@@ -80,6 +80,13 @@ public:
     [[nodiscard]] const HttpResponse& response() const noexcept { return resp_; }
     void reset();
 
+    /// 取出未消费字节（如 101 升级响应后紧跟的 WebSocket 帧）。
+    std::string releaseLeftover() {
+        std::string out;
+        out.swap(pending_);
+        return out;
+    }
+
 private:
     ParseOutcome tryParse();
     ParseOutcome fail(std::string msg);

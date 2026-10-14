@@ -27,6 +27,9 @@ set(ZENITH_SOURCES
     http/router.cpp
     http/http_server.cpp
     http/http_client.cpp
+    net/websocket.cpp
+    redis/redis_client.cpp
+    config/json_config.cpp
 )
 
 set(ZENITH_PUBLIC_HEADERS
@@ -39,6 +42,15 @@ else()
     set(ZENITH_PLATFORM_LIBS)
 endif()
 
+# ---- db 层（依赖 uORM 子模块；ZENITH_ENABLE_ORM=ON 时编入） ----
+if (TARGET uORM::uorm)
+    list(APPEND ZENITH_SOURCES db/db_service.cpp)
+    set(ZENITH_DB_LIBS uORM::uorm)
+    set_property(GLOBAL PROPERTY ZENITH_HAS_DB ON)
+else()
+    set(ZENITH_DB_LIBS)
+endif()
+
 # ---------------------------------------------------------------------------
 # zenith_core —— 静态库（嵌入式 / 单体部署形态）
 # ---------------------------------------------------------------------------
@@ -47,7 +59,7 @@ if (ZENITH_BUILD_STATIC)
     zenith_target_include_public(zenith_core)
     zenith_set_warnings(zenith_core)
     target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC)
-    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS})
+    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS})
     set_target_properties(zenith_core PROPERTIES OUTPUT_NAME zenith)
 endif()
 
@@ -59,7 +71,7 @@ if (ZENITH_BUILD_SHARED)
     zenith_target_include_public(zenith)
     zenith_set_warnings(zenith)
     target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY)
-    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS})
+    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS})
     set_target_properties(zenith PROPERTIES
         OUTPUT_NAME zenith
         CXX_VISIBILITY_PRESET hidden

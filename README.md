@@ -6,7 +6,23 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 
 前端交给 React，Zenith 只提供 API。
 
-## M2（当前）：Reactor + HTTP
+## M3（当前）：数据层与协议扩展
+
+- `zenith::net::websocket` —— RFC 6455 完整实现：帧编解码（掩码/16·64 位长度/分片重组）、
+  会话（ping→pong 自动应答、close 握手、大消息上限）、`HttpServer::enableWebSocket` 升级路径、
+  `WebSocketClient`（升级 + 帧流，客户端帧强制掩码）
+- `zenith::redis` —— 自研 RESP2 客户端：增量解析器、命令流水线（回调 FIFO 对齐）、
+  `commandBlocking` 便捷形态；测试用内置 mock Redis 服务器（无需真实 Redis）
+- `zenith::config::JsonConfig` —— JSON 配置（自研解析器驱动）：dotted 嵌套取值、数组下标、
+  flatten 成 KeyValueConfig（直接对接宿主 C ABI config_get）
+- `zenith::db` —— uORM 服务化：`DbConfig`（从配置构建）→ `DataSource`（uORM 有界连接池）→
+  `IDbService` 注册进 ServiceRegistry；DB 阻塞操作经专用线程池 `post()` 执行，绝不占 EventLoop
+- `zenith::crypto` —— 自研 SHA-1 / Base64（WebSocket 握手；已用标准向量与 Python 权威核对）
+- `zenith::coro` —— 通用回调→协程挂起器（callback_await.hpp）+ `co_await redisCommand(...)`
+- 示例：`03_websocket`（广播 + REST 统计）
+- 测试：+websocket/redis/config/db 四套件，sqlite 驱动真实建表查询；debug 13/13、coro 15/15
+
+## M2：Reactor + HTTP
 
 - `zenith::net` —— Reactor 网络层
   - `Poller` 抽象 + 四后端：**WSAPoll**(Windows) / **epoll**(Linux) / **kqueue**(macOS) / **select**(兜底)
@@ -103,7 +119,9 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 - **M1 ✅ 插件内核**：C ABI v1、服务注册表、插件管理、线程池、日志、双示例插件、uORM 集成
 - **M2 ✅ Reactor + HTTP**：EventLoop（WSAPoll/epoll/kqueue/select 四后端）、TCP 全家、自研
   HTTP/1.1 解析器、路由/中间件/Context、HttpServer/HttpClient、自研 JSON、协程 co_await 接入
-- **M3 数据层**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
+- **M3 ✅ 数据层与协议扩展**：WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置、
+  uORM 服务化（连接池 + ServiceRegistry + 专用 DB 线程池）、SHA1/Base64
+- **M4 生态与边缘**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
 - **M4 生态与边缘**：TLS 后端实装（OpenSSL/mbedTLS/wolfSSL）、media-ffmpeg、ai-comfyui、
   edge-esp32 插件、RK3566/RK3576 与 ESP-IDF 真机联调
 

@@ -41,29 +41,39 @@ void TcpClient::connect(const ConnectOptions& opt, ConnectedCallback onOk, Faile
         return;
     }
 
-    loop_->registerFd(sock_.fd(), kPollWritable, [self](uint16_t revents) {
+    // registerFd 仅允许 loop 线程调用（与 poll 并发改注册表是数据竞争）→ 投递
+    loop_->runInLoop([self] {
         if (!self->pending_) return;
-        if ((revents & (kPollError | kPollHangup)) != 0) {
-            self->fail("connect failed: " + Socket::lastSystemError());
-            return;
-        }
-        const int soErr = detail::getSocketError(self->sock_.fd());
-        if (soErr != 0) {
-            self->fail("connect failed (SO_ERROR=" + std::to_string(soErr) + ")");
-            return;
-        }
-        self->succeed();
+        self->loop_->registerFd(self->sock_.fd(), kPollWritable, [self](uint16_t revents) {
+            if (!self->pending_) return;
+            if ((revents & (kPollError | kPollHangup)) != 0) {
+                self->fail("connect failed: " + Socket::lastSystemError());
+                return;
+            }
+            const int soErr = detail::getSocketError(self->sock_.fd());
+            if (soErr != 0) {
+                self->fail("connect failed (SO_ERROR=" + std::to_string(soErr) + ")");
+                return;
+            }
+            self->succeed();
+        });
     });
 }
 
 void TcpClient::cleanupRegistration() {
-    if (timerId_ != 0) {
-        loop_->cancel(timerId_);
-        timerId_ = 0;
-    }
-    if (sock_.valid()) {
-        loop_->deregisterFd(sock_.fd());
-    }
+    // 注销/取消定时器必须发生在 loop 线程（与 poll 并发是数据竞争）。
+    // weak 捕获：loop 停止或对象已消亡（fd 注册回调本就持有 shared）时安全跳过。
+    auto weak = weak_from_this();
+    loop_->runInLoop([weak, this] {
+        if (weak.expired()) return;
+        if (timerId_ != 0) {
+            loop_->cancel(timerId_);
+            timerId_ = 0;
+        }
+        if (sock_.valid()) {
+            loop_->deregisterFd(sock_.fd());
+        }
+    });
 }
 
 void TcpClient::succeed() {

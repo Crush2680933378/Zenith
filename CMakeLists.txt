@@ -56,6 +56,34 @@ if (ZENITH_BUILD_TESTS)
 endif()
 
 # ---------------------------------------------------------------------------
+# uORM 集成（先于 src：db 层与测试需要 TARGET uORM::uorm 存在）
+# 只取 uORM::uorm 核心目标；其 asio Web 控制台与示例全部关闭。
+# ---------------------------------------------------------------------------
+if (ZENITH_ENABLE_ORM)
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/uORM/CMakeLists.txt)
+        set(BUILD_EXAMPLES     OFF CACHE BOOL "" FORCE)
+        set(UORM_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
+        set(UORM_ENABLE_WEB    OFF CACHE BOOL "" FORCE)
+        set(UORM_BUILD_C_ABI   OFF CACHE BOOL "" FORCE)
+        set(UORM_BUILD_UORMPP  OFF CACHE BOOL "" FORCE)
+        add_subdirectory(thirdparty/uORM)
+        # uORM 头以 SYSTEM 引入：其内部告警不进入 Zenith 的零警告基线
+        if (TARGET uORM::uorm)
+            get_target_property(_uorm_incs uorm INTERFACE_INCLUDE_DIRECTORIES)
+            if (_uorm_incs)
+                set_target_properties(uorm PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "")
+                target_include_directories(uorm SYSTEM INTERFACE ${_uorm_incs})
+            endif()
+        endif()
+        message(STATUS "Zenith: uORM integrated -> target uORM::uorm (MySQL/PgSQL/SQLite 按环境自动探测)")
+    else()
+        message(WARNING
+            "ZENITH_ENABLE_ORM=ON 但缺少 thirdparty/uORM；"
+            "执行: git submodule update --init --recursive")
+    endif()
+endif()
+
+# ---------------------------------------------------------------------------
 # 目标
 # ---------------------------------------------------------------------------
 add_subdirectory(src)
@@ -70,26 +98,6 @@ endif()
 
 if (ZENITH_BUILD_TESTS)
     add_subdirectory(tests)
-endif()
-
-# ---------------------------------------------------------------------------
-# uORM 集成（M1：仅打通编译链接；M3：服务化封装 zenith::db 层）
-# 只取 uORM::uorm 核心目标；其 asio Web 控制台与示例全部关闭。
-# ---------------------------------------------------------------------------
-if (ZENITH_ENABLE_ORM)
-    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/uORM/CMakeLists.txt)
-        set(BUILD_EXAMPLES     OFF CACHE BOOL "" FORCE)
-        set(UORM_BUILD_TESTS   OFF CACHE BOOL "" FORCE)
-        set(UORM_ENABLE_WEB    OFF CACHE BOOL "" FORCE)
-        set(UORM_BUILD_C_ABI   OFF CACHE BOOL "" FORCE)
-        set(UORM_BUILD_UORMPP  OFF CACHE BOOL "" FORCE)
-        add_subdirectory(thirdparty/uORM)
-        message(STATUS "Zenith: uORM integrated -> target uORM::uorm (MySQL/PgSQL/SQLite 按环境自动探测)")
-    else()
-        message(WARNING
-            "ZENITH_ENABLE_ORM=ON 但缺少 thirdparty/uORM；"
-            "执行: git submodule update --init --recursive")
-    endif()
 endif()
 
 message(STATUS "Zenith ${PROJECT_VERSION}: "

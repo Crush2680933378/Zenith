@@ -21,6 +21,21 @@ class ZENITH_API KeyValueConfig {
 public:
     KeyValueConfig() = default;
 
+    // 含 mutex，需显式移动构造（拷贝保持删除）
+    KeyValueConfig(KeyValueConfig&& other) noexcept {
+        std::lock_guard<std::mutex> lk(other.mtx_);
+        map_ = std::move(other.map_);
+    }
+    KeyValueConfig& operator=(KeyValueConfig&& other) noexcept {
+        if (this != &other) {
+            std::unique_lock<std::mutex> lk1(mtx_, std::defer_lock);
+            std::unique_lock<std::mutex> lk2(other.mtx_, std::defer_lock);
+            std::lock(lk1, lk2);
+            map_ = std::move(other.map_);
+        }
+        return *this;
+    }
+
     void set(const std::string& key, const std::string& value);
     [[nodiscard]] std::string get(const std::string& key,
                                   const std::string& defaultValue = "") const;

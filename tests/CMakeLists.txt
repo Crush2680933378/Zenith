@@ -9,7 +9,10 @@ set(ZENITH_TESTS
     test_http_parser
     test_router
     test_net
-    test_http_e2e)
+    test_http_e2e
+    test_websocket
+    test_redis
+    test_config)
 
 foreach(t IN LISTS ZENITH_TESTS)
     add_executable(${t} ${t}.cpp)
@@ -22,6 +25,17 @@ foreach(t IN LISTS ZENITH_TESTS)
     add_test(NAME ${t} COMMAND ${t})
     set_tests_properties(${t} PROPERTIES TIMEOUT 180)
 endforeach()
+
+# db 测试：仅当 uORM 集成（sqlite 驱动可用性由 uORM 自身探测）
+get_property(ZENITH_HAS_DB_PROP GLOBAL PROPERTY ZENITH_HAS_DB)
+if (ZENITH_HAS_DB_PROP)
+    add_executable(test_db test_db.cpp)
+    target_link_libraries(test_db PRIVATE zenith_core Threads::Threads uORM::uorm)
+    target_include_directories(test_db PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    zenith_set_warnings(test_db)
+    add_test(NAME test_db COMMAND test_db)
+    set_tests_properties(test_db PROPERTIES TIMEOUT 120)
+endif()
 
 # 端到端插件测试需要示例插件已构建
 if (ZENITH_BUILD_PLUGINS)

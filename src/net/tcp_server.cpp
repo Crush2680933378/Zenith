@@ -27,8 +27,14 @@ core::Result<void> TcpServer::listen(const std::string& host, uint16_t port, int
 
     listenSock_ = std::move(sock);
 
+// 监听注册投递到 loop 线程（registerFd 仅 loop 线程调用；
+    // loop 尚未启动时 runInLoop 内联执行，行为不变）
     TcpServer* self = this;
-    loop_->registerFd(listenSock_.fd(), kPollReadable, [self](uint16_t) { self->handleAccept(); });
+    const fd_t listenFd = listenSock_.fd();
+    loop_->runInLoop([self, listenFd] {
+        self->loop_->registerFd(listenFd, kPollReadable,
+                                [self](uint16_t) { self->handleAccept(); });
+    });
     return core::Result<void>::Ok();
 }
 

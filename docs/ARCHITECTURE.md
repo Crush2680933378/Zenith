@@ -104,6 +104,15 @@ DNS（getaddrinfo）当前为调用线程阻塞解析，数字地址/通配符�
 异步 DNS 留待后续里程碑。HttpClient M2 策略为每请求一条连接（Connection: close），
 keep-alive 连接池在 M3。
 
+## 5d. M3 追加的铁律：回调内不得替换自身所在这条回调
+
+`TcpConnection::setMessageCallback` 替换会立即销毁旧 std::function——若替换发生在
+该回调**自己的执行栈内**（如 WebSocket 升级接管），后续访问其捕获即为 use-after-free，
+表现为随机段错误与堆控制块损坏（曾达 50% 复现率）。规则：**接管/替换类操作一律
+`queueInLoop` 投递到回调返回之后执行**（服务端 HttpServer::tryWebSocketUpgrade 与
+客户端 WebSocketClient 均已遵守）。同理，同包到达的协议升级后首帧必须先
+`releaseLeftover` 取出再 reset 解析器，否则会被吞没（表现为静默丢消息）。
+
 ## 6. 协程层（可选编译）
 
 - `ZENITH_ENABLE_COROUTINES=ON` 时新增 `zenith_coro` 接口层并切换该层到 C++20；

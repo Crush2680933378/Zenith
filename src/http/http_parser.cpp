@@ -300,27 +300,33 @@ ParseOutcome HttpResponseParser::tryParse() {
                 const int r = takeLine(pending_, line, kMaxHeaderBytes);
                 if (r <= 0) return r < 0 ? fail("headers too large") : ParseOutcome{};
                 if (line.empty()) {
+                    // 1xx/204/304 无消息体：头部结束即完成（如 WebSocket 101）
+                    if (resp_.status >= 100 && resp_.status < 200 ||
+                        resp_.status == 204 || resp_.status == 304) {
+                        state_ = State::Done;
+                        continue;
+                    }
                     const bool chunked =
                         resp_.headers.contains("Transfer-Encoding") &&
                         core::string_util::toLower(resp_.headers.get("Transfer-Encoding"))
                             .find("chunked") != std::string::npos;
                     const std::string cl = resp_.headers.get("Content-Length");
-                if (chunked) {
-                    state_ = State::BodyChunkSize;
-                } else if (!cl.empty()) {
-                    size_t n = 0;
-                    bool ok = !cl.empty();
-                    for (char c : cl) {
-                        if (c < '0' || c > '9') { ok = false; break; }
-                        n = n * 10 + static_cast<size_t>(c - '0');
-                        if (n > (1ull << 40)) break;
+                    if (chunked) {
+                        state_ = State::BodyChunkSize;
+                    } else if (!cl.empty()) {
+                        size_t n = 0;
+                        bool ok = !cl.empty();
+                        for (char c : cl) {
+                            if (c < '0' || c > '9') { ok = false; break; }
+                            n = n * 10 + static_cast<size_t>(c - '0');
+                            if (n > (1ull << 40)) break;
+                        }
+                        if (!ok) return fail("bad Content-Length");
+                        bodyRemaining_ = n;
+                        state_ = bodyRemaining_ > 0 ? State::BodyIdentity : State::Done;
+                    } else {
+                        state_ = State::ReadUntilClose;
                     }
-                    if (!ok) return fail("bad Content-Length");
-                    bodyRemaining_ = n;
-                    state_ = bodyRemaining_ > 0 ? State::BodyIdentity : State::Done;
-                } else {
-                    state_ = State::ReadUntilClose;
-                }
                     continue;
                 }
                 const size_t colon = line.find(':');

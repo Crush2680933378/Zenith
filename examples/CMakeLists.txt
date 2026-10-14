@@ -1,2 +1,3 @@
 add_subdirectory(01_plugin_host)
 add_subdirectory(02_http_server)
+add_subdirectory(03_websocket)

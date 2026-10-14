@@ -13,7 +13,7 @@ struct ConnState {
 } // namespace
 
 HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool, size_t maxBody)
-    : server_(loop, ioPool), maxBodyBytes_(maxBody) {
+    : loop_(loop), server_(loop, ioPool), maxBodyBytes_(maxBody) {
     server_.setMessageCallback(
         [this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
             onMessage(conn, buf);
@@ -27,6 +27,41 @@ core::Result<void> HttpServer::listen(const std::string& host, uint16_t port, in
 }
 
 void HttpServer::stop() { server_.stop(); }
+
+void HttpServer::enableWebSocket(
+    const std::string& path, std::function<void(const net::WebSocketSession::Ptr&)> onOpen) {
+    wsPaths_[path] = std::move(onOpen);
+}
+
+bool HttpServer::tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn) {
+    auto state = conn->context<ConnState>();
+    const std::string path = state->parser.request().path; // 先拷贝（reset 会清空内部请求）
+    const std::string key = state->parser.request().headers.get("Sec-WebSocket-Key");
+    if (key.empty()) return false;
+
+    const std::string accept = net::wsComputeAccept(key);
+    std::string resp =
+        "HTTP/1.1 101 Switching Protocols\r\n"
+        "Upgrade: websocket\r\n"
+        "Connection: Upgrade\r\n"
+        "Sec-WebSocket-Accept: " +
+        accept + "\r\n\r\n";
+    conn->send(resp);
+
+    // 升级请求可能与客户端首帧同包到达：先取出残留再重置解析器。
+    // 接管动作投递执行：takeover 会替换正在执行的 HTTP 消息回调，
+    // 在其闭包内继续操作属于 use-after-free。
+    const std::string earlyFrames = state->parser.releaseLeftover();
+    state->parser.reset(); // HTTP 阶段结束
+    auto* self = this;
+    loop_->queueInLoop([self, conn, path, earlyFrames]() mutable {
+        auto session = net::WebSocketSession::takeover(conn, /*clientSide=*/false);
+        auto it = self->wsPaths_.find(path);
+        if (it != self->wsPaths_.end() && it->second) it->second(session);
+        session->processPending(earlyFrames); // 回放同包到达的早期帧
+    });
+    return true;
+}
 
 void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
     auto state = conn->context<ConnState>();
@@ -62,6 +97,15 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     auto state = conn->context<ConnState>();
     HttpRequest req = state->parser.request();
     req.peer = conn->peer();
+
+    // WebSocket 升级路径（先于路由）
+    if (req.method == HttpMethod::Get &&
+        core::string_util::toLower(req.headers.get("Upgrade")) == "websocket" &&
+        core::string_util::toLower(req.headers.get("Connection")).find("upgrade") !=
+            std::string::npos &&
+        wsPaths_.count(req.path) > 0) {
+        if (tryWebSocketUpgrade(conn)) return;
+    }
 
     Context ctx(std::move(req));
     ctx.response().httpMajor = ctx.request().httpMajor;

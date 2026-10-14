@@ -13,46 +13,14 @@
 #include <stdexcept>
 #include <utility>
 
-#include "zenith/coro/task.hpp"
+#include "zenith/coro/callback_await.hpp"
 #include "zenith/core/result.hpp"
 #include "zenith/http/http_client.hpp"
 #include "zenith/net/tcp_client.hpp"
 
 namespace zenith::coro {
 
-namespace detail {
-
-/// 把「带回调的异步操作」挂起为 co_await。
-/// Starter 形如 void(std::function<void(core::Result<T>)>)。
-template <typename T, typename Starter>
-Task<T> awaitCallback(Starter starter) {
-    struct Awaiter {
-        Starter starter;
-        std::optional<core::Result<T>> result;
-
-        [[nodiscard]] bool await_ready() const noexcept { return false; }
-
-        void await_suspend(std::coroutine_handle<> h) {
-            starter([this, h](core::Result<T> r) {
-                result.emplace(std::move(r));
-                h.resume(); // 通常在 loop 线程；对称转移回协程
-            });
-        }
-
-        T await_resume() {
-            if (!result.has_value() || result->isErr()) {
-                throw std::runtime_error(!result.has_value()
-                                             ? std::string("coro awaiter: no result")
-                                             : result->error().message);
-            }
-            return std::move(result->value());
-        }
-    };
-
-    co_return co_await Awaiter{std::move(starter), std::nullopt};
-}
-
-} // namespace detail
+using detail::awaitCallback; // 共享实现见 callback_await.hpp
 
 /// co_await tcpConnect(loop, host, port) → Task<TcpConnection::Ptr>；失败抛异常。
 inline Task<net::TcpConnection::Ptr>
