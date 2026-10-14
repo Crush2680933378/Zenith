@@ -1,0 +1,125 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "win-mingw-debug",
+      "displayName": "Windows MinGW-w64 (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/win-mingw-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "win-mingw-release",
+      "displayName": "Windows MinGW-w64 (RelWithDebInfo)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/win-mingw-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "win-mingw-coro",
+      "displayName": "Windows MinGW-w64 + 协程层 (Debug, C++20)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/win-mingw-coro",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "ZENITH_ENABLE_COROUTINES": "ON"
+      }
+    },
+    {
+      "name": "win-msvc-debug",
+      "displayName": "Windows MSVC (Debug, 需在 VS 开发者命令行运行)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/win-msvc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl"
+      }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "displayName": "Linux GCC (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-gcc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "linux-gcc-release",
+      "displayName": "Linux GCC (RelWithDebInfo)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-gcc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "linux-gcc-coro",
+      "displayName": "Linux GCC + 协程层 (Debug, C++20)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-gcc-coro",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "ZENITH_ENABLE_COROUTINES": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-debug",
+      "displayName": "Linux Clang (Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-clang-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "win-mingw-debug",   "configurePreset": "win-mingw-debug" },
+    { "name": "win-mingw-release", "configurePreset": "win-mingw-release" },
+    { "name": "win-mingw-coro",    "configurePreset": "win-mingw-coro" },
+    { "name": "win-msvc-debug",    "configurePreset": "win-msvc-debug" },
+    { "name": "linux-gcc-debug",   "configurePreset": "linux-gcc-debug" },
+    { "name": "linux-gcc-release", "configurePreset": "linux-gcc-release" },
+    { "name": "linux-gcc-coro",    "configurePreset": "linux-gcc-coro" },
+    { "name": "linux-clang-debug", "configurePreset": "linux-clang-debug" }
+  ],
+  "testPresets": [
+    {
+      "name": "win-mingw-debug",
+      "configurePreset": "win-mingw-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "win-mingw-coro",
+      "configurePreset": "win-mingw-coro",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc-debug",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

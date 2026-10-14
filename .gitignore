@@ -1,0 +1,21 @@
+# 构建产物
+build/
+cmake-build-*/
+out/
+
+# IDE
+.vscode/
+.idea/
+.vs/
+.cache/
+.zcode/
+*.user
+
+# 运行期产物
+*.log
+*.log.*
+logs/
+
+# 编译数据库 / 本地杂项
+compile_commands.json
+*.tmp
