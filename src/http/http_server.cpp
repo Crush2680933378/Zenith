@@ -26,6 +26,19 @@ core::Result<void> HttpServer::listen(const std::string& host, uint16_t port, in
     return server_.listen(host, port, backlog);
 }
 
+core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx,
+                                          const std::string& host, uint16_t port, int backlog) {
+    server_.setConnectionDecorator([&ctx](const net::TcpConnection::Ptr& conn) {
+        SSL* ssl = ctx.newServerSession();
+        if (ssl == nullptr) {
+            conn->forceClose();
+            return;
+        }
+        conn->startTls(std::make_unique<tls::TlsFilter>(/*serverSide=*/true, ssl));
+    });
+    return server_.listen(host, port, backlog);
+}
+
 void HttpServer::stop() { server_.stop(); }
 
 void HttpServer::enableWebSocket(

@@ -182,4 +182,51 @@ std::string HttpResponse::serialize(bool includeBody, bool connKeepAlive) const 
     return out;
 }
 
+core::Result<Url> parseUrl(const std::string& url) {
+    Url u;
+    std::string rest = url;
+
+    // scheme
+    const size_t ss = rest.find("://");
+    if (ss != std::string::npos) {
+        u.scheme = core::string_util::toLower(rest.substr(0, ss));
+        if (u.scheme != "http" && u.scheme != "https") {
+            return core::Result<Url>::Err(core::Error(90, "unsupported scheme: " + u.scheme));
+        }
+        u.tls = u.scheme == "https";
+        rest = rest.substr(ss + 3);
+    }
+
+    // 路径与查询
+    const size_t slash = rest.find('/');
+    if (slash != std::string::npos) {
+        u.pathAndQuery = rest.substr(slash);
+        rest = rest.substr(0, slash);
+    }
+    if (u.pathAndQuery.empty()) u.pathAndQuery = "/";
+
+    // userinfo（忽略，取 @ 后）
+    const size_t at = rest.rfind('@');
+    if (at != std::string::npos) rest = rest.substr(at + 1);
+
+    // host[:port]（IPv6 字面量暂不支持 —— 后续里程碑按需）
+    const size_t colon = rest.rfind(':');
+    if (colon != std::string::npos) {
+        u.host = rest.substr(0, colon);
+        const std::string portStr = rest.substr(colon + 1);
+        if (portStr.empty() ||
+            portStr.find_first_not_of("0123456789") != std::string::npos) {
+            return core::Result<Url>::Err(core::Error(91, "bad port in url: " + url));
+        }
+        u.port = static_cast<uint16_t>(std::stoi(portStr));
+    } else {
+        u.host = rest;
+        u.port = u.tls ? 443 : 80;
+    }
+    if (u.host.empty()) {
+        return core::Result<Url>::Err(core::Error(92, "empty host in url: " + url));
+    }
+    return core::Result<Url>::Ok(std::move(u));
+}
+
 } // namespace zenith::http

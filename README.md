@@ -6,7 +6,24 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 
 前端交给 React，Zenith 只提供 API。
 
-## M3（当前）：数据层与协议扩展
+## M4（当前）：生态与边缘（TLS/媒体/AI/设备桥）
+
+- `zenith::tls` —— OpenSSL 后端：内存 BIO 非阻塞握手状态机（TlsFilter 作为
+  TcpConnection 加解密滤层，对 HTTP 层透明）、`HttpServer::listenTls` 一行 HTTPS、
+  客户端 SNI/证书校验/自定 CA；自签证书端到端 + curl --cacert 实测
+- `HttpClient` —— URL 直填（http/https 解析）+ keep-alive 连接池（同 host 复用、
+  惰性剔除失效连接、归还/取用全在 loop 线程）
+- `media_ffmpeg` 插件 —— FFmpeg probe/snapshot/transcode（COBS…不，libavformat 全套：
+  探测元信息、任意时间点 JPEG 截图（sws 缩放+mjpeg）、转码管线（CRF/缩放/进度回调））
+- `edge_esp32` 插件 —— COBS+CRC32 帧协议、TCP 网关（设备 hello/心跳/RPC/事件）、
+  串口通道（win32/termios 双后端）、`zenith::io::SerialPort`；ESP32 固件样例
+  （examples/05_esp32_firmware，ESP-IDF 裸 lwIP 实现同帧协议）
+- `ai_comfyui` 插件 —— ComfyUI workflow 提交/占位符注入（{{seed}}/{{key}}）、
+  /history 轮询、/view 产物下载；mock ComfyUI 全链路测试（自家 HttpServer 扮演）
+- `ports/esp-idf` —— ESP-IDF 组件脚手架（静态注册表替代 dlopen，同一 C ABI）
+- 测试：+tls/media/edge/ai 四套件，debug 17/17 全绿；aarch64 交叉留待工具链
+
+## M3：数据层与协议扩展
 
 - `zenith::net::websocket` —— RFC 6455 完整实现：帧编解码（掩码/16·64 位长度/分片重组）、
   会话（ping→pong 自动应答、close 握手、大消息上限）、`HttpServer::enableWebSocket` 升级路径、
@@ -121,8 +138,12 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   HTTP/1.1 解析器、路由/中间件/Context、HttpServer/HttpClient、自研 JSON、协程 co_await 接入
 - **M3 ✅ 数据层与协议扩展**：WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置、
   uORM 服务化（连接池 + ServiceRegistry + 专用 DB 线程池）、SHA1/Base64
-- **M4 生态与边缘**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
-- **M4 生态与边缘**：TLS 后端实装（OpenSSL/mbedTLS/wolfSSL）、media-ffmpeg、ai-comfyui、
+- **M4 ✅（主体）**：TLS/OpenSSL、FFmpeg 媒体、edge 设备桥、ComfyUI AI、URL/连接池；
+  RK/ESP32 实机联调待硬件（脚手架与固件样例就绪）
+- **后续**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
+- **M4 ✅（主体）**：TLS/OpenSSL、FFmpeg 媒体、edge 设备桥、ComfyUI AI、URL/连接池；
+  RK/ESP32 实机联调待硬件（脚手架与固件样例就绪）
+- **后续**：TLS 后端实装（OpenSSL/mbedTLS/wolfSSL）、media-ffmpeg、ai-comfyui、
   edge-esp32 插件、RK3566/RK3576 与 ESP-IDF 真机联调
 
 ## 依赖原则

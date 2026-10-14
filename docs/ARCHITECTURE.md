@@ -113,6 +113,22 @@ keep-alive 连接池在 M3。
 客户端 WebSocketClient 均已遵守）。同理，同包到达的协议升级后首帧必须先
 `releaseLeftover` 取出再 reset 解析器，否则会被吞没（表现为静默丢消息）。
 
+## 5e. M4 经验
+
+1. **FFmpeg master（2026 nightly）swscale 对弃用的 yuvj 系列直接断言**——sws 输入侧
+   必须把 YUVJ420P 映射回 YUV420P，mjpeg 编码侧用 `color_range=AVCOL_RANGE_JPEG`
+   显式声明全范围（数据布局相同，可安全复用缓冲）。
+2. **seek 后必须 `avcodec_flush_buffers`，且取帧循环须在首帧即 break**——后续
+   EAGAIN 迭代会 unref 掉 AVFrame（format 变 -1），再喂 sws 即断言崩溃。
+3. **插件内联编译 zenith 源码时必须定义 ZENITH_STATIC**——否则头里的 dllimport
+   声明与编译进插件的定义冲突（__imp_ 未定义链接错）。
+4. **匿名连接 hello 注册不得在遍历内做容器转移**——先标记 pendingName，
+   由持有迭代的循环统一 promote/erase（与 5d 同族：嵌套回调不得动外层容器）。
+5. **init 失败的插件必须先 removeByOwner 再卸载 DLL**——否则注册表里留着指向
+   已卸载代码的 destroy 悬空指针（析构时崩溃）。
+6. **COBS 编码 254 边界**：code 255 = 254 字面量且不隐含 0x00——编码器须在
+   压入第 254 个非零字节后即断块（差一即整流解析错位）。
+
 ## 6. 协程层（可选编译）
 
 - `ZENITH_ENABLE_COROUTINES=ON` 时新增 `zenith_coro` 接口层并切换该层到 C++20；

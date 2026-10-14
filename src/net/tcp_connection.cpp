@@ -1,6 +1,7 @@
 #include "zenith/net/tcp_connection.hpp"
 
 #include "net_detail.hpp"
+#include "zenith/tls/tls_context.hpp"
 
 namespace zenith::net {
 
@@ -17,7 +18,59 @@ void TcpConnection::establish() {
     loop_->registerFd(fd_, kPollReadable, [self](uint16_t revents) {
         self->handleEvents(revents);
     });
+    if (tls_ != nullptr) {
+        // TLS 连接：onConnect 推迟到握手完成（handleTls 推进）
+        std::string wire;
+        tls_->encrypt(nullptr, 0, wire); // 触发客户端握手泵
+        if (!wire.empty()) sockSend(wire);
+        return;
+    }
     if (onConnect_) onConnect_(self);
+}
+
+void TcpConnection::startTls(std::unique_ptr<tls::TlsFilter> filter) {
+    tls_ = std::move(filter);
+    if (!connected_.load(std::memory_order_acquire)) return; // establish 时接管
+    std::string wire;
+    tls_->encrypt(nullptr, 0, wire);
+    if (!wire.empty()) sockSend(wire);
+}
+
+bool TcpConnection::tlsEstablished() const noexcept {
+    return tls_ != nullptr && tls_->state() == tls::TlsState::Established;
+}
+
+/// 底层密文直发（绕过 TLS 层）
+void TcpConnection::sockSend(const std::string& wire) {
+    if (wire.empty()) return;
+    if (writing_ || outBuf_.readableBytes() > 0) {
+        outBuf_.append(wire.data(), wire.size());
+        enableWriteInterest(true);
+        return;
+    }
+    const int w = sock_.writeSome(wire.data(), wire.size());
+    size_t remaining = wire.size();
+    if (w > 0) remaining = wire.size() - static_cast<size_t>(w);
+    if (remaining > 0) {
+        outBuf_.append(wire.data() + (wire.size() - remaining), remaining);
+        enableWriteInterest(true);
+    } else if (w == -2) {
+        handleClose("send error: " + Socket::lastSystemError());
+    }
+}
+
+/// TLS 泵：处理握手推进/解密；返回 false 表示 TLS 失败需关连接
+bool TcpConnection::pumpTls(const char* cipher, size_t n) {
+    std::string plain, wire;
+    tls_->feedCipher(cipher, n, plain, wire);
+    if (!wire.empty()) sockSend(wire);
+    if (tls_->state() == tls::TlsState::Failed) {
+        handleClose("tls error: " + tls_->error());
+        return false;
+    }
+    if (!plain.empty()) inBuf_.append(plain.data(), plain.size());
+    if (tls_->consumeHandshakeDone() && onConnect_) onConnect_(shared_from_this());
+    return true;
 }
 
 void TcpConnection::finalize(CloseCallback hostClose) { hostClose_ = std::move(hostClose); }
@@ -32,6 +85,16 @@ void TcpConnection::send(const void* data, size_t n) {
 
 void TcpConnection::sendInLoop(const void* data, size_t n) {
     if (!connected_.load(std::memory_order_acquire)) return;
+    if (tls_ != nullptr) {
+        // 明文先入 TLS 层；密文（含握手期暂存）走底层发送
+        std::string wire;
+        tls_->encrypt(static_cast<const char*>(data), n, wire);
+        if (!wire.empty()) sockSend(wire);
+        if (tls_->state() == tls::TlsState::Failed) {
+            handleClose("tls error: " + tls_->error());
+        }
+        return;
+    }
     if (writing_ || outBuf_.readableBytes() > 0) {
         outBuf_.append(data, n);
         return;
@@ -90,7 +153,11 @@ void TcpConnection::handleRead() {
     for (;;) {
         const int n = sock_.readSome(buf, sizeof(buf));
         if (n > 0) {
-            inBuf_.append(buf, static_cast<size_t>(n));
+            if (tls_ != nullptr) {
+                if (!pumpTls(buf, static_cast<size_t>(n))) return; // TLS 失败已关
+            } else {
+                inBuf_.append(buf, static_cast<size_t>(n));
+            }
             if (n < static_cast<int>(sizeof(buf))) break; // 读尽本轮
             continue;
         }
@@ -126,6 +193,12 @@ void TcpConnection::handleWrite() {
 
 void TcpConnection::handleClose(const std::string& reason) {
     if (!connected_.exchange(false, std::memory_order_acq_rel)) return; // 幂等
+    // TLS：尽力发送 close_notify（连接即将关闭，一次直写不重试）
+    if (tls_ != nullptr) {
+        std::string wire;
+        tls_->shutdown(wire);
+        if (!wire.empty()) (void)sock_.writeSome(wire.data(), wire.size());
+    }
     loop_->deregisterFd(fd_);
     if (onError_ && reason.rfind("peer closed") != 0) {
         onError_(shared_from_this(), reason);

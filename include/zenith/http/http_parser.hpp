@@ -78,6 +78,8 @@ public:
     ParseOutcome feed(core::Buffer& buf);
 
     [[nodiscard]] const HttpResponse& response() const noexcept { return resp_; }
+    /// 是否已实际解析出状态行（区别于默认构造的 status=200 空响应）。
+    [[nodiscard]] bool hasParsed() const noexcept { return state_ != State::StatusLine; }
     void reset();
 
     /// 取出未消费字节（如 101 升级响应后紧跟的 WebSocket 帧）。

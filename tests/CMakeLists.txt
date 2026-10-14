@@ -37,6 +37,58 @@ if (ZENITH_HAS_DB_PROP)
     set_tests_properties(test_db PROPERTIES TIMEOUT 120)
 endif()
 
+
+# TLS 测试：仅当 OpenSSL 后端编入
+get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
+if (ZENITH_HAS_TLS_PROP)
+    add_executable(test_tls test_tls.cpp)
+    target_link_libraries(test_tls PRIVATE zenith_core Threads::Threads)
+    target_compile_definitions(test_tls PRIVATE ZENITH_HAS_TLS=1)
+    target_include_directories(test_tls PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    zenith_set_warnings(test_tls)
+    add_test(NAME test_tls COMMAND test_tls)
+    set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
+endif()
+
+# ai 插件测试（mock ComfyUI 走本仓 HttpServer）
+add_executable(test_ai test_ai.cpp)
+target_link_libraries(test_ai PRIVATE zenith_core Threads::Threads ws2_32)
+target_include_directories(test_ai PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests
+    ${CMAKE_SOURCE_DIR}/examples/common)
+target_compile_definitions(test_ai PRIVATE
+    ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+zenith_set_warnings(test_ai)
+add_test(NAME test_ai COMMAND test_ai)
+set_tests_properties(test_ai PROPERTIES TIMEOUT 120)
+
+# edge 插件测试（cobs/serial 编入核心库）
+add_executable(test_edge test_edge.cpp)
+target_link_libraries(test_edge PRIVATE zenith_core Threads::Threads ws2_32)
+target_include_directories(test_edge PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests
+    ${CMAKE_SOURCE_DIR}/examples/common)
+target_compile_definitions(test_edge PRIVATE
+    ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+zenith_set_warnings(test_edge)
+add_test(NAME test_edge COMMAND test_edge)
+set_tests_properties(test_edge PROPERTIES TIMEOUT 120)
+
+# media 插件测试：仅当 media_ffmpeg 目标存在（FFmpeg SDK 找到）
+if (TARGET zenith_media_ffmpeg)
+    add_executable(test_media test_media.cpp)
+    target_link_libraries(test_media PRIVATE zenith_core Threads::Threads)
+    target_include_directories(test_media PRIVATE
+        ${CMAKE_SOURCE_DIR}/tests
+        ${CMAKE_SOURCE_DIR}/examples/common)
+    target_compile_definitions(test_media PRIVATE
+        ZENITH_HAS_MEDIA=1
+        ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+    zenith_set_warnings(test_media)
+    add_test(NAME test_media COMMAND test_media)
+    set_tests_properties(test_media PROPERTIES TIMEOUT 300)
+endif()
+
 # 端到端插件测试需要示例插件已构建
 if (ZENITH_BUILD_PLUGINS)
     target_compile_definitions(test_plugin PRIVATE

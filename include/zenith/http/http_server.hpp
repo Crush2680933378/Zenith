@@ -16,6 +16,7 @@
 #include "zenith/net/event_loop_thread_pool.hpp"
 #include "zenith/net/tcp_server.hpp"
 #include "zenith/net/websocket.hpp"
+#include "zenith/tls/tls_context.hpp"
 
 namespace zenith::http {
 
@@ -27,6 +28,11 @@ public:
 
     core::Result<void> listen(const std::string& host = "0.0.0.0", uint16_t port = 8080,
                               int backlog = 128);
+
+    /// HTTPS：同一套路由/中间件/WS，accept 后自动安装 TLS 滤层（M4.1）。
+    core::Result<void> listenTls(const tls::OpenSslContext& ctx,
+                                 const std::string& host = "0.0.0.0", uint16_t port = 8443,
+                                 int backlog = 128);
 
     /// 访问内部路由表（注册路由/中间件/分组）。
     [[nodiscard]] Router& router() noexcept { return router_; }

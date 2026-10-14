@@ -27,6 +27,11 @@ public:
     void setConnectionCallback(TcpConnection::ConnectCallback cb) { onConn_ = std::move(cb); }
     void setMessageCallback(TcpConnection::MessageCallback cb)    { onMsg_ = std::move(cb); }
 
+    /// 连接装饰器：accept 后、establish 前调用（用于安装 TLS 滤层等）。
+    void setConnectionDecorator(std::function<void(const TcpConnection::Ptr&)> d) {
+        decorator_ = std::move(d);
+    }
+
     void stop();
 
     [[nodiscard]] uint16_t port() const noexcept { return port_; }
@@ -43,6 +48,7 @@ private:
     std::unordered_map<fd_t, TcpConnection::Ptr> conns_; // 仅主 loop 线程
     TcpConnection::ConnectCallback onConn_;
     TcpConnection::MessageCallback onMsg_;
+    std::function<void(const TcpConnection::Ptr&)> decorator_; // TLS 等安装点
 };
 
 } // namespace zenith::net

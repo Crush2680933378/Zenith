@@ -46,4 +46,15 @@ parseQuery(const std::string& query);
 /// 大小写不敏感相等（header 名比较用）。
 ZENITH_API bool iequals(const std::string& a, const std::string& b) noexcept;
 
+/// URL 解析（M4.2）：scheme://host[:port]/path[?query]
+/// scheme 缺省 http；https → tls=true；端口缺省 80/443。
+struct Url {
+    std::string scheme = "http";
+    std::string host;
+    uint16_t port = 80;
+    std::string pathAndQuery = "/"; // 以 / 开头，可含 ?query
+    bool tls = false;
+};
+ZENITH_API core::Result<Url> parseUrl(const std::string& url);
+
 } // namespace zenith::http

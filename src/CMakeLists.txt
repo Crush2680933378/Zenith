@@ -1,5 +1,22 @@
 # zenith 核心库目标：zenith_core(静态) + zenith(动态) + zenith_coro(可选接口层)
 
+# ---- TLS 后端（ZENITH_TLS=openssl；先于源列表展开）----
+set(ZENITH_TLS_LIBS)
+set(ZENITH_TLS_SOURCES)
+if (ZENITH_TLS STREQUAL "openssl")
+    find_path(OPENSSL_INCLUDE_DIR openssl/ssl.h)
+    find_library(OPENSSL_SSL_LIB NAMES ssl libssl)
+    find_library(OPENSSL_CRYPTO_LIB NAMES crypto libcrypto)
+    if (OPENSSL_INCLUDE_DIR AND OPENSSL_SSL_LIB AND OPENSSL_CRYPTO_LIB)
+        list(APPEND ZENITH_TLS_SOURCES tls/tls_context.cpp)
+        set(ZENITH_TLS_LIBS ${OPENSSL_SSL_LIB} ${OPENSSL_CRYPTO_LIB})
+        set_property(GLOBAL PROPERTY ZENITH_HAS_TLS ON)
+        message(STATUS "Zenith TLS: OpenSSL backend enabled")
+    else()
+        message(WARNING "ZENITH_TLS=openssl 但未找到 OpenSSL 开发库；TLS 禁用")
+    endif()
+endif()
+
 set(ZENITH_SOURCES
     core/key_value_config.cpp
     concurrency/thread_pool.cpp
@@ -30,6 +47,9 @@ set(ZENITH_SOURCES
     net/websocket.cpp
     redis/redis_client.cpp
     config/json_config.cpp
+    io/cobs.cpp
+    io/serial_port.cpp
+    ${ZENITH_TLS_SOURCES}
 )
 
 set(ZENITH_PUBLIC_HEADERS
@@ -59,7 +79,7 @@ if (ZENITH_BUILD_STATIC)
     zenith_target_include_public(zenith_core)
     zenith_set_warnings(zenith_core)
     target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC)
-    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS})
+    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS})
     set_target_properties(zenith_core PROPERTIES OUTPUT_NAME zenith)
 endif()
 
@@ -71,7 +91,7 @@ if (ZENITH_BUILD_SHARED)
     zenith_target_include_public(zenith)
     zenith_set_warnings(zenith)
     target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY)
-    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS})
+    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS})
     set_target_properties(zenith PROPERTIES
         OUTPUT_NAME zenith
         CXX_VISIBILITY_PRESET hidden

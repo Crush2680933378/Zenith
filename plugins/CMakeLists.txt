@@ -4,3 +4,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${ZENITH_PLUGIN_OUTPUT_DIR})
 
 add_subdirectory(hello_cpp)
 add_subdirectory(hello_c)
+add_subdirectory(media_ffmpeg)
+add_subdirectory(edge_esp32)
+add_subdirectory(ai_comfyui)

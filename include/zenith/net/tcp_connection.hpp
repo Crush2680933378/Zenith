@@ -16,6 +16,10 @@
 #include "zenith/net/event_loop.hpp"
 #include "zenith/net/socket.hpp"
 
+namespace zenith::tls {
+class TlsFilter; // 实现见 zenith/tls/tls_context.hpp
+}
+
 namespace zenith::net {
 
 class TcpConnection : private core::NonCopyable,
@@ -64,6 +68,14 @@ public:
         return std::static_pointer_cast<T>(context_);
     }
 
+    /* ---- TLS 滤层（M4.1）----
+     * 安装后：socket 密文进 → 解密后进入输入缓冲；send() 的明文自动加密。
+     * 握手在后台推进；onConnect_ 在握手完成时触发（若已设置）。
+     * 拥有 SSL* 的所有权。仅同 loop 线程调用。 */
+    void startTls(std::unique_ptr<tls::TlsFilter> filter);
+    [[nodiscard]] bool tlsActive() const noexcept { return tls_ != nullptr; }
+    [[nodiscard]] bool tlsEstablished() const noexcept;
+
 private:
     TcpConnection(EventLoop* loop, fd_t fd, std::string peer);
 
@@ -73,6 +85,9 @@ private:
     void handleClose(const std::string& reason);
     void sendInLoop(const void* data, size_t n);
     void enableWriteInterest(bool on);
+    // TLS 辅助（M4.1）
+    void sockSend(const std::string& wire);
+    bool pumpTls(const char* cipher, size_t n);
 
     EventLoop* loop_;
     fd_t fd_;
@@ -90,6 +105,7 @@ private:
     ErrorCallback onError_;
     CloseCallback hostClose_;
 
+    std::unique_ptr<tls::TlsFilter> tls_; // 可选 TLS 滤层（M4.1）
     std::shared_ptr<void> context_;
     std::atomic<bool> connected_{false};
 };

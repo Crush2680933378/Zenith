@@ -57,6 +57,10 @@ core::Result<PluginInfo*> PluginManager::load(const std::string& path) {
                                    static_cast<void*>(info.get()));
     const zenith_status st = info->desc.init(&info->hostApi);
     if (st != ZENITH_OK) {
+        // init 可能已注册服务后才失败：必须先按令牌清理（此刻 DLL 仍在内存），
+        // 再卸载动态库——顺序颠倒会留下指向已卸载代码的 destroy 悬空指针
+        registry_.removeByOwner(static_cast<void*>(info.get()));
+        if (info->desc.shutdown != nullptr) info->desc.shutdown();
         info->lib->unload();
         return core::Result<PluginInfo*>::Err(
             core::Error(4, "plugin init failed (" + std::to_string(st) + "): " + info->name));

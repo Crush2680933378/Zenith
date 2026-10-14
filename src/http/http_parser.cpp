@@ -301,7 +301,7 @@ ParseOutcome HttpResponseParser::tryParse() {
                 if (r <= 0) return r < 0 ? fail("headers too large") : ParseOutcome{};
                 if (line.empty()) {
                     // 1xx/204/304 无消息体：头部结束即完成（如 WebSocket 101）
-                    if (resp_.status >= 100 && resp_.status < 200 ||
+                    if ((resp_.status >= 100 && resp_.status < 200) ||
                         resp_.status == 204 || resp_.status == 304) {
                         state_ = State::Done;
                         continue;
