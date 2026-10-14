@@ -10,11 +10,34 @@ set(ZENITH_SOURCES
     plugin/dynlib.cpp
     plugin/host_api.cpp
     plugin/plugin_manager.cpp
+    net/net_detail.cpp
+    net/socket.cpp
+    net/poller.cpp
+    net/poller_wsapoll.cpp
+    net/poller_epoll.cpp
+    net/poller_kqueue.cpp
+    net/event_loop.cpp
+    net/event_loop_thread_pool.cpp
+    net/tcp_connection.cpp
+    net/tcp_server.cpp
+    net/tcp_client.cpp
+    json/json.cpp
+    http/http_common.cpp
+    http/http_parser.cpp
+    http/router.cpp
+    http/http_server.cpp
+    http/http_client.cpp
 )
 
 set(ZENITH_PUBLIC_HEADERS
     ${CMAKE_SOURCE_DIR}/include/zenith/abi/zenith_abi.h
 )
+
+if (WIN32)
+    set(ZENITH_PLATFORM_LIBS ws2_32)
+else()
+    set(ZENITH_PLATFORM_LIBS)
+endif()
 
 # ---------------------------------------------------------------------------
 # zenith_core —— 静态库（嵌入式 / 单体部署形态）
@@ -24,7 +47,7 @@ if (ZENITH_BUILD_STATIC)
     zenith_target_include_public(zenith_core)
     zenith_set_warnings(zenith_core)
     target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC)
-    target_link_libraries(zenith_core PUBLIC Threads::Threads)
+    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS})
     set_target_properties(zenith_core PROPERTIES OUTPUT_NAME zenith)
 endif()
 
@@ -36,7 +59,7 @@ if (ZENITH_BUILD_SHARED)
     zenith_target_include_public(zenith)
     zenith_set_warnings(zenith)
     target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY)
-    target_link_libraries(zenith PUBLIC Threads::Threads)
+    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS})
     set_target_properties(zenith PROPERTIES
         OUTPUT_NAME zenith
         CXX_VISIBILITY_PRESET hidden

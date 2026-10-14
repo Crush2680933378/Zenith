@@ -38,13 +38,12 @@ public:
 
     void ensureWritable(size_t n) {
         if (writableBytes() >= n) return;
-        if (buf_.size() - readableBytes() + writableBytes() >= n + kPrependBytes
-            && readableBytes() < kCompactThreshold) {
-            // 剩余空间足够：把未读数据挪到 kPrependBytes 处，避免扩容
-            compact();
-        } else {
-            buf_.resize(writerIndex_ + n);
+        // 需求容量 = 前部保留 + 未读数据 + 新数据；不足则扩容，随后紧凑化
+        const size_t required = kPrependBytes + readableBytes() + n;
+        if (buf_.size() < required) {
+            buf_.resize(required);
         }
+        compact();
     }
 
     /* ---- 读取（消费式） ---- */
@@ -77,8 +76,7 @@ public:
     uint64_t readUint64BE() { return readIntegral<uint64_t, true>(); }
 
 private:
-    static constexpr size_t kPrependBytes      = 8;     // 预留前部空间（协议头注入用）
-    static constexpr size_t kCompactThreshold  = 4096;  // 未读数据小于该值才做紧凑挪动
+    static constexpr size_t kPrependBytes = 8; // 预留前部空间（协议头注入用）
 
     void compact() {
         const size_t n = readableBytes();

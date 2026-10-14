@@ -14,6 +14,7 @@
 #include <cassert>
 #include <coroutine>
 #include <exception>
+#include <future>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -136,14 +137,38 @@ inline Task<void> TaskPromise<void>::get_return_object() {
 } // namespace detail
 
 // ---------------------------------------------------------------------------
-// syncWait —— 无事件循环时的顶层驱动：同步运行惰性协程直至完成。
-// M2 EventLoop 就位后新增 loop.run(task) 调度式入口。
+// syncWait —— 顶层驱动：运行惰性协程直至完成（支持协程内部挂起到其它线程，
+// 如 EventLoop 的 I/O 完成线程；完成经 promise/future 汇合）。
+// M2 的 EventLoop 就位后，loop 线程 resume 挂起协程即由此路径汇合。
 // ---------------------------------------------------------------------------
+namespace detail {
+template <typename T>
+Task<void> syncWaitRunner(std::shared_ptr<std::promise<T>> pr, Task<T> inner) {
+    try {
+        pr->set_value(co_await inner);
+    } catch (...) {
+        pr->set_exception(std::current_exception());
+    }
+}
+template <>
+inline Task<void> syncWaitRunner<void>(std::shared_ptr<std::promise<void>> pr, Task<void> inner) {
+    try {
+        co_await inner;
+        pr->set_value();
+    } catch (...) {
+        pr->set_exception(std::current_exception());
+    }
+}
+} // namespace detail
+
 template <typename T>
 T syncWait(Task<T> task) {
     if (!task.valid()) throw std::invalid_argument("syncWait: empty task");
-    task.handle().resume(); // 惰性启动；内部若无 I/O 挂起将直接跑完
-    return task.await_resume();
+    auto pr = std::make_shared<std::promise<T>>();
+    auto fut = pr->get_future();
+    Task<void> runner = detail::syncWaitRunner<T>(std::move(pr), std::move(task));
+    runner.handle().resume(); // 启动；内部挂起后由恢复方（如 loop 线程）驱动
+    return fut.get();
 }
 
 } // namespace zenith::coro

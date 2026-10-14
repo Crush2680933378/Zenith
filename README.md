@@ -6,7 +6,23 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 
 前端交给 React，Zenith 只提供 API。
 
-## M1（当前）：插件内核
+## M2（当前）：Reactor + HTTP
+
+- `zenith::net` —— Reactor 网络层
+  - `Poller` 抽象 + 四后端：**WSAPoll**(Windows) / **epoll**(Linux) / **kqueue**(macOS) / **select**(兜底)
+  - `EventLoop`：fd 就绪回调、min-heap 定时器（可取消）、跨线程任务（自连接 UDP 唤醒）
+  - `EventLoopThreadPool`（one loop per thread）、`TcpServer`（accept 分发）、`TcpConnection`
+    （双 Buffer、写兴趣自适应、context 附带状态）、`TcpClient`（非阻塞连接 + 超时）
+- `zenith::http` —— HTTP/1.1 全自研
+  - 增量解析器（任意字节切分、Content-Length/chunked、pipelining、体积限制）
+  - `Router` 路由树（`:param` / `*catchAll` / 静态优先 / 405 语义 / 分组）
+  - `Context`（Gin 风格：param/query/header/bodyJson/text/json/abort/next）
+  - 洋葱中间件、`HttpServer`（keep-alive/HEAD/异常 500/坏 JSON 400）、`HttpClient`（异步 + fetchBlocking）
+- `zenith::json` —— 自研 RFC 8259 解析/序列化（代理对、深度限制、最短往返双精度、紧凑/美化）
+- 协程接入：`syncWait` 升级为跨线程汇合；`co_await tcpConnect(...)` / `co_await httpFetch(...)`
+- 示例：`02_http_server`（Gin 风格：访问日志中间件、路由参数、JSON API、鉴权分组、自请求演示）
+
+## M1：插件内核
 
 - `zenith/abi/zenith_abi.h` — 纯 C 插件 ABI v1（C89/C++ 双编译器可用，MSVC/GCC/Clang）
 - `zenith::core` — Result / Buffer / string / time / KeyValueConfig
@@ -85,8 +101,8 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 ## 里程碑
 
 - **M1 ✅ 插件内核**：C ABI v1、服务注册表、插件管理、线程池、日志、双示例插件、uORM 集成
-- **M2 Reactor + HTTP**：EventLoop（epoll/kqueue/IOCP/select 四后端）、自研 HTTP/1.1 解析器、
-  路由/中间件、自研 JSON；协程 awaiter 接入事件循环（`co_await http_fetch()`）
+- **M2 ✅ Reactor + HTTP**：EventLoop（WSAPoll/epoll/kqueue/select 四后端）、TCP 全家、自研
+  HTTP/1.1 解析器、路由/中间件/Context、HttpServer/HttpClient、自研 JSON、协程 co_await 接入
 - **M3 数据层**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
 - **M4 生态与边缘**：TLS 后端实装（OpenSSL/mbedTLS/wolfSSL）、media-ffmpeg、ai-comfyui、
   edge-esp32 插件、RK3566/RK3576 与 ESP-IDF 真机联调

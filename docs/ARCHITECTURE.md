@@ -78,6 +78,32 @@ load → init(host) → start() → [运行期] → stop() → shutdown() → �
    规则：**宿主必须在 main 返回前调用 `LoggerFacade::shutdown()`**（示例已示范）。
 3. 大对象勿放栈上：AsyncFileLogger 的 65536 槽队列（约 2.6MB）已改为堆持有。
 
+## 5b. M2 并发内存两条铁律（均已付出过崩溃代价，测试防回归）
+
+1. **`EventLoop::nextTimeoutMs` 读 `pendingTasks_` 必须持锁**——其它线程正在锁下
+   push 同一 deque；无锁并发读写 STL 容器是 UB，表现为随机堆损坏
+   （曾导致大响应传输 30%~80% 概率崩溃，极难排查）。
+2. **`Buffer::ensureWritable` 的容量判定必须保守**——"紧凑后可写 ≥ n"才算得出
+   正确结论，否则 `memcpy` 越界写堆。正确公式：`required = kPrependBytes +
+   readableBytes() + n`，不足则 resize，随后无条件 compact。
+
+## 5c. Reactor 后端矩阵与线程模型
+
+| 平台 | 后端 | 说明 |
+|---|---|---|
+| Windows | WSAPoll | 断连报告 POLLRDNORM 而非 POLLHUP → 读 0 判关闭（TcpConnection 已处理） |
+| Linux | epoll | level-triggered |
+| macOS/BSD | kqueue | EVFILT_READ/WRITE |
+| 其它 | select | FD_SETSIZE 提升至 4096，仅兜底 |
+
+IOCP 为 Proactor 模型，与 Reactor 接口形态不同，M4 以独立 ITransport 形态接入。
+线程模型：accept 在主 loop；新连接 round-robin 到 EventLoopThreadPool；
+跨线程操作一律 `runInLoop` 投递（fd 注册/注销必须在所属 loop 线程内执行）。
+
+DNS（getaddrinfo）当前为调用线程阻塞解析，数字地址/通配符有免 DNS 快速路径；
+异步 DNS 留待后续里程碑。HttpClient M2 策略为每请求一条连接（Connection: close），
+keep-alive 连接池在 M3。
+
 ## 6. 协程层（可选编译）
 
 - `ZENITH_ENABLE_COROUTINES=ON` 时新增 `zenith_coro` 接口层并切换该层到 C++20；
