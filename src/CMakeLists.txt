@@ -44,9 +44,14 @@ set(ZENITH_SOURCES
     http/router.cpp
     http/http_server.cpp
     http/http_client.cpp
+    http/multipart.cpp
+    http/static_files.cpp
+    http/session.cpp
+    http/context.cpp
     net/websocket.cpp
     redis/redis_client.cpp
     config/json_config.cpp
+    net/signal.cpp
     io/cobs.cpp
     io/serial_port.cpp
     ${ZENITH_TLS_SOURCES}

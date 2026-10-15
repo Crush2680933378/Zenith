@@ -6,6 +6,7 @@
 #include "zenith/crypto/base64.hpp"
 #include "zenith/crypto/sha1.hpp"
 #include "zenith/http/http_parser.hpp"
+#include "zenith/tls/tls_context.hpp"
 
 namespace zenith::net {
 
@@ -319,11 +320,46 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
     copt.port = opt.port;
     copt.timeoutMs = opt.timeoutMs;
 
+    const bool useTls = opt.tls;
+    const std::string caFile = opt.caFile;
+    const std::string sniHost = opt.host;
     client_->connect(
         copt,
-        [st, loop, request, expectedAccept, timeoutMs = opt.timeoutMs](
-            const TcpConnection::Ptr& conn) {
+        [st, loop, request, expectedAccept, timeoutMs = opt.timeoutMs, useTls, caFile,
+         sniHost](const TcpConnection::Ptr& conn) {
             st->conn = conn;
+            // wss：先装 TLS 滤层（升级请求在握手完成后自动发出——滤层暂存明文）
+            if (useTls) {
+                static std::mutex ctxMtx;
+                static std::map<bool, std::shared_ptr<tls::OpenSslContext>> ctxCache;
+                std::shared_ptr<tls::OpenSslContext> ctx;
+                {
+                    std::lock_guard<std::mutex> lk(ctxMtx);
+                    ctx = ctxCache[caFile.empty()];
+                    if (!ctx || !ctx->valid()) {
+                        tls::TlsClientConfig cfg;
+                        cfg.caFile = caFile;
+                        cfg.useSystemTrust = caFile.empty();
+                        auto c = tls::OpenSslContext::createClient(cfg);
+                        if (!c) {
+                            st->done = true;
+                            conn->forceClose();
+                            if (st->onFail) st->onFail("tls context setup failed");
+                            return;
+                        }
+                        ctx = std::make_shared<tls::OpenSslContext>(std::move(c).value());
+                        ctxCache[caFile.empty()] = ctx;
+                    }
+                }
+                SSL* ssl = ctx->newClientSession(sniHost);
+                if (ssl == nullptr) {
+                    st->done = true;
+                    conn->forceClose();
+                    if (st->onFail) st->onFail("tls session setup failed");
+                    return;
+                }
+                conn->startTls(std::make_unique<tls::TlsFilter>(false, ssl));
+            }
             st->timerId = loop->scheduleAfter(std::chrono::milliseconds(timeoutMs), [st] {
                 if (st->done) return;
                 st->done = true;

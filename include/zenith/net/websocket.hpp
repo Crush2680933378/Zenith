@@ -120,6 +120,8 @@ struct WsConnectOptions {
     std::string path{"/"};
     std::string subprotocol; // 可选 Sec-WebSocket-Protocol
     int timeoutMs = 5000;
+    bool tls = false;        // wss://（M5.1）
+    std::string caFile;      // 自定 CA（空 = 系统信任）
 };
 
 class ZENITH_API WebSocketClient {

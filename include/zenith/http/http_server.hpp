@@ -5,6 +5,7 @@
 // ============================================================================
 #pragma once
 
+#include <atomic>
 #include <memory>
 
 #include "zenith/core/export.hpp"
@@ -44,6 +45,12 @@ public:
 
     void stop();
 
+    /// 优雅停机：停 accept → 新响应一律 Connection: close → 在途请求排空后触发回调。
+    /// 回调在连接所属线程触发（通常用于停 EventLoop）。
+    void beginGracefulShutdown(std::function<void()> onDrained = nullptr);
+    [[nodiscard]] bool isClosing() const noexcept { return closing_.load(); }
+    [[nodiscard]] int inflightRequests() const noexcept { return inflight_.load(); }
+
     [[nodiscard]] uint16_t port() const noexcept { return server_.port(); }
 
 private:
@@ -54,6 +61,10 @@ private:
 
     net::EventLoop* loop_;
     net::TcpServer server_;
+    std::atomic<int> inflight_{0};
+    std::atomic<bool> closing_{false};
+    std::function<void()> drainedCb_;
+    void maybeFireDrained();
     Router router_;
     size_t maxBodyBytes_;
     std::unordered_map<std::string, std::function<void(const net::WebSocketSession::Ptr&)>>

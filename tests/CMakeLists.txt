@@ -50,6 +50,17 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
 endif()
 
+# M5 Web 完整性（multipart/静态/session/优雅停机/wss；wss 需 TLS 后端）
+get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
+if (ZENITH_HAS_TLS_PROP)
+    add_executable(test_m5_web test_m5_web.cpp)
+    target_link_libraries(test_m5_web PRIVATE zenith_core Threads::Threads ws2_32)
+    target_include_directories(test_m5_web PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    zenith_set_warnings(test_m5_web)
+    add_test(NAME test_m5_web COMMAND test_m5_web)
+    set_tests_properties(test_m5_web PROPERTIES TIMEOUT 120)
+endif()
+
 # ai 插件测试（mock ComfyUI 走本仓 HttpServer）
 add_executable(test_ai test_ai.cpp)
 target_link_libraries(test_ai PRIVATE zenith_core Threads::Threads ws2_32)

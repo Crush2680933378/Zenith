@@ -41,6 +41,24 @@ core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx,
 
 void HttpServer::stop() { server_.stop(); }
 
+void HttpServer::beginGracefulShutdown(std::function<void()> onDrained) {
+    closing_.store(true);
+    drainedCb_ = std::move(onDrained);
+    server_.stop(); // 停 accept；既有连接继续服务至排空
+    if (inflight_.load() == 0 && drainedCb_) {
+        loop_->runInLoop([cb = std::move(drainedCb_)] { cb(); });
+        drainedCb_ = nullptr;
+    }
+}
+
+void HttpServer::maybeFireDrained() {
+    inflight_.fetch_sub(1);
+    if (closing_.load() && inflight_.load() <= 0 && drainedCb_) {
+        loop_->runInLoop([cb = std::move(drainedCb_)] { cb(); });
+        drainedCb_ = nullptr;
+    }
+}
+
 void HttpServer::enableWebSocket(
     const std::string& path, std::function<void(const net::WebSocketSession::Ptr&)> onOpen) {
     wsPaths_[path] = std::move(onOpen);
@@ -107,6 +125,10 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
 }
 
 void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
+    inflight_.fetch_add(1);
+    auto inflightGuard = [this](void*) { maybeFireDrained(); };
+    std::unique_ptr<void, decltype(inflightGuard)> guard{reinterpret_cast<void*>(this), inflightGuard};
+
     auto state = conn->context<ConnState>();
     HttpRequest req = state->parser.request();
     req.peer = conn->peer();
@@ -139,7 +161,8 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
 
     // 未显式写响应体的合法情形：handler 未设置 body → 200 空体
     const bool isHead = ctx.request().method == HttpMethod::Head;
-    const bool keep = ctx.request().keepAlive();
+    bool keep = ctx.request().keepAlive();
+    if (closing_.load()) keep = false; // 停机中：一律短连接
     const std::string wire = ctx.response().serialize(/*includeBody=*/!isHead, keep);
     conn->send(wire);
     if (!keep) conn->shutdown();

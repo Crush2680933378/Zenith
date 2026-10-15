@@ -6,12 +6,14 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "zenith/http/http_message.hpp"
+#include "zenith/http/multipart.hpp"
 #include "zenith/json/json.hpp"
 
 namespace zenith::http {
@@ -59,6 +61,29 @@ public:
         return std::move(v).value();
     }
     [[nodiscard]] const std::string& body() const noexcept { return req_.body; }
+
+    /* ---- Cookie（M5.1） ---- */
+    /// Cookie 值（解析 Cookie 头；不存在返回 def）。值为 urlDecode 后。
+    [[nodiscard]] std::string cookie(const std::string& name,
+                                     const std::string& def = "") const;
+
+    /* ---- multipart 表单（M5.1；懒解析缓存） ---- */
+    /// 表单字段值（非文件部分）；缺失返回空。
+    [[nodiscard]] std::string form(const std::string& name) const;
+    /// 文件部分（filename 非空的第一个同名部分）；无返回 nullptr。
+    [[nodiscard]] const multipart::FormPart* file(const std::string& name) const;
+    /// 全部部分（含普通字段与文件）
+    [[nodiscard]] const std::vector<multipart::FormPart>& formParts() const;
+
+    /* ---- 会话（sessionMiddleware 注入；未使用中间件时为空） ---- */
+    [[nodiscard]] std::shared_ptr<void> contextPtr() const { return context_; }
+    template <typename T>
+    [[nodiscard]] std::shared_ptr<T> contextAs() const {
+        return std::static_pointer_cast<T>(context_);
+    }
+    /// 便捷：sessionMiddleware 装配后可用。未装配抛 BadRequestBody 语义错误。
+    [[nodiscard]] std::shared_ptr<class Session> session() const;
+    void setContext(std::shared_ptr<void> ctx) { context_ = std::move(ctx); }
 
     /* ---- 响应侧（链式） ---- */
     Context& status(int code) {
@@ -128,6 +153,8 @@ private:
     HttpResponse resp_;
     std::unordered_map<std::string, std::string> params_;
     std::vector<Handler> chain_;
+    std::shared_ptr<void> context_;                      // session 等附带状态
+    mutable std::shared_ptr<std::vector<multipart::FormPart>> formCache_;
     size_t idx_ = 0;
     bool aborted_ = false;
 };
