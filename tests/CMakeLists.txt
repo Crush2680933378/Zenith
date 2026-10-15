@@ -50,6 +50,14 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
 endif()
 
+# M5.3 可观测性（指标/Request-Id/status）
+add_executable(test_m5_obs test_m5_obs.cpp)
+target_link_libraries(test_m5_obs PRIVATE zenith_core Threads::Threads ws2_32)
+target_include_directories(test_m5_obs PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m5_obs)
+add_test(NAME test_m5_obs COMMAND test_m5_obs)
+set_tests_properties(test_m5_obs PROPERTIES TIMEOUT 120)
+
 # M5 Web 完整性（multipart/静态/session/优雅停机/wss；wss 需 TLS 后端）
 get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
 if (ZENITH_HAS_TLS_PROP)

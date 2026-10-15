@@ -51,6 +51,7 @@ set(ZENITH_SOURCES
     net/websocket.cpp
     redis/redis_client.cpp
     config/json_config.cpp
+    metrics/metrics.cpp
     net/signal.cpp
     io/cobs.cpp
     io/serial_port.cpp
