@@ -6,7 +6,20 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 
 前端交给 React，Zenith 只提供 API。
 
-## M4（当前）：生态与边缘（TLS/媒体/AI/设备桥）
+## M5（当前）：生产就绪
+
+- **Web 完整性**：multipart 文件上传、静态文件服务（Range/ETag/穿越防护）、
+  Session/Cookie（内存存储 + 中间件）、优雅停机（在途排空 + 信号处理）、wss
+- **可观测**：Prometheus 指标（Counter/Gauge/14 桶直方图 + P50/99）、
+  X-Request-Id 全链路、`/zenith/status` 运行时状态
+- **安全**：自研 SHA-256/HMAC（NIST 向量 + OpenSSL 2000 组随机交叉核对）、JWT
+  签发/校验（恒时比较）、CORS 白名单、令牌桶限流、安全响应头
+- **性能**：zenith-bench 自研压测工具 + 31K RPS 基线（Debug/loopback）+
+  CI 回归门槛
+- **交付**：`find_package(Zenith CONFIG)` 安装导出、GitHub Actions 三平台 CI、
+  zenith-new 工程脚手架
+
+## M4：生态与边缘（TLS/媒体/AI/设备桥）
 
 - `zenith::tls` —— OpenSSL 后端：内存 BIO 非阻塞握手状态机（TlsFilter 作为
   TcpConnection 加解密滤层，对 HTTP 层透明）、`HttpServer::listenTls` 一行 HTTPS、
