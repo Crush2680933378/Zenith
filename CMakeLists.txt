@@ -101,6 +101,39 @@ if (ZENITH_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# ---------------------------------------------------------------------------
+# 安装与导出（M5.5）：find_package(Zenith CONFIG) 消费
+# ---------------------------------------------------------------------------
+include(GNUInstallDirs)
+install(DIRECTORY include/zenith DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY abi/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zenith/abi FILES_MATCHING PATTERN "*.h")
+
+if (ZENITH_BUILD_STATIC)
+    install(TARGETS zenith_core EXPORT ZenithTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+if (ZENITH_BUILD_SHARED)
+    install(TARGETS zenith EXPORT ZenithTargets
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+
+if (ZENITH_BUILD_STATIC OR ZENITH_BUILD_SHARED)
+    install(EXPORT ZenithTargets
+            NAMESPACE Zenith::
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Zenith)
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ZenithConfig.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Zenith)
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfigVersion.cmake
+        VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfig.cmake
+                  ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfigVersion.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Zenith)
+endif()
+
 message(STATUS "Zenith ${PROJECT_VERSION}: "
                "static=${ZENITH_BUILD_STATIC} shared=${ZENITH_BUILD_SHARED} "
                "coro=${ZENITH_ENABLE_COROUTINES} orm=${ZENITH_ENABLE_ORM} tls=${ZENITH_TLS}")

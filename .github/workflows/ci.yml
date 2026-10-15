@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  windows-mingw:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+      - shell: msys2 {0}
+        run: |
+          # uORM 代理（如需）：git config --global http.proxy ...
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+  linux-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev sqlite3 libsqlite3-dev
+      - run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+  linux-clang-coro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang libssl-dev
+      - run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_COROUTINES=ON \
+                -DZENITH_ENABLE_ORM=OFF
+          cmake --build build
+          ctest --test-dir build --output-on-failure
