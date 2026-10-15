@@ -50,6 +50,14 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
 endif()
 
+# zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
+if (ZENITH_BUILD_BENCH)
+    add_executable(zenith_bench ../tools/zenith_bench.cpp)
+    target_link_libraries(zenith_bench PRIVATE zenith_core Threads::Threads ws2_32)
+    target_include_directories(zenith_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    zenith_set_warnings(zenith_bench)
+endif()
+
 # M5.2 安全（SHA-256/HMAC/JWT/CORS/限流/安全头；需 TLS=openssl 以做 OpenSSL 交叉核对）
 get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
 if (ZENITH_HAS_TLS_PROP)

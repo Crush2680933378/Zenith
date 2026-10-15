@@ -19,6 +19,7 @@ option(ZENITH_BUILD_EXAMPLES      "Build examples"                              
 option(ZENITH_BUILD_PLUGINS       "Build sample plugins"                        ON)
 option(ZENITH_ENABLE_COROUTINES   "Enable optional C++20 coroutine layer (zenith_coro)" OFF)
 option(ZENITH_ENABLE_ORM          "Integrate thirdparty/uORM (git submodule)"   ON)
+option(ZENITH_BUILD_BENCH        "Build zenith-bench load test tool"            ON)
 
 set(ZENITH_TLS "none" CACHE STRING
     "TLS backend behind ITLSTransport: openssl | mbedtls | wolfssl | none (impl lands in M2/M3)")
