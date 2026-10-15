@@ -50,6 +50,17 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
 endif()
 
+# M5.2 安全（SHA-256/HMAC/JWT/CORS/限流/安全头；需 TLS=openssl 以做 OpenSSL 交叉核对）
+get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
+if (ZENITH_HAS_TLS_PROP)
+    add_executable(test_m5_sec test_m5_sec.cpp)
+    target_link_libraries(test_m5_sec PRIVATE zenith_core Threads::Threads ws2_32)
+    target_include_directories(test_m5_sec PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    zenith_set_warnings(test_m5_sec)
+    add_test(NAME test_m5_sec COMMAND test_m5_sec)
+    set_tests_properties(test_m5_sec PROPERTIES TIMEOUT 120)
+endif()
+
 # M5.3 可观测性（指标/Request-Id/status）
 add_executable(test_m5_obs test_m5_obs.cpp)
 target_link_libraries(test_m5_obs PRIVATE zenith_core Threads::Threads ws2_32)

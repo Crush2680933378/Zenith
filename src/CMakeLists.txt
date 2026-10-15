@@ -52,6 +52,9 @@ set(ZENITH_SOURCES
     redis/redis_client.cpp
     config/json_config.cpp
     metrics/metrics.cpp
+    crypto/sha256.cpp
+    http/jwt.cpp
+    http/security.cpp
     net/signal.cpp
     io/cobs.cpp
     io/serial_port.cpp
