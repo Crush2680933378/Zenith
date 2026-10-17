@@ -67,6 +67,8 @@ public:
     void clearPool();
 
     [[nodiscard]] size_t pooledConnections() const;
+    [[nodiscard]] uint64_t poolHits() const noexcept { return poolHits_.load(); }
+    [[nodiscard]] uint64_t poolMisses() const noexcept { return poolMisses_.load(); }
 
 private:
     struct AsyncState {
@@ -90,6 +92,8 @@ private:
     std::shared_ptr<tls::OpenSslContext> tlsCtx_;
     // 连接池（key = "T?host:port"）；const 方法（pooledConnections）亦需读取
     mutable std::mutex poolMtx_;
+    std::atomic<uint64_t> poolHits_{0};
+    std::atomic<uint64_t> poolMisses_{0};
     std::map<std::string, std::vector<net::TcpConnection::Ptr>> pool_;
     static constexpr size_t kMaxPoolPerHost = 8;
 };

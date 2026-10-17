@@ -153,6 +153,7 @@ int main(int argc, char** argv) {
             for (int i = 0; i < 200; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
+            (void)0;
             loop.stop();
             loopThread.join();
         });

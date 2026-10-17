@@ -191,6 +191,7 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
             }
         }
         if (pooled) {
+            poolHits_.fetch_add(1, std::memory_order_relaxed);
             // 跨线程时投递到 loop 线程再操作连接
             auto* self = this;
             loop_->runInLoop([self, pooledSt = st, conn = pooled, req]() {
@@ -201,6 +202,7 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
     }
 
     // 2) 新建连接
+    poolMisses_.fetch_add(1, std::memory_order_relaxed);
     auto client = std::make_shared<net::TcpClient>(loop_);
     net::ConnectOptions copt;
     copt.host = req.host;
