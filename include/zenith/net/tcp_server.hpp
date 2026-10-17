@@ -28,8 +28,14 @@ public:
     void setMessageCallback(TcpConnection::MessageCallback cb)    { onMsg_ = std::move(cb); }
 
     /// 连接装饰器：accept 后、establish 前调用（用于安装 TLS 滤层等）。
+    /// 可叠加多次（如 HttpServer 防护计数 + TLS 滤层）——按注册序执行。
+    void addConnectionDecorator(std::function<void(const TcpConnection::Ptr&)> d) {
+        decorators_.push_back(std::move(d));
+    }
+    /// 兼容旧名（覆盖语义）
     void setConnectionDecorator(std::function<void(const TcpConnection::Ptr&)> d) {
-        decorator_ = std::move(d);
+        decorators_.clear();
+        decorators_.push_back(std::move(d));
     }
 
     void stop();
@@ -48,7 +54,7 @@ private:
     std::unordered_map<fd_t, TcpConnection::Ptr> conns_; // 仅主 loop 线程
     TcpConnection::ConnectCallback onConn_;
     TcpConnection::MessageCallback onMsg_;
-    std::function<void(const TcpConnection::Ptr&)> decorator_; // TLS 等安装点
+    std::vector<std::function<void(const TcpConnection::Ptr&)>> decorators_;
 };
 
 } // namespace zenith::net

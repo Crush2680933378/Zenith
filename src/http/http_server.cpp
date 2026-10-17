@@ -13,11 +13,71 @@ struct ConnState {
 } // namespace
 
 HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool, size_t maxBody)
-    : loop_(loop), server_(loop, ioPool), maxBodyBytes_(maxBody) {
+    : HttpServer(loop, ioPool, [&] {
+          SecurityLimits l;
+          l.maxBodyBytes = maxBody;
+          return l;
+      }()) {}
+
+HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool,
+                        const SecurityLimits& limits)
+    : loop_(loop), server_(loop, ioPool), limits_(limits) {
+    maxBodyBytes_ = limits.maxBodyBytes;
     server_.setMessageCallback(
         [this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
             onMessage(conn, buf);
         });
+    // 连接装饰器：计数 + 空闲踢除定时器（slowloris 防线）
+    server_.addConnectionDecorator([this](const net::TcpConnection::Ptr& conn) {
+        const int n = connCount_.fetch_add(1) + 1;
+        if (static_cast<size_t>(n) > limits_.maxConcurrentConns) {
+            // 装饰器在 establish 前执行：send/forceClose 此刻会被静默丢弃——
+            // 推迟到连接建立回调（connected_ 已置位）再拒绝
+            conn->setConnectCallback([](const net::TcpConnection::Ptr& c) {
+                HttpResponse resp;
+                resp.status = 503;
+                resp.headers.set("Content-Type", "text/plain; charset=utf-8");
+                resp.body = "503 connection limit exceeded";
+                c->send(resp.serialize(true, false));
+                c->forceClose();
+            });
+            return;
+        }
+        // keep-alive 空闲超时：连接无请求超限即关（有在途请求则续期）
+        armIdleTimer(conn);
+        conn->setCloseCallback([this](const net::TcpConnection::Ptr& c) {
+            connCount_.fetch_sub(1);
+            cancelIdleTimer(c);
+        });
+    });
+}
+
+void HttpServer::armIdleTimer(const net::TcpConnection::Ptr& conn) {
+    if (limits_.keepAliveIdleSec <= 0) return;
+    const auto key = reinterpret_cast<uintptr_t>(conn.get());
+    std::lock_guard<std::mutex> lk(idleMtx_);
+    idleTimers_[key] = loop_->scheduleAfter(
+        std::chrono::seconds(limits_.keepAliveIdleSec), [this, conn] {
+            std::lock_guard<std::mutex> lk2(idleMtx_);
+            idleTimers_.erase(reinterpret_cast<uintptr_t>(conn.get()));
+            if (conn->connected() && inflight_.load() <= 0) {
+                conn->forceClose(); // 空闲超限
+            }
+        });
+}
+
+void HttpServer::cancelIdleTimer(const net::TcpConnection::Ptr& conn) {
+    const auto key = reinterpret_cast<uintptr_t>(conn.get());
+    uint64_t tid = 0;
+    {
+        std::lock_guard<std::mutex> lk(idleMtx_);
+        auto it = idleTimers_.find(key);
+        if (it != idleTimers_.end()) {
+            tid = it->second;
+            idleTimers_.erase(it);
+        }
+    }
+    if (tid != 0) loop_->cancel(tid);
 }
 
 HttpServer::~HttpServer() { stop(); }
@@ -28,7 +88,7 @@ core::Result<void> HttpServer::listen(const std::string& host, uint16_t port, in
 
 core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx,
                                           const std::string& host, uint16_t port, int backlog) {
-    server_.setConnectionDecorator([&ctx](const net::TcpConnection::Ptr& conn) {
+    server_.addConnectionDecorator([&ctx](const net::TcpConnection::Ptr& conn) {
         SSL* ssl = ctx.newServerSession();
         if (ssl == nullptr) {
             conn->forceClose();
@@ -125,6 +185,7 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
 }
 
 void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
+    armIdleTimer(conn); // 每请求续期空闲计时
     inflight_.fetch_add(1);
     auto inflightGuard = [this](void*) { maybeFireDrained(); };
     std::unique_ptr<void, decltype(inflightGuard)> guard{reinterpret_cast<void*>(this), inflightGuard};

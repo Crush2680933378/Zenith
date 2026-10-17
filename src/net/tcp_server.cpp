@@ -54,7 +54,7 @@ void TcpServer::handleAccept() {
         conn->setConnectCallback(onConn_);
         conn->setMessageCallback(onMsg_);
         conn->finalize([this](const TcpConnection::Ptr& c) { removeConnection(c); });
-        if (decorator_) decorator_(conn); // TLS 滤层等安装（establish 前）
+        for (auto& d : decorators_) d(conn); // TLS 滤层/防护计数等（establish 前）
 
         // 连接表在主 loop 维护（accept 顺序确定）；
         // fd 注册与回调必须发生在所属 IO loop 线程内（跨线程经 runInLoop 投递）

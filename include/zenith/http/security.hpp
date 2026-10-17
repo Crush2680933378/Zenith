@@ -19,6 +19,23 @@
 namespace zenith::http {
 
 // ---------------------------------------------------------------------------
+// SecurityLimits：协议层防护统一配置（M5.2 遗留收口 / M6.4 补齐）
+// ---------------------------------------------------------------------------
+struct SecurityLimits {
+    size_t maxBodyBytes = 10 * 1024 * 1024;   // 请求体上限
+    size_t maxHeaderBytes = 64 * 1024;        // 头部区上限（parser 内建同值）
+    size_t maxRequestLine = 8 * 1024;         // 请求行上限（parser 内建同值）
+    size_t maxConcurrentConns = 10000;        // 最大并发连接（超出新连接 503）
+    int keepAliveIdleSec = 60;                // keep-alive 空闲超时（slowloris 防线）
+    int headerReadTimeoutMs = 15000;          // 请求头读取超时
+
+    static const SecurityLimits& defaults() {
+        static SecurityLimits d;
+        return d;
+    }
+};
+
+// ---------------------------------------------------------------------------
 // CORS
 // ---------------------------------------------------------------------------
 struct CorsOptions {

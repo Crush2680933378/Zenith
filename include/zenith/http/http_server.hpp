@@ -6,6 +6,7 @@
 #pragma once
 
 #include <atomic>
+#include <map>
 #include <memory>
 
 #include "zenith/core/export.hpp"
@@ -13,6 +14,7 @@
 #include "zenith/core/result.hpp"
 #include "zenith/http/http_parser.hpp"
 #include "zenith/http/router.hpp"
+#include "zenith/http/security.hpp"
 #include "zenith/net/event_loop.hpp"
 #include "zenith/net/event_loop_thread_pool.hpp"
 #include "zenith/net/tcp_server.hpp"
@@ -25,6 +27,9 @@ class ZENITH_API HttpServer : private core::NonCopyable {
 public:
     HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool = nullptr,
                size_t maxBodyBytes = 10 * 1024 * 1024);
+    /// 完整防护参数形态（M6.4）：连接上限/空闲超时/头超时
+    HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool,
+               const SecurityLimits& limits);
     ~HttpServer();
 
     core::Result<void> listen(const std::string& host = "0.0.0.0", uint16_t port = 8080,
@@ -62,7 +67,13 @@ private:
     net::EventLoop* loop_;
     net::TcpServer server_;
     std::atomic<int> inflight_{0};
+    std::atomic<int> connCount_{0};
     std::atomic<bool> closing_{false};
+    SecurityLimits limits_;
+    std::mutex idleMtx_;
+    std::map<uintptr_t, uint64_t> idleTimers_;
+    void armIdleTimer(const net::TcpConnection::Ptr& conn);
+    void cancelIdleTimer(const net::TcpConnection::Ptr& conn);
     std::function<void()> drainedCb_;
     void maybeFireDrained();
     Router router_;
