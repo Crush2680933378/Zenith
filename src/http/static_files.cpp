@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <mutex>
 #include <fstream>
 
 namespace zenith::http {
@@ -117,8 +118,49 @@ bool parseRange(const std::string& v, uint64_t size, uint64_t& start, uint64_t& 
 }
 } // namespace
 
-Handler staticHandler(std::string rootDir, std::string urlPrefix) {
-    return [root = std::move(rootDir), prefix = std::move(urlPrefix)](Context& c) {
+namespace {
+// 小文件缓存（ETag 键；上限 256 条防膨胀）。M6.2：削静态热路径磁盘读。
+constexpr uint64_t kCacheMaxFile = 64 * 1024;
+constexpr size_t kCacheMaxEntries = 256;
+struct CacheEntry {
+    std::string etag;
+    std::string body;
+    int64_t mtime;
+};
+std::mutex gCacheMtx;
+std::map<std::string, CacheEntry> gCache;
+
+bool cacheGet(const std::string& path, const std::string& etag, std::string& outBody) {
+    std::lock_guard<std::mutex> lk(gCacheMtx);
+    auto it = gCache.find(path);
+    if (it == gCache.end()) return false;
+    if (it->second.etag != etag) {
+        gCache.erase(it); // 文件已变 —— 失效
+        return false;
+    }
+    outBody = it->second.body;
+    return true;
+}
+
+void cachePut(const std::string& path, const std::string& etag, const std::string& body,
+              int64_t mtime) {
+    std::lock_guard<std::mutex> lk(gCacheMtx);
+    if (gCache.size() >= kCacheMaxEntries) {
+        // 简单逐出：清最旧 mtime 的一半
+        std::vector<const std::string*> doomed;
+        for (const auto& [p, e] : gCache) doomed.push_back(&p);
+        std::sort(doomed.begin(), doomed.end(), [&](const std::string* a, const std::string* b) {
+            return gCache[*a].mtime < gCache[*b].mtime;
+        });
+        for (size_t i = 0; i < doomed.size() / 2; ++i) gCache.erase(*doomed[i]);
+    }
+    gCache[path] = CacheEntry{etag, body, mtime};
+}
+} // namespace
+
+Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmallFiles) {
+    return [root = std::move(rootDir), prefix = std::move(urlPrefix),
+            cache = cacheSmallFiles](Context& c) {
         // 去前缀得相对路径
         std::string rel = c.path();
         if (rel.compare(0, prefix.size(), prefix) == 0) {
@@ -164,6 +206,23 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix) {
 
         // Range
         const std::string range = c.header("Range");
+
+        // 小文件缓存快路径：全量 200 且 ETag 未变 → 免磁盘读
+        if (cache && range.empty() && size > 0 && size <= kCacheMaxFile) {
+            std::string cached;
+            if (cacheGet(full, etag, cached)) {
+                c.status(200);
+                c.response().body = std::move(cached);
+                return;
+            }
+            std::string body(static_cast<size_t>(size), ' ');
+            in.read(body.data(), static_cast<std::streamsize>(size));
+            cachePut(full, etag, body, mtime);
+            c.status(200);
+            c.response().body = std::move(body);
+            return;
+        }
+
         uint64_t start = 0, end = size == 0 ? 0 : size - 1;
         bool partial = false;
         if (!range.empty() && size > 0 && parseRange(range, size, start, end)) {

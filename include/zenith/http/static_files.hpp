@@ -16,7 +16,9 @@ namespace zenith::http {
 
 /// 静态文件处理器工厂。urlPrefix 为挂载前缀（如 "/assets"），
 /// 请求 path 去前缀后拼接到 rootDir 下。
-ZENITH_API Handler staticHandler(std::string rootDir, std::string urlPrefix);
+/// cacheSmallFiles：≤64KB 文件进程内缓存（ETag 失效），静态场景显著削磁盘读。
+ZENITH_API Handler staticHandler(std::string rootDir, std::string urlPrefix,
+                                 bool cacheSmallFiles = true);
 
 /// ETag 计算（size+mtime 十六进制），独立导出便于测试
 ZENITH_API std::string computeFileEtag(uint64_t size, int64_t mtimeSec);

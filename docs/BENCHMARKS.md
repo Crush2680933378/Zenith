@@ -19,6 +19,20 @@
 | p99 | ≤0.001s |
 | body_throughput | 1.45 MB/s |
 
+## Release 基线（2026-10，M6.2，RelWithDebInfo / -O2 / loopback / 2线程×8链）
+
+| 场景 | RPS | P99 | 备注 |
+|---|---|---|---|
+| 裸 JSON API（无日志中间件） | **181,716** | ≤1ms | http_server.hpp 直接起服务 |
+| 裸 text / HTTPS hello | 154,232 | ≤1ms | TLS 握手摊薄后几乎零开销 |
+| JSON + **同步控制台访问日志** | 30,477 | ≤1ms | ⚠️ 控制台日志是 6× 瓶颈 |
+| 静态 5KB 文件（含小文件缓存） | 7,164 | 2ms | ~35MB/s；缓存对热磁盘无增益（瓶颈在拷贝链路） |
+
+**核心结论（M6.2 实测）**：生产环境访问日志必须走 AsyncFileLogger（M1 已有），
+勿用同步 ConsoleLogger——同步控制台输出造成 6 倍吞吐损失。
+Buffer 池化经评估暂缓：连接级 Buffer 常驻复用，每请求分配在 Context/字符串层，
+181K RPS 下非瓶颈（留待 500K+ 目标时再议）。
+
 ## 回归门槛（CI）
 
 同环境复跑劣化 > 10% 视为回归（PR 拦截）。Release 构建预期 2~4× 提升，
