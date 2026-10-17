@@ -1,5 +1,10 @@
 # Zenith
 
+[![CI](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml/badge.svg)](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
+[![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
+
 **天顶，顶点，万物之巅。** Zenith 是一款 C++17 高并发后端框架（对标 Java Spring Boot / Go Gin 的定位），
 以**纯 C ABI 插件内核**为地基：一切扩展能力——数据库、TLS、FFmpeg 媒体、ComfyUI/AI、ESP32 与泰山派
 RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入。
