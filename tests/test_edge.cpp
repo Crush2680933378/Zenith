@@ -165,7 +165,7 @@ public:
         }
         return "";
     }
-    ~FakeDevice() { closesocket(fd_); }
+    ~FakeDevice() { closesock(static_cast<int>(fd_)); }
 
 private:
     static void closesock(int s) {
