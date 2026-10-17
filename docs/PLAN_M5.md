@@ -92,12 +92,16 @@ CI 基线门槛生效。
 **验收**：新机/新目录 `find_package` 消费成功；CI 全绿徽章；脚手架生成的
 工程开箱即跑。
 
-## M5.6（可选，排期富余才做）
+## M5.6（可选 → 已实施 ✅ 2026-10）
 
-- 多进程 worker（POSIX SO_REUSEPORT）+ 主进程管理
-- 配置热重载（SIGHUP / 文件监听）
-- io_uring 后端（Linux，ITransport 第三形态）
-- uORM Web 管理台迁移到 Zenith 自研 HTTP 上承载（M3 起的旧愿）
+- ✅ 配置热重载：HotReloader——**内容哈希检测**（实测 NTFS 对覆写的 last_write_time
+  不更新，mtime 检测不可靠——写入 5e 教训）+ 原子快照 + 失败保旧
+- ✅ 多进程 worker：WorkerSupervisor（POSIX fork + SO_REUSEPORT + waitpid 监视补齐）；
+  Windows stub 返回 Err；CI Linux 矩阵验证
+- ✅ DB 管理台迁移：examples/06_admin_console——Zenith 自研 HTTP 承载
+  （uORM/sqlite REST CRUD + 内嵌单文件控制台 + 可观测三件套），替换 uORM asio 控制台
+- ⏸️ io_uring：需真实 Linux 内核 5.1+/liburing 工具链实机验证——按风险条款裁剪至
+  后续里程碑（接口位 ITransport 第三形态已预留）
 
 ---
 

@@ -32,7 +32,7 @@ void Histogram::observe(int64_t micros) noexcept {
     }
 }
 
-double Histogram::percentile(double q) const noexcept {
+double Histogram::percentile(double q) const {
     const int64_t n = count_.load(std::memory_order_relaxed);
     if (n == 0) return 0.0;
     const double target = static_cast<double>(n) * q;

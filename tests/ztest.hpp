@@ -58,9 +58,12 @@ inline int runAll() {
         } catch (const FailException&) {
             ++failed;
             std::printf("[ FAIL ] %s.%s\n", tc.suite, tc.name);
+        } catch (const std::exception& e) {
+            ++failed;
+            std::printf("[ FAIL ] %s.%s (exception: %s)\n", tc.suite, tc.name, e.what());
         } catch (...) {
             ++failed;
-            std::printf("[ FAIL ] %s.%s (unexpected exception)\n", tc.suite, tc.name);
+            std::printf("[ FAIL ] %s.%s (unexpected non-std exception)\n", tc.suite, tc.name);
         }
     }
     std::printf("========== %d test(s), %d failed ==========\n", total, failed);

@@ -24,7 +24,7 @@
 namespace zenith::db {
 
 /// 数据库连接配置（键前缀默认 "db"，如 db.driver / db.host / db.database）
-struct DbConfig {
+struct ZENITH_API DbConfig {
     std::string driver = "sqlite";     // sqlite | mysql | postgresql
     std::string host = "127.0.0.1";
     int port = 0;                      // sqlite 忽略

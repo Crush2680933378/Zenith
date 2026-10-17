@@ -51,11 +51,13 @@ set(ZENITH_SOURCES
     net/websocket.cpp
     redis/redis_client.cpp
     config/json_config.cpp
+    config/hot_reload.cpp
     metrics/metrics.cpp
     crypto/sha256.cpp
     http/jwt.cpp
     http/security.cpp
     net/signal.cpp
+    net/worker_supervisor_posix.cpp
     io/cobs.cpp
     io/serial_port.cpp
     ${ZENITH_TLS_SOURCES}

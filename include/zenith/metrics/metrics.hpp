@@ -19,7 +19,7 @@
 
 namespace zenith::metrics {
 
-class Counter {
+class ZENITH_API Counter {
 public:
     void inc(int64_t delta = 1) noexcept { value_.fetch_add(delta, std::memory_order_relaxed); }
     [[nodiscard]] int64_t value() const noexcept {
@@ -30,7 +30,7 @@ private:
     std::atomic<int64_t> value_{0};
 };
 
-class Gauge {
+class ZENITH_API Gauge {
 public:
     void set(int64_t v) noexcept { value_.store(v, std::memory_order_relaxed); }
     void inc(int64_t d = 1) noexcept { value_.fetch_add(d, std::memory_order_relaxed); }
@@ -44,11 +44,11 @@ private:
 };
 
 /// 固定桶直方图（延迟微秒）：≤1/5/10/50/100/500μs、1/5/10/50/100/500ms、1s+
-class Histogram {
+class ZENITH_API Histogram {
 public:
     void observe(int64_t micros) noexcept;
     /// P 分位（0~1）；空样本返回 0
-    [[nodiscard]] double percentile(double q) const noexcept;
+    [[nodiscard]] double percentile(double q) const;
     [[nodiscard]] int64_t count() const noexcept { return count_.load(std::memory_order_relaxed); }
     [[nodiscard]] int64_t sumMicros() const noexcept {
         return sum_.load(std::memory_order_relaxed);

@@ -50,6 +50,19 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_tls PROPERTIES TIMEOUT 180)
 endif()
 
+# M5.6 运维能力（热重载/管理台 REST；DB 部分需 uORM）
+add_executable(test_m5_ops test_m5_ops.cpp)
+if (TARGET uORM::uorm)
+    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ws2_32 uORM::uorm)
+else()
+    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ws2_32)
+    target_compile_definitions(test_m5_ops PRIVATE ZENITH_NO_DB=1)
+endif()
+target_include_directories(test_m5_ops PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m5_ops)
+add_test(NAME test_m5_ops COMMAND test_m5_ops)
+set_tests_properties(test_m5_ops PROPERTIES TIMEOUT 120)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

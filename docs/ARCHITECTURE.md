@@ -129,6 +129,18 @@ keep-alive 连接池在 M3。
 6. **COBS 编码 254 边界**：code 255 = 254 字面量且不隐含 0x00——编码器须在
    压入第 254 个非零字节后即断块（差一即整流解析错位）。
 
+## 5f. M5/M5.6 经验
+
+1. **Windows 动态库下未标 ZENITH_API 的类不出现在导入库**——Histogram/DbConfig
+   曾在链接期报 __imp_ 未定义。规则：公共头中任何有跨库调用点的类/自由函数
+   必须标注 ZENITH_API（静态库消费无感，动态库必需）。
+2. **声明与定义的 noexcept/限定符不一致会改写 mangled 名**——Histogram::percentile
+   曾因头文件 noexcept 而实现缺 noexcept 导致"undefined reference"。签名对齐是红线。
+3. **NTFS 对既有文件覆写的 last_write_time 可能不更新**（同长覆写实测不变，仅
+   重建可见）——文件变更检测必须用内容哈希，mtime 只能作辅助信号。
+4. **MinGW 下 -lzenith 优先命中 libzenith.dll.a（导入库）**——静态消费必须显式
+   链 libzenith.a 全路径（zenith-new 脚手架已内置并注释存档）。
+
 ## 6. 协程层（可选编译）
 
 - `ZENITH_ENABLE_COROUTINES=ON` 时新增 `zenith_coro` 接口层并切换该层到 C++20；
