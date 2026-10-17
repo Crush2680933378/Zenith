@@ -1,5 +1,11 @@
 # 单元测试（ZTEST 自研微框架）—— 链接静态库 zenith_core，逐可执行注册 ctest
 
+if(WIN32)
+    set(ZT_NETLIB ws2_32)
+else()
+    set(ZT_NETLIB)
+endif()
+
 set(ZENITH_TESTS
     test_core
     test_concurrency
@@ -53,9 +59,9 @@ endif()
 # M5.6 运维能力（热重载/管理台 REST；DB 部分需 uORM）
 add_executable(test_m5_ops test_m5_ops.cpp)
 if (TARGET uORM::uorm)
-    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ws2_32 uORM::uorm)
+    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ${ZT_NETLIB} uORM::uorm)
 else()
-    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ws2_32)
+    target_link_libraries(test_m5_ops PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
     target_compile_definitions(test_m5_ops PRIVATE ZENITH_NO_DB=1)
 endif()
 target_include_directories(test_m5_ops PRIVATE ${CMAKE_SOURCE_DIR}/tests)
@@ -66,7 +72,7 @@ set_tests_properties(test_m5_ops PROPERTIES TIMEOUT 120)
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)
-    target_link_libraries(zenith_bench PRIVATE zenith_core Threads::Threads ws2_32)
+    target_link_libraries(zenith_bench PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
     target_include_directories(zenith_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
     zenith_set_warnings(zenith_bench)
 endif()
@@ -75,7 +81,7 @@ endif()
 get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
 if (ZENITH_HAS_TLS_PROP)
     add_executable(test_m5_sec test_m5_sec.cpp)
-    target_link_libraries(test_m5_sec PRIVATE zenith_core Threads::Threads ws2_32)
+    target_link_libraries(test_m5_sec PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
     target_include_directories(test_m5_sec PRIVATE ${CMAKE_SOURCE_DIR}/tests)
     zenith_set_warnings(test_m5_sec)
     add_test(NAME test_m5_sec COMMAND test_m5_sec)
@@ -84,7 +90,7 @@ endif()
 
 # M5.3 可观测性（指标/Request-Id/status）
 add_executable(test_m5_obs test_m5_obs.cpp)
-target_link_libraries(test_m5_obs PRIVATE zenith_core Threads::Threads ws2_32)
+target_link_libraries(test_m5_obs PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
 target_include_directories(test_m5_obs PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 zenith_set_warnings(test_m5_obs)
 add_test(NAME test_m5_obs COMMAND test_m5_obs)
@@ -94,7 +100,7 @@ set_tests_properties(test_m5_obs PROPERTIES TIMEOUT 120)
 get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
 if (ZENITH_HAS_TLS_PROP)
     add_executable(test_m5_web test_m5_web.cpp)
-    target_link_libraries(test_m5_web PRIVATE zenith_core Threads::Threads ws2_32)
+    target_link_libraries(test_m5_web PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
     target_include_directories(test_m5_web PRIVATE ${CMAKE_SOURCE_DIR}/tests)
     zenith_set_warnings(test_m5_web)
     add_test(NAME test_m5_web COMMAND test_m5_web)
@@ -103,7 +109,7 @@ endif()
 
 # ai 插件测试（mock ComfyUI 走本仓 HttpServer）
 add_executable(test_ai test_ai.cpp)
-target_link_libraries(test_ai PRIVATE zenith_core Threads::Threads ws2_32)
+target_link_libraries(test_ai PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
 target_include_directories(test_ai PRIVATE
     ${CMAKE_SOURCE_DIR}/tests
     ${CMAKE_SOURCE_DIR}/examples/common)
@@ -115,7 +121,7 @@ set_tests_properties(test_ai PROPERTIES TIMEOUT 120)
 
 # edge 插件测试（cobs/serial 编入核心库）
 add_executable(test_edge test_edge.cpp)
-target_link_libraries(test_edge PRIVATE zenith_core Threads::Threads ws2_32)
+target_link_libraries(test_edge PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
 target_include_directories(test_edge PRIVATE
     ${CMAKE_SOURCE_DIR}/tests
     ${CMAKE_SOURCE_DIR}/examples/common)

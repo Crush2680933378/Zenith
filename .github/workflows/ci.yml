@@ -42,7 +42,8 @@ jobs:
       - run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
                 -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
-                -DZENITH_TLS=openssl
+                -DZENITH_TLS=openssl \
+                -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
           cmake --build build
           ctest --test-dir build --output-on-failure
 
