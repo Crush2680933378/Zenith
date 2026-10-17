@@ -105,6 +105,7 @@ endif()
 # 安装与导出（M5.5）：find_package(Zenith CONFIG) 消费
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 install(DIRECTORY include/zenith DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY abi/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zenith/abi FILES_MATCHING PATTERN "*.h")
 
