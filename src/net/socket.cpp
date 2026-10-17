@@ -4,6 +4,10 @@
 
 #include "zenith/core/platform.hpp"
 
+#if !defined(ZENITH_PLATFORM_WINDOWS)
+  #include <csignal> // SIGPIPE 忽略（见下方 SigpipeGuard）
+#endif
+
 #if defined(ZENITH_PLATFORM_WINDOWS)
   #ifndef _WIN32_WINNT
     #define _WIN32_WINNT 0x0601
@@ -52,8 +56,6 @@ inline void closeNative(fd_t fd) noexcept {
 }
 
 #else
-
-#include <csignal>
 
 using NativeSocket = int;
 constexpr NativeSocket kInvalidNative = -1;
