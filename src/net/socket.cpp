@@ -53,8 +53,19 @@ inline void closeNative(fd_t fd) noexcept {
 
 #else
 
+#include <csignal>
+
 using NativeSocket = int;
 constexpr NativeSocket kInvalidNative = -1;
+
+namespace {
+// Linux 写入已关闭对端的 socket 触发 SIGPIPE 默认终止进程——服务端必须忽略
+// （Windows 对应 WSAECONNRESET，由错误路径处理）。首次创建 socket 时生效一次。
+struct SigpipeGuard {
+    SigpipeGuard() { std::signal(SIGPIPE, SIG_IGN); }
+};
+const SigpipeGuard g_sigpipeGuard;
+} // namespace
 
 inline int sockErr() noexcept { return errno; }
 constexpr bool wouldBlock(int e) noexcept { return e == EAGAIN || e == EWOULDBLOCK || e == EINPROGRESS; }
