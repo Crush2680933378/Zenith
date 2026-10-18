@@ -111,6 +111,12 @@ install(DIRECTORY abi/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zenith/abi FILES_
 
 if (ZENITH_BUILD_STATIC)
     install(TARGETS zenith_core EXPORT ZenithTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    if (TARGET uorm)
+        install(TARGETS uorm EXPORT ZenithTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
+    if (TARGET ujson)
+        install(TARGETS ujson EXPORT ZenithTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
 endif()
 if (ZENITH_BUILD_SHARED)
     install(TARGETS zenith EXPORT ZenithTargets

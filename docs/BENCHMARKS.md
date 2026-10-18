@@ -33,6 +33,17 @@
 Buffer 池化经评估暂缓：连接级 Buffer 常驻复用，每请求分配在 Context/字符串层，
 181K RPS 下非瓶颈（留待 500K+ 目标时再议）。
 
+## Linux epoll 实测（WSL2 Ubuntu-24.04 / 内核 6.6.114，2026-10-18）
+
+| 指标 | 值 | 对照 Windows |
+|---|---|---|
+| 编译 | 158 目标零错误 | 同 |
+| ctest | 22/22 全绿 | 同 |
+| wrk plaintext | ~50K RPS | 238K（WSAPoll） |
+| wrk JSON | ~53K RPS | 234K |
+| 限制 | WSL2 虚拟网络栈（Hyper-V 虚拟交换机） | loopback 原生 |
+| 结论 | 50K 为环境天花板（wrk 与 zenith-bench 同值）；裸机 epoll 预期≥Windows | — |
+
 ## 长稳（M6.3 soak，2026-10）
 
 | 指标 | 值 |

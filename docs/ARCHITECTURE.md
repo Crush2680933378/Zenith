@@ -87,6 +87,25 @@ load → init(host) → start() → [运行期] → stop() → shutdown() → �
    正确结论，否则 `memcpy` 越界写堆。正确公式：`required = kPrependBytes +
    readableBytes() + n`，不足则 resize，随后无条件 compact。
 
+## 5c-2. Linux epoll 本机验证（M6 追加，2026-10-18）
+
+WSL2 Ubuntu-24.04（内核 6.6.114）上完成 epoll 后端首次本机闭环：
+
+| 验证项 | 结果 |
+|---|---|
+| 全量编译（158 目标） | 零错误零警告 |
+| ctest 全量 | **22/22 全绿**（含 TCP/HTTP/WS/TLS/Redis/media/edge/ai 全部 e2e） |
+| poller 确认 | `EventLoop::pollerName()` 输出 `epoll` |
+| 基准（loopback） | wrk 第三方确认 ~50K RPS —— WSL2 虚拟网络栈天花板（非 Zenith 瓶颈） |
+| find_package 消费 | 独立工程 `find_package(Zenith CONFIG)` 编译运行成功 |
+
+**发行版**：`zenith-v0.1.0-linux-x64.tar.gz`（16MB）——头文件 + libzenith.a +
+libzenith.so + CMake 导出（自动 resolve Threads/OpenSSL 依赖）。
+
+**导出修复**（首次 Linux 安装测试抓到）：
+- `uORM::uorm`/`uORM::ujson` 须加入 EXPORT 目标集（PUBLIC 依赖传递）
+- `ZenithConfig.cmake.in` 须 `find_dependency(Threads)` + `find_dependency(OpenSSL)`
+
 ## 5c. Reactor 后端矩阵与线程模型
 
 | 平台 | 后端 | 说明 |
