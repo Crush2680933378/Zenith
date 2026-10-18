@@ -11,6 +11,28 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 
 前端交给 React，Zenith 只提供 API。
 
+## 🏆 性能：跨语言公平基准（10 框架对比）
+
+同机 loopback / 统一客户端 zenith-bench（2 线程×8 keep-alive 链）/ 预热 3s /
+每端点 3 轮取中位数 / 各语言 Release 构建档。完整方法论与局限声明见
+[benchmarks/BENCHMARK_FAIR.md](benchmarks/BENCHMARK_FAIR.md)。
+
+| 框架 | plaintext RPS | JSON RPS | 内存(MB) | vs Zenith |
+|---|---:|---:|---:|---:|
+| **Zenith (C++17)** | **237,952** | **234,459** | **9.2** | **1.00×** |
+| Rust (axum) | 153,043 | 153,218 | 7.1 | 0.64× |
+| Go (gin) | 145,471 | 139,426 | 12.2 | 0.61× |
+| Java (Spring Boot) | 133,369 | 123,164 | 156.5 | 0.56× |
+| Java (JDK HttpServer) | 130,172 | 129,299 | 52.1 | 0.55× |
+| Go (stdlib) | 128,422 | 116,097 | 8.4 | 0.54× |
+| Node.js (node:http) | 88,537 | 89,017 | 48.2 | 0.37× |
+| Node.js (fastify) | 85,217 | 83,211 | 57.5 | 0.36× |
+| Node.js (express) | 60,078 | 55,990 | 51.9 | 0.25× |
+| Python (FastAPI) | 3,902 | 2,993 | 53.6 | 0.02× |
+
+> P99：除 Python（5-10ms）外全部 ≤1ms。内存：Spring Boot 的 **1/17**、Node 的 **1/6**。
+> 局限：客户端与服务端共享同一物理机（loopback），更高速差需专用压测机验证。
+
 ## M5（当前）：生产就绪
 
 - **Web 完整性**：multipart 文件上传、静态文件服务（Range/ETag/穿越防护）、
