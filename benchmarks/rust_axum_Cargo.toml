@@ -1,0 +1,12 @@
+[package]
+name = "zenith_bench_rust"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.7"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+
+[profile.release]
+opt-level = 3
