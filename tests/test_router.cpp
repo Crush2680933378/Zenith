@@ -152,4 +152,36 @@ ZTEST(Router, HasRoute) {
     ZEXPECT_FALSE(r.hasRoute("/a/c"));
 }
 
+/// 根路径与 catch-all 的边界（Blog 实战固化的规格）：
+/// 1) catch-all "/*path" 不匹配 "/"——path 语义是「/ 之后至少一段」，
+///    空剩余段不算命中。SPA 托管忘注册 "/" 的直接症状就是首页 404。
+/// 2) 显式注册 "/" 后正常命中；且静态段优先级仍高于 catch-all。
+ZTEST(Router, RootPathNotMatchedByCatchAll) {
+    Router r;
+    r.get("/api/stats", [](Context& c) { c.text(200, "stats"); });
+    r.get("/*path", [](Context& c) { c.text(200, "spa:" + c.param("path")); });
+
+    // "/"：catch-all 未命中 → 404（这就是必须单独注册根路径的原因）
+    Context root = makeCtx(HttpMethod::Get, "/");
+    r.dispatch(root);
+    ZEXPECT_EQ(root.responseStatus(), 404);
+
+    // 显式注册 "/" 后命中
+    r.get("/", [](Context& c) { c.text(200, "index"); });
+    Context root2 = makeCtx(HttpMethod::Get, "/");
+    r.dispatch(root2);
+    ZEXPECT_EQ(root2.responseStatus(), 200);
+    ZEXPECT_EQ(root2.response().body, std::string("index"));
+
+    // 静态段仍优先于 catch-all
+    Context api = makeCtx(HttpMethod::Get, "/api/stats");
+    r.dispatch(api);
+    ZEXPECT_EQ(api.response().body, std::string("stats"));
+
+    // 多级路径仍由 catch-all 兜底
+    Context deep = makeCtx(HttpMethod::Get, "/game/room/ABCD");
+    r.dispatch(deep);
+    ZEXPECT_EQ(deep.response().body, std::string("spa:game/room/ABCD"));
+}
+
 ZTEST_MAIN

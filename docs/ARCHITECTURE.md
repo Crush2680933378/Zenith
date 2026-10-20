@@ -160,6 +160,57 @@ keep-alive 连接池在 M3。
 4. **MinGW 下 -lzenith 优先命中 libzenith.dll.a（导入库）**——静态消费必须显式
    链 libzenith.a 全路径（zenith-new 脚手架已内置并注释存档）。
 
+## 5g. Blog 实战沉淀（M5.7 追加，2026-10）
+
+> 来源：用 Zenith 完整实现一个「技术博客 + 3D 联机棋室」独立应用
+> （React 19 + Three.js 前端，约 2 万行，仓库 `../ZenithBlog`，只经
+> `find_package(Zenith CONFIG)` 消费安装好的 SDK）。以下每条都有
+> 复现路径与回归测试。
+
+1. **Router catch-all 不匹配根路径 "/"**——`/*path` 的 path 语义是
+   "/ 之后至少一段"，空剩余段不算命中。SPA 托管忘注册 "/" 的直接症状
+   就是首页 404。已固化为回归测试 `Router.RootPathNotMatchedByCatchAll`；
+   并新增 `http::spaHandler()`（M5.7）把「静态 + index.html 回退 + 根路径」
+   收敛为框架一处实现，应用层不再手写双 Context 探测补丁。
+
+2. **spaHandler 的回退边界**——带扩展名的 404 资源（/assets/missing.js）
+   绝不能回 index.html：会以 200 + text/html 伪装成功，前端拿到垃圾字节
+   且 Content-Type/缓存协商全错，是实战最难排查的一类问题。规则：
+   末段含 '.' → 404；无扩展名 → index.html；回退响应带
+   `Cache-Control: no-cache`（入口文件引用内容哈希资源，必须每次校验）。
+   回归测试 `SpaE2E.FallbackAndAssetPriority` 四条断言全覆盖。
+
+3. **WebSocket 会话身份必须挂 `session->setContext`，禁止裸指针做键**——
+   会话销毁后堆地址被新连接复用，旧会话延迟执行的 close 回调会通过相同
+   指针抹掉新会话的身份，表现为「hello 成功但后续指令报未登记」，只在
+   连接频繁建立/断开时偶发。API 头文件（websocket.hpp setContext 处）
+   已就地写入警告与推荐模式。
+
+4. **WS 广播文案必须与接收者无关**——发给房间内所有人的消息不得用
+   「你执先手/后手」这类第二人称：房主收到「你执后手」后按文案判断自己
+   座位，与实际座位（服务端 state.players[].seat）冲突。规则：文案描述
+   事件本身（"对手已加入，你执先手" 属于错例），接收者自己的状态一律以
+   state 快照字段推导。
+
+5. **Windows 控制台中文乱码的框架级修复**——控制台默认代码页是 GBK(936)，
+   而日志是 UTF-8 字面量，打印必乱码。ConsoleLogger 现已在构造时自动切
+   `CP_UTF8`（GetConsoleOutputCP 为 0 即重定向场景则跳过，字节原样落盘）。
+   应用层不再需要（也不应该）自己调 SetConsoleOutputCP。
+
+6. **static_files.cpp 源码内嵌 NUL 字节**——小文件缓存路径的字符字面量
+   `' '` 实际是 `'\0'`，产生 "null character(s) preserved in literal" 警告，
+   且使该文件被多数工具判定为二进制。已修复为显式 `'\0'`；教训：任何
+   「编译警告+工具读不了文件」叠加出现时先查源文件字节。
+
+7. **SDK 消费形态验证（find_package 全流程）**——`ZENITH_ENABLE_ORM=OFF`
+   + `ZENITH_TLS=openssl` 构建出的安装树，`find_package(Zenith CONFIG)`
+   + `Zenith::zenith_core` 在 MinGW 下可独立链接应用（uORM/DB 驱动依赖
+   不再传递）；已知问题：`ZENITH_TLS=none` 时 net 层仍无条件引用
+   TlsFilter/OpenSslContext 符号，库不可链接（规避：openssl；后续提供
+   none 后端 stub 后解除）。
+
+
+
 ## 6. 协程层（可选编译）
 
 - `ZENITH_ENABLE_COROUTINES=ON` 时新增 `zenith_coro` 接口层并切换该层到 C++20；

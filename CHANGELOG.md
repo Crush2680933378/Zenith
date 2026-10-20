@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### 新增
+- `http::spaHandler(rootDir)`（M5.7）：SPA 静态 + index.html 回退。
+  真实文件优先（ETag/304/Range/小文件缓存）；未命中且路径非资源形态
+  （末段无扩展名）回 index.html 并带 `Cache-Control: no-cache`；
+  带扩展名的 404 资源保持 404。回归测试 `SpaE2E.FallbackAndAssetPriority`。
+- 新增回归测试 `Router.RootPathNotMatchedByCatchAll`：固化
+  "catch-all `/*path` 不匹配根路径 /" 的规格（SPA 托管须单独注册 `/`）。
+
+### 修复
+- Windows 控制台中文乱码：`ConsoleLogger` 构造时自动切换控制台代码页到
+  UTF-8（重定向场景自动跳过）。应用层不再需要自行调用 `SetConsoleOutputCP`。
+- `static_files.cpp` 源文件内嵌 NUL 字节（小文件缓存路径的字符字面量），
+  消除 "null character(s) preserved in literal" 编译警告。
+
+### 文档
+- `docs/ARCHITECTURE.md` 新增 §5g「Blog 实战沉淀」：根路径/catch-all 边界、
+  spaHandler 回退边界、WS 会话身份挂 `setContext`（禁止裸指针做键）、
+  广播文案与接收者无关、SDK 消费形态验证（ORM=OFF + TLS=openssl）等 7 条。
+
+### 变更
+- 框架首个实战应用（技术博客 + 3D 联机棋室，React 19 + Three.js）迁出为
+  独立仓库，改经 `find_package(Zenith CONFIG)` 消费安装好的 SDK——
+  「SDK 化消费」形态首次在 Windows/MinGW 全流程验证（含 ORM=OFF 裁剪）。
+- 根 CMakeLists 移除 `ZENITH_BUILD_APPS` 选项（apps/ 已随应用迁出）。
+
+### 已知问题
+- `ZENITH_TLS=none` 时 net/http 层仍无条件引用 TLS 符号，静态/动态库均
+  不可链接；规避：`ZENITH_TLS=openssl`。计划在 none 后端补 stub 后解除。
+
 ## v0.1.0 (2026-10)
 
 首个正式版本。六个里程碑、27 个提交、~24,000 行自研代码、22 个测试套件全绿。

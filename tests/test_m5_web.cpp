@@ -193,6 +193,61 @@ ZTEST(StaticE2E, Get304RangeTraversal) {
     ZEXPECT_EQ(miss.value().status, 404);
 }
 
+/* ---------------- SPA 静态服务（M5.7） ---------------- */
+
+/// spaHandler 回归测试——这个用例固化的是 Blog 实战踩出的三条规则：
+/// 1) 真实文件优先（/assets/app.js 必须回 JS，不能回 HTML）
+/// 2) 未命中路径回 index.html（前端路由接管，刷新深链不 404）
+/// 3) 根路径 "/" 不命中 catch-all，必须单独注册（空剩余段）
+ZTEST(SpaE2E, FallbackAndAssetPriority) {
+    const std::string root = "zspa.tmp";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    std::filesystem::create_directories(root + "/assets", ec);
+    { std::ofstream(root + "/index.html") << "<div id=spa-shell>"; }
+    { std::ofstream(root + "/assets/app.js") << "console.log('real');"; }
+
+    net::EventLoop loop;
+    net::EventLoopThreadPool io{1};
+    io.start();
+    http::HttpServer server(&loop, &io);
+    server.router().get("/", http::spaHandler(root));
+    server.router().get("/*path", http::spaHandler(root));
+    (void)server.listen("127.0.0.1", 0);
+    std::thread runner([&] { loop.loop(); });
+    std::this_thread::sleep_for(120ms);
+
+    const std::string base = "http://127.0.0.1:" + std::to_string(server.port());
+
+    // 1) 根路径：单独注册的 "/" → index.html
+    auto r0 = http::HttpClient::fetchBlockingUrl(base + "/");
+    ZEXPECT_EQ(r0.value().status, 200);
+    ZEXPECT_EQ(r0.value().body, std::string("<div id=spa-shell>"));
+    ZEXPECT_TRUE(r0.value().headers.get("Content-Type").find("text/html") != std::string::npos);
+    ZEXPECT_TRUE(r0.value().headers.get("Cache-Control").find("no-cache") != std::string::npos);
+
+    // 2) 深链（前端路由路径，磁盘上不存在）→ 回 index.html，200 而非 404
+    auto r1 = http::HttpClient::fetchBlockingUrl(base + "/game/room/ABCD");
+    ZEXPECT_EQ(r1.value().status, 200);
+    ZEXPECT_EQ(r1.value().body, std::string("<div id=spa-shell>"));
+
+    // 3) 真实静态资源：优先于回退（绝不能被 index.html 顶掉）
+    auto r2 = http::HttpClient::fetchBlockingUrl(base + "/assets/app.js");
+    ZEXPECT_EQ(r2.value().status, 200);
+    ZEXPECT_EQ(r2.value().body, std::string("console.log('real');"));
+    ZEXPECT_TRUE(r2.value().headers.get("Content-Type").find("javascript") != std::string::npos);
+
+    // 4) 带扩展名的不存在资源 → 404（不能伪装成 200 HTML，否则前端加载到
+    //    垃圾字节且 Content-Type 错误、缓存协商失效——实战最难排查的一类问题）
+    auto r3 = http::HttpClient::fetchBlockingUrl(base + "/assets/missing.js");
+    ZEXPECT_EQ(r3.value().status, 404);
+
+    loop.stop();
+    runner.join();
+    io.stop();
+    std::filesystem::remove_all(root, ec);
+}
+
 ZTEST(FormE2E, MultipartUpload) {
     WebFixture f;
     const std::string boundary = "ZenBoundary123";

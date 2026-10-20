@@ -1,0 +1,6 @@
+# Register the OpenCode Go 号池 route without touching the profile's
+# current default model: the plugin mounts dormant and only claims its route
+# once a pool holds at least one usable key.
+- insert:
+    - id: llm-opencode-go-pool
+      name: dsh-opencode-go-pool

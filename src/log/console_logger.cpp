@@ -50,6 +50,22 @@ bool enableVirtualTerminalOnce() {
     }();
     return ok;
 }
+
+/// Windows 控制台默认代码页是 GBK（936），而 Zenith 的日志/HTTP 消息全部是 UTF-8
+/// 字面量，直接打印中文必乱码。这里把输入/输出代码页都切到 UTF-8。
+/// GetConsoleCP 在输出被重定向到文件/管道时失败（返回 0）——那正是我们想要的：
+/// 重定向场景不需要（也不应该）改代码页，字节原样落盘即正确。
+/// 幂等：进程内只做一次；教学要点——UTF-8 日志系统在 Windows 上的第一件事。
+bool enableUtf8CodePageOnce() {
+    static const bool ok = [] {
+        const UINT out = GetConsoleOutputCP();
+        if (out == 0 || out == 65001) return out == 65001;
+        const BOOL o = SetConsoleOutputCP(65001);
+        const BOOL i = SetConsoleCP(65001);
+        return o != FALSE && i != FALSE;
+    }();
+    return ok;
+}
 #endif
 
 bool colorSupported() {
@@ -63,7 +79,12 @@ bool colorSupported() {
 } // namespace
 
 ConsoleLogger::ConsoleLogger(bool useStderr, bool colorEnabled)
-    : useStderr_(useStderr), color_(colorEnabled && colorSupported()) {}
+    : useStderr_(useStderr), color_(colorEnabled && colorSupported()) {
+#if defined(ZENITH_PLATFORM_WINDOWS)
+    // 无论是否开彩色，控制台代码页都要切到 UTF-8——否则纯文本中文一样乱码。
+    (void)enableUtf8CodePageOnce();
+#endif
+}
 
 void ConsoleLogger::write(const LogRecord& record) {
     const std::string plain = formatLogLine(record); // 以 '\n' 结尾

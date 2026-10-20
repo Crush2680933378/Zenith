@@ -33,7 +33,19 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 > P99：除 Python（5-10ms）外全部 ≤1ms。内存：Spring Boot 的 **1/17**、Node 的 **1/6**。
 > 局限：客户端与服务端共享同一物理机（loopback），更高速差需专用压测机验证。
 
-## M5（当前）：生产就绪
+## M5.7（当前）：SPA 托管 + 实战沉淀
+
+- **`http::spaHandler(rootDir)`**：单页应用静态服务——真实文件优先
+  （ETag/304/Range/小文件缓存），未命中的前端路由回 index.html（带
+  `Cache-Control: no-cache`），带扩展名的 404 资源保持 404 不伪装
+- **Windows 控制台 UTF-8**：ConsoleLogger 自动切换代码页，中文日志不再乱码
+- **SDK 消费全流程验证**：`find_package(Zenith CONFIG)` + `Zenith::zenith_core`
+  在 Windows/MinGW 独立链接外部应用（ORM=OFF 裁剪，不传递 uORM/DB 驱动依赖）
+- **首个实战应用迁出**：技术博客 + 3D 联机棋室（React 19 + Three.js，
+  `../ZenithBlog`），经 SDK 消费；踩坑 7 条沉淀入 `docs/ARCHITECTURE.md` §5g
+- 新增回归测试：`SpaE2E.FallbackAndAssetPriority`、`Router.RootPathNotMatchedByCatchAll`
+
+## M5：生产就绪
 
 - **Web 完整性**：multipart 文件上传、静态文件服务（Range/ETag/穿越防护）、
   Session/Cookie（内存存储 + 中间件）、优雅停机（在途排空 + 信号处理）、wss
@@ -171,6 +183,33 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 
 宿主加载：`PluginManager::loadDirectory()` → `startAll()` → `registry.queryRaw("my.IService", 1)`。
 
+## 插件生态
+
+### 已实装插件（v0.1.0）
+
+| 插件 | 功能 | 技术 |
+|---|---|---|
+| `hello_cpp` | C++ 虚接口服务示例 | 纯 C ABI |
+| `hello_c` | **纯 C 编译器**构建的示例插件 | C89 兼容 |
+| `media_ffmpeg` | probe / 截图 / 转码（进度回调） | FFmpeg SDK |
+| `edge_esp32` | COBS 帧设备桥（TCP 网关 + 串口） | 自研协议 |
+| `ai_comfyui` | ComfyUI workflow 提交 + 产物下载 | 自研 HTTP |
+
+### 预计适配插件（M8 生态扩展，2026 最热方向）
+
+| 插件 | 功能 | 为什么最火 | 优先级 |
+|---|---|---|---|
+| `ai_inference` | LLM 推理网关（llama.cpp + **OpenAI 兼容 API** + SSE 流式） | 2026 推理之年，219% YoY 增长 | ⭐⭐⭐⭐⭐ |
+| `ai_mcp` | **MCP Server**——把 DB/Redis/媒体/设备暴露为 AI Agent 工具 | MCP 成为 Agent 生态标准协议 | ⭐⭐⭐⭐⭐ |
+| `db_vector` | 向量数据库（自研 HNSW + Qdrant 兼容 API） | RAG 检索增强是最普遍 AI 应用 | ⭐⭐⭐⭐⭐ |
+| `net_mqtt` | MQTT 3.1.1/5.0 broker（QoS/共享订阅/保留消息） | IoT 标准消息协议 | ⭐⭐⭐⭐ |
+| `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
+| `media_webrtc` | WebRTC 实时通信（ICE/DTLS/SRTP + FFmpeg 转码联动） | 视频会议/AI 实时视频 | ⭐⭐⭐ |
+| `obs_otel` | OpenTelemetry 分布式追踪（OTLP + W3C Trace Context） | 云原生可观测标准 | ⭐⭐⭐ |
+| `ai_stt` | 语音识别（whisper.cpp + 实时流式 + VAD） | 语音 AI 入口 | ⭐⭐⭐ |
+
+→ 完整方案见 [docs/PLAN_M8.md](docs/PLAN_M8.md)（功能/架构/代码量/依赖逐项标注）
+
 ## 里程碑
 
 - **M1 ✅ 插件内核**：C ABI v1、服务注册表、插件管理、线程池、日志、双示例插件、uORM 集成
@@ -178,13 +217,15 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   HTTP/1.1 解析器、路由/中间件/Context、HttpServer/HttpClient、自研 JSON、协程 co_await 接入
 - **M3 ✅ 数据层与协议扩展**：WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置、
   uORM 服务化（连接池 + ServiceRegistry + 专用 DB 线程池）、SHA1/Base64
-- **M4 ✅（主体）**：TLS/OpenSSL、FFmpeg 媒体、edge 设备桥、ComfyUI AI、URL/连接池；
-  RK/ESP32 实机联调待硬件（脚手架与固件样例就绪）
-- **后续**：uORM 服务化封装（连接池/事务）、WebSocket(RFC6455)、自研 Redis RESP 客户端、JSON 配置
-- **M4 ✅（主体）**：TLS/OpenSSL、FFmpeg 媒体、edge 设备桥、ComfyUI AI、URL/连接池；
-  RK/ESP32 实机联调待硬件（脚手架与固件样例就绪）
-- **后续**：TLS 后端实装（OpenSSL/mbedTLS/wolfSSL）、media-ffmpeg、ai-comfyui、
-  edge-esp32 插件、RK3566/RK3576 与 ESP-IDF 真机联调
+- **M4 ✅ 生态与边缘**：TLS/OpenSSL、FFmpeg 媒体、edge 设备桥、ComfyUI AI、URL/连接池
+- **M5 ✅ 生产就绪**：multipart/静态文件/Session/优雅停机/wss、可观测(指标/Request-Id/status)、
+  安全(SHA-256/JWT/CORS/限流)、zenith-bench、CI/安装导出/脚手架、热重载/多进程/管理台
+- **M6 ✅ v0.1.0 发布**：Release 基准(181K RPS)/连接上限/slowloris 防线/soak 1.64 亿零失败/
+  Linux epoll 闭环/双平台发行版
+- **M7 📋 性能深挖**：Context 池化+arena、sendfile 零拷贝、deflate 压缩、io_uring/IOCP、HTTP/2
+  → [docs/PLAN_M7.md](docs/PLAN_M7.md)
+- **M8 📋 生态扩展**：AI 推理/MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
+  → [docs/PLAN_M8.md](docs/PLAN_M8.md)
 
 ## 依赖原则
 

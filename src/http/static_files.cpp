@@ -215,7 +215,7 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
                 c.response().body = std::move(cached);
                 return;
             }
-            std::string body(static_cast<size_t>(size), ' ');
+            std::string body(static_cast<size_t>(size), '\0');
             in.read(body.data(), static_cast<std::streamsize>(size));
             cachePut(full, etag, body, mtime);
             c.status(200);
@@ -243,6 +243,71 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
             in.read(body.data(), static_cast<std::streamsize>(len));
         }
         c.response().body = std::move(body);
+    };
+}
+
+// ---------------------------------------------------------------------------
+//  spaHandler（M5.7）—— SPA 静态 + index.html 回退
+//
+//  实现：每个请求只构造一次 staticHandler 闭包（保存于 lambda 捕获，零重复
+//  分配）；「先判存在，再服务」：
+//    - 请求相对路径命中真实文件 → staticHandler 完整语义（ETag/304/Range/缓存）
+//    - 未命中（含穿越防护拒绝） → 以 "index.html" 为路径重放一次静态管线，
+//      把响应（状态/头/体）拷回原 Context
+//
+//  为什么不做「路径像不像静态资源」的启发式：带扩展名的 404 资源若回
+//  index.html，会以 200 + text/html 伪装成功——前端拿到垃圾字节且难排查。
+//  让回退只对「确实无对应文件」的路径生效，语义最不易错。
+//
+//  回退响应带 Cache-Control: no-cache：index.html 引用的 /assets/*.js 都是
+//  内容哈希命名，入口文件必须每次重新校验，否则发版后旧壳引用新哈希会失败。
+// ---------------------------------------------------------------------------
+Handler spaHandler(std::string rootDir) {
+    auto files = staticHandler(rootDir, "", /*cacheSmallFiles=*/true);
+
+    return [root = std::move(rootDir), files = std::move(files)](Context& c) {
+        std::string rel = c.path();
+        while (!rel.empty() && rel[0] == '/') rel.erase(0, 1);
+
+        std::error_code ec;
+        const std::string full = safeJoin(fs::path(root), rel);
+        const bool hit = !full.empty() && fs::is_regular_file(fs::path(full), ec);
+        if (hit) {
+            files(c);  // 真实文件：原样走静态管线
+            return;
+        }
+
+        // ---- 回退判定：只对「前端路由形态」的路径回 index.html ----
+        // 资源形态（末段含 '.'，如 app.js / logo.png）不回退——带扩展名的
+        // 请求若回 index.html，会以 200 + text/html 伪装成功，前端拿到
+        // 垃圾字节且 Content-Type/缓存协商全错，是实战最难排查的问题之一。
+        // 判定用「末段最后一个 '.' 之后是否还有字符」，避免 "dir." 误判。
+        std::string last = rel;
+        const size_t slash = rel.rfind('/');
+        if (slash != std::string::npos) last = rel.substr(slash + 1);
+        const bool assetLike = !last.empty() && last.find('.') != std::string::npos;
+        if (assetLike) {
+            files(c);  // 保持 404，语义诚实
+            return;
+        }
+
+        // ---- SPA 回退：改写路径指向 index.html，重放静态管线 ----
+        HttpRequest idxReq = c.request();
+        idxReq.path = "/index.html";
+        Context idx(idxReq);
+        files(idx);
+
+        if (idx.responseStatus() == 200 || idx.responseStatus() == 304) {
+            c.status(idx.responseStatus());
+            for (const auto& kv : idx.response().headers.entries()) {
+                c.setHeader(kv.first, kv.second);
+            }
+            c.setHeader("Cache-Control", "no-cache");
+            c.response().body = idx.response().body;
+            return;
+        }
+        // index.html 也不存在（前端未构建）→ 交回原始 404，语义诚实
+        files(c);
     };
 }
 

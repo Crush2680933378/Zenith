@@ -82,6 +82,18 @@ public:
     [[nodiscard]] const std::string& peer() const noexcept { return conn_->peer(); }
     [[nodiscard]] TcpConnection* connection() const noexcept { return conn_.get(); }
     /// 用户附带状态
+    ///
+    /// ⚠️ 会话身份必须挂在这里（setContext/context<T>），不要用
+    /// `WebSocketSession*` 或 `TcpConnection*` 做 map 键来记录身份！
+    /// 实战教训（Blog 棋室踩坑）：会话销毁后堆地址会被新连接复用，
+    /// 旧会话的 close 回调延迟执行时会通过相同指针抹掉新会话的身份，
+    /// 表现为「hello 成功但后续指令报未登记」——这类 bug 只在
+    /// 连接频繁建立/断开时偶发，极难复现。
+    ///
+    /// 推荐模式：
+    ///   struct Player { std::string id; std::string room; };
+    ///   s->setContext(std::make_shared<Player>());
+    ///   // 之后任意回调里： auto me = s->context<Player>();
     void setContext(std::shared_ptr<void> ctx) { context_ = std::move(ctx); }
     template <typename T>
     [[nodiscard]] std::shared_ptr<T> context() const {
