@@ -179,6 +179,11 @@ watcher.pollOnce();  // 或手动触发一轮（测试/CI 用）
 | 热替换 | `PluginWatcher::pollOnce()` / `start()`（`.new` 交换协议） |
 | 改配置生效 | 同样用 `mgr.reload(path)`——重载会重新 `init()`，插件重新读 config |
 
+**Linux 上的 NODELETE 坑**：glibc 的 `dlopen` 按路径缓存。若插件含 `STB_GNU_UNIQUE`
+符号（C++ 内联静态量很常见），`dlclose` 后模块仍会被驻留，**再次 `dlopen` 同一路径直接
+返回旧句柄，新文件根本不会被读取**——表现为"热替换成功但跑的还是旧代码"。
+确定要热替换就用带版本号的文件名（`foo.so.v2`），别覆盖同名文件。
+
 **两条必须知道的规则**：
 1. **重载后旧服务指针失效**（旧实例已 destroy），消费者必须重新 `queryRaw`；
 2. 重载代价 = 插件 `init()` 的代价，AI 插件差别很大：

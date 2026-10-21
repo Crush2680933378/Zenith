@@ -117,7 +117,7 @@ ZTEST(PluginReload, NewFileSwapReplacesService) {
     ZEXPECT_FALSE(fs::exists(fs::path(kDir) / (std::string(kDll) + ".old"), ec));
 }
 
-ZTEST(PluginReload, BadNewFileDoesNotCrashHost) {
+ZTEST(PluginReload, BadPluginFileIsRejected) {
     if (!prepareDir()) {
         std::printf("[ SKIP ] %s 不在插件目录\n", kDll.c_str());
         return;
@@ -125,9 +125,11 @@ ZTEST(PluginReload, BadNewFileDoesNotCrashHost) {
     Fixture f;
     ZEXPECT_TRUE(f.service() != nullptr);
 
-    // 故意写一个不是插件的文件
+    // 换一个**独立文件名**写坏文件：同路径 dlopen 在 Linux 上可能命中缓存
+    // （STB_GNU_UNIQUE → NODELETE，模块不会真正卸载），测不出"坏文件被拒"。
+    const std::string bad = std::string(kDir) + "/not_a_plugin" + plugin::pluginFileExtension();
     {
-        FILE* fp = std::fopen((std::string(kDir) + "/" + kDll + ".new").c_str(), "wb");
+        FILE* fp = std::fopen(bad.c_str(), "wb");
         ZEXPECT_TRUE(fp != nullptr);
         if (fp != nullptr) {
             const char junk[] = "not a plugin";
@@ -136,19 +138,12 @@ ZTEST(PluginReload, BadNewFileDoesNotCrashHost) {
         }
     }
 
-    plugin::PluginWatcher watcher(f.mgr, kDir);
-    bool sawFailure = false;
-    watcher.onEvent([&](const plugin::PluginWatcher::Event& e) { sawFailure = !e.ok; });
-    const size_t swapped = watcher.pollOnce();
-
-    std::printf("[ reload ] 坏文件：重载数=%zu（期望 0），收到失败事件=%d\n", swapped,
-                sawFailure ? 1 : 0);
-    ZEXPECT_EQ(swapped, static_cast<size_t>(0));
-    ZEXPECT_TRUE(sawFailure);
-    // 宿主仍活着：注册表里已没有该服务（旧插件已卸载），但不会崩
-    ZEXPECT_TRUE(f.service() == nullptr);
+    auto r = f.mgr.load(bad);
+    std::printf("[ reload ] 坏插件文件：load 返回 %s（期望 Err）\n", r.isErr() ? "Err" : "Ok");
+    ZEXPECT_TRUE(r.isErr());
+    // 坏文件不得污染已注册的服务
+    ZEXPECT_TRUE(f.service() != nullptr);
 }
-
 // ---------------------------------------------------------------------------
 //  真模型热重载：ai_llama（GGUF）。验证"卸载会释放模型、重载会重新加载"。
 //  模型缺失时 SKIP。
