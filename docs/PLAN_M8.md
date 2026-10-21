@@ -5,6 +5,29 @@
 > MCP Agent 协议、向量数据库、MQTT 消息、gRPC、WebRTC 实时通信、
 > OpenTelemetry 追踪、语音识别——使 Zenith 成为完整的 AI 时代后端底座。
 
+## 进度快照（2026-10-21）
+
+| 项 | 计划 | 实际 |
+|---|---|---|
+| **M8.1** `ai-inference` | 1 个插件，~2,000 行 | ✅ **已实装，拆成 4 个插件**（AI 侧 ~3,470 行 C++） |
+| **M8.2–M8.8** | 7 个插件 | 📋 **未开始** |
+| **计划外** | — | 插件热重载（`PluginManager::reload` + `PluginWatcher`，169 行 + 测试） |
+| **前置** | M7.4 压缩、HTTP 流式 | ✅ **已提前落地**（zlib 后端 + `SseStream`），M8.1 不再被卡 |
+
+**M8.1 为什么变成 4 个插件**——原计划"封装 llama.cpp"在实机上遇到 C ABI 分野：
+
+| 插件 | 形态 | 引擎有 C ABI？ |
+|---|---|---|
+| `ai_inference` | 通用网关：mock / 外部 OpenAI 上游 / 本地引擎进程监管 | — |
+| `ai_llama` | **进程内** llama.cpp（`libllama.a` 8.5 MB 静态链入） | ✅ `llama.h` 全在 `extern "C"` 内，不透明句柄 |
+| `ai_ninfer` | NInfer 引擎**子进程 + HTTP** | ❌ 发行版无头文件/导入库；能力只在 server 层 |
+| `ai_ninfer_native` | NInfer **进程内**，自研纯 C ABI shim + 宿主适配器 | ⚠️ 我们自己补的 C ABI（MSVC 侧 550 MB DLL） |
+
+实测（RTX 5070 Ti 16 GB / `Ternary-Bonsai-2-27B-ninfer-v3`）：
+**prefill 3.65k tok/s、decode 729 tok/s、投机接受 89%**（DFlash2 d12）；
+llama.cpp 侧：10.18 GB `Qwen3.8-27B-UD-IQ3_XXS.gguf` 加载 1.2 s、24 token 4.4 s（CPU）。
+完整数据与复现命令见 [plugins/ai_ninfer_native/RESULTS.md](../plugins/ai_ninfer_native/RESULTS.md)。
+
 ## 市场判断依据（2026-10 搜索验证）
 
 - **AI 推理**被 Coreweave/VAST Data 定义为"2026 推理之年"——推理工作负载
@@ -89,6 +112,37 @@ SSE 流式 300 行 + 模型管理 300 行）
 C++ 生态 + C ABI 插件系统支持模型热插拔
 
 ---
+
+### 计划外落地：引擎形态的四个插件（M8.1 衍生）
+
+原计划 M8.1 只写"封装 llama.cpp 暴露 OpenAI API"。实机落地时发现**引擎的 C ABI 状况决定插件形态**，
+于是拆成四个，并在框架层顺手补了热重载：
+
+| 插件 | 服务名（可同进程共存） | 形态 | 重载代价 |
+|---|---|---|---|
+| `ai_inference` | `zenith.ai.IInferenceService` | 通用网关：mock / 外部 OpenAI 上游 / 本地引擎**进程监管** | 毫秒级 |
+| `ai_llama` | `zenith.ai.ILlamaInference` | **进程内** llama.cpp，`libllama.a` 静态链入 | ~1 s（重 mmap 模型） |
+| `ai_ninfer` | `zenith.ai.INinferInference` | NInfer **子进程 + OpenAI HTTP**（引擎无 C ABI） | ~4–6 s（重拉进程） |
+| `ai_ninfer_native` | `zenith.ai.INinferCApi` | NInfer **进程内**，自研纯 C ABI shim（MSVC 侧 550 MB DLL） | ~3.5 s（重载 8.9 GB） |
+
+**C ABI 取证**（决定前两条路）：
+
+| 引擎 | 结论 | 依据 |
+|---|---|---|
+| llama.cpp | ✅ 纯 C ABI | `include/llama.h` 全在 `extern "C"` 内；`llama_model`/`llama_context` 不透明句柄 |
+| NInfer | ❌ 无 C ABI | 发行版只有 `.exe`+DLL（无头文件/导入库）；上游明写 headers 不作为 SDK 分发；KVMem/投机解码只在 server 层 |
+
+**为此新增的框架能力**：
+
+- `zenith/ai/*`：推理服务契约、OpenAI 兼容层（SSE 流式 + usage）、NInfer C ABI 契约与宿主适配器
+- `http::SseStream` / `ChunkWriter`、`http::gzipMiddleware`、`jwt::asym`（前置，已随本次交付）
+- `PluginManager::unload/reload` + `PluginWatcher`（`.new` 交换协议）；Windows 下运行中的 DLL
+  不可覆盖，故必须走"先落盘 `.new` 再换"。Linux 另注意 glibc 的 NODELETE 缓存坑
+  （见 [README 热重载节](../README.md)）
+
+**实测**：`Ternary-Bonsai-2-27B` 进程内 prefill **3.65k tok/s** / decode **729 tok/s**
+（DFlash2 d12，投机接受 89%）；1000 token 出 0.86 s。数据见
+[plugins/ai_ninfer_native/RESULTS.md](../plugins/ai_ninfer_native/RESULTS.md)。
 
 ### M8.2 `ai-mcp` — MCP (Model Context Protocol) 服务器插件 ⭐⭐⭐⭐⭐
 
@@ -264,8 +318,8 @@ C++ 生态 + C ABI 插件系统支持模型热插拔
 
 ```
 第一批（1-2 周/插件）：
-  M8.1 ai-inference（llama.cpp + OpenAI API）     ← "推理之年"窗口
-  M8.2 ai-mcp（MCP Server 工具桥）                  ← Agent 生态入口
+  M8.1 ai-inference（llama.cpp + OpenAI API）     ← ✅ 已完成（拆成 4 个插件，见「进度快照」）
+  M8.2 ai-mcp（MCP Server 工具桥）                  ← Agent 生态入口（下一项，前置已齐：SSE + 无状态 JSON-RPC）
 
 第二批（2-3 周/插件）：
   M8.3 db-vector（HNSW 向量搜索）                   ← RAG 基础设施
@@ -290,7 +344,7 @@ M8 插件可与 M7 并行开发：
 
 | 插件 | 新增行数 | 依赖 |
 |---|---|---|
-| ai-inference | ~2000 | llama.cpp SDK |
+| ai-inference | 计划 ~2000 → **实际 ~3470** | llama.cpp SDK + NInfer（4 个插件，含自研 C ABI shim） |
 | ai-mcp | ~1500 | 无（全自研；协议基线 MCP 2026-07-28） |
 | db-vector | ~1500 | 无（全自研 HNSW） |
 | net-mqtt | ~2500 | 无（全自研） |
@@ -302,7 +356,8 @@ M8 插件可与 M7 并行开发：
 
 ## 对 Zenith 生态的影响
 
-M8 完成后 Zenith 将具备：
+**当前（2026-10-21）**：已实装 9 个插件（5 个原有 + M8.1 衍生的 4 个）+
+插件热重载 + 流式/压缩/非对称 JWT。下表是 M8 全部完成后的目标态：
 
 | 能力域 | 覆盖 |
 |---|---|
@@ -314,4 +369,4 @@ M8 完成后 Zenith 将具备：
 | 实时通信 | WebRTC + FFmpeg 转码 |
 | 可观测 | Prometheus + OpenTelemetry |
 | 语音 | whisper.cpp STT |
-| **总计 13 个插件** | 覆盖 2026 后端全场景 |
+| **总计 13 个插件** | 覆盖 2026 后端全场景（现已实装 9 个，M8.2–M8.8 七项待做） |

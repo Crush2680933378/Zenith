@@ -6,10 +6,23 @@
 [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
 
 **天顶，顶点，万物之巅。** Zenith 是一款 C++17 高并发后端框架（对标 Java Spring Boot / Go Gin 的定位），
-以**纯 C ABI 插件内核**为地基：一切扩展能力——数据库、TLS、FFmpeg 媒体、ComfyUI/AI、ESP32 与泰山派
+以**纯 C ABI 插件内核**为地基：一切扩展能力——数据库、TLS、FFmpeg 媒体、**LLM 推理网关**
+（进程内 llama.cpp / NInfer 引擎 / OpenAI 兼容上游）、ComfyUI 绘画、ESP32 与泰山派
 RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入。
 
 前端交给 React，Zenith 只提供 API。
+
+## 📌 进度总览（2026-10-21）
+
+| 里程碑 | 状态 | 关键产出 |
+|---|---|---|
+| **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
+| **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
+| **M8 生态扩展** | 🚧 **1/8 实装** | ✅ M8.1 LLM 推理网关（**衍生成 4 个插件**）；M8.2–M8.8 待做 → [PLAN_M8](docs/PLAN_M8.md) |
+| **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
+| **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
+| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，29–30 套测试 |
+| **插件** | 9 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·**ai_inference·ai_llama·ai_ninfer·ai_ninfer_native** |
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
 
@@ -211,7 +224,7 @@ cfgFile.start();
 
 > AI 插件重载会连模型/引擎一起重建（见上表），配置这类"高频小改"更建议做成
 > 每请求读取而非重载插件。
-## M9（进行中）：流式响应 / 压缩 / 非对称身份
+## M9：流式响应 / 压缩 / 非对称身份（✅ 已完成）
 
 - **`http::SseStream` + `http::ChunkWriter`** —— HTTP/1.1 分块流式响应。
   `Context::sse()` 一行起流，事件帧（`event` / `id` / 多行 `data` / 心跳注释）由框架编码；
@@ -430,11 +443,13 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   安全(SHA-256/JWT/CORS/限流)、zenith-bench、CI/安装导出/脚手架、热重载/多进程/管理台
 - **M6 ✅ v0.1.0 发布**：Release 基准(181K RPS)/连接上限/slowloris 防线/soak 1.64 亿零失败/
   Linux epoll 闭环/双平台发行版
-- **M9 🚧 流式与身份**：分块/SSE 流式响应、gzip 响应压缩、非对称 JWT（RS/ES）
+- **M9 ✅ 流式与身份**：分块/SSE 流式响应、gzip 响应压缩、非对称 JWT（RS/ES）
 - **M7 📋 性能深挖**：Context 池化+arena、sendfile 零拷贝、deflate 压缩、io_uring/IOCP、HTTP/2
   → [docs/PLAN_M7.md](docs/PLAN_M7.md)
-- **M8 🚧 生态扩展**：✅ M8.1 LLM 推理网关（引擎监管 + OpenAI 兼容 + SSE）；
-  📋 MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
+- **M8 🚧 生态扩展（1/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
+  （`ai_inference` 网关 / `ai_llama` 进程内 llama.cpp / `ai_ninfer` 子进程 /
+  `ai_ninfer_native` 自研 C ABI 进程内），实测 prefill 3.65k · decode 729 tok/s；
+  📋 M8.2–M8.8：MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
   → [docs/PLAN_M8.md](docs/PLAN_M8.md)
 
 ## 依赖原则

@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
 
@@ -100,6 +100,10 @@
   消除 "null character(s) preserved in literal" 编译警告。
 
 ### 文档
+- 里程碑状态对齐实际进度：`README.md` 顶部新增「进度总览」表（M1–M6/M7/M8 1-8/M9/计划外/CI/插件数），
+  M9 从"进行中"改为已完成，M8 标注 1/8 并说明 M8.1 实装为 4 个插件；
+  `docs/PLAN_M8.md` 新增「进度快照（2026-10-21）」与「计划外落地：引擎形态的四个插件」，
+  补齐实施顺序的实际状态、代码量（实际 ~3,470 行）与生态影响的当前/目标态区分。
 - `README.md` 依赖原则改写：三方准入从「点名白名单」改为「C ABI 边界」——凡提供稳定
   C ABI 的库均可直接接入，不再逐个立项；补齐已接入/已排期依赖表（llama.cpp /
   whisper.cpp / libsrtp / wasmtime / miniz / libmupdf 等）与四道准入闸（接口/许可/可选/隔离）。
