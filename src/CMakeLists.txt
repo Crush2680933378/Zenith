@@ -1,4 +1,4 @@
-# zenith 核心库目标：zenith_core(静态) + zenith(动态) + zenith_coro(可选接口层)
+﻿# zenith 核心库目标：zenith_core(静态) + zenith(动态) + zenith_coro(可选接口层)
 
 # ---- TLS 后端（ZENITH_TLS=openssl；先于源列表展开）----
 set(ZENITH_TLS_LIBS)
@@ -8,13 +8,26 @@ if (ZENITH_TLS STREQUAL "openssl")
     find_library(OPENSSL_SSL_LIB NAMES ssl libssl)
     find_library(OPENSSL_CRYPTO_LIB NAMES crypto libcrypto)
     if (OPENSSL_INCLUDE_DIR AND OPENSSL_SSL_LIB AND OPENSSL_CRYPTO_LIB)
-        list(APPEND ZENITH_TLS_SOURCES tls/tls_context.cpp)
+        list(APPEND ZENITH_TLS_SOURCES tls/tls_context.cpp http/jwt_asym.cpp)
         set(ZENITH_TLS_LIBS ${OPENSSL_SSL_LIB} ${OPENSSL_CRYPTO_LIB})
+        set(ZENITH_HAS_OPENSSL ON)
         set_property(GLOBAL PROPERTY ZENITH_HAS_TLS ON)
         message(STATUS "Zenith TLS: OpenSSL backend enabled")
     else()
         message(WARNING "ZENITH_TLS=openssl 但未找到 OpenSSL 开发库；TLS 禁用")
     endif()
+endif()
+
+# ---- 响应压缩（zlib 后端，可选的 C ABI 依赖）----
+set(ZENITH_ZLIB_LIBS)
+set(ZENITH_HAS_ZLIB OFF)
+find_package(ZLIB QUIET)
+if (ZLIB_FOUND)
+    set(ZENITH_ZLIB_LIBS ZLIB::ZLIB)
+    set(ZENITH_HAS_ZLIB ON)
+    message(STATUS "Zenith compress: zlib backend enabled (gzip)")
+else()
+    message(STATUS "Zenith compress: zlib not found -> identity only")
 endif()
 
 set(ZENITH_SOURCES
@@ -27,6 +40,7 @@ set(ZENITH_SOURCES
     plugin/dynlib.cpp
     plugin/host_api.cpp
     plugin/plugin_manager.cpp
+    plugin/plugin_watcher.cpp
     net/net_detail.cpp
     net/socket.cpp
     net/poller.cpp
@@ -43,6 +57,8 @@ set(ZENITH_SOURCES
     http/http_parser.cpp
     http/router.cpp
     http/http_server.cpp
+    http/sse.cpp
+    http/compress.cpp
     http/http_client.cpp
     http/multipart.cpp
     http/static_files.cpp
@@ -53,6 +69,8 @@ set(ZENITH_SOURCES
     config/json_config.cpp
     config/hot_reload.cpp
     metrics/metrics.cpp
+    ai/openai_api.cpp
+    ai/ninfer_c_api_client.cpp
     crypto/sha256.cpp
     http/jwt.cpp
     http/security.cpp
@@ -90,7 +108,13 @@ if (ZENITH_BUILD_STATIC)
     zenith_target_include_public(zenith_core)
     zenith_set_warnings(zenith_core)
     target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC)
-    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS})
+    if (ZENITH_HAS_OPENSSL)
+        target_compile_definitions(zenith_core PUBLIC ZENITH_HAS_OPENSSL=1)
+    endif()
+    if (ZENITH_HAS_ZLIB)
+        target_compile_definitions(zenith_core PRIVATE ZENITH_HAS_ZLIB=1)
+    endif()
+    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS} ${ZENITH_ZLIB_LIBS})
     set_target_properties(zenith_core PROPERTIES OUTPUT_NAME zenith)
 endif()
 
@@ -102,7 +126,13 @@ if (ZENITH_BUILD_SHARED)
     zenith_target_include_public(zenith)
     zenith_set_warnings(zenith)
     target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY)
-    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS})
+    if (ZENITH_HAS_OPENSSL)
+        target_compile_definitions(zenith PUBLIC ZENITH_HAS_OPENSSL=1)
+    endif()
+    if (ZENITH_HAS_ZLIB)
+        target_compile_definitions(zenith PRIVATE ZENITH_HAS_ZLIB=1)
+    endif()
+    target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS} ${ZENITH_ZLIB_LIBS})
     set_target_properties(zenith PROPERTIES
         OUTPUT_NAME zenith
         CXX_VISIBILITY_PRESET hidden

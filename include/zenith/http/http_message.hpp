@@ -96,6 +96,10 @@ struct HttpResponse {
     int status = 200;
     HttpHeaders headers;
     std::string body;
+    /// 流式响应（M9.1）：true 时不发 Content-Length，改发
+    /// `Transfer-Encoding: chunked`，正文字节按分块编码写出。
+    /// 通常由 Context::sse() / Context::chunkedStream() 置位，勿手工设置。
+    bool chunked = false;
 
     [[nodiscard]] bool keepAlive() const noexcept {
         const std::string conn = core::string_util::toLower(headers.get("Connection"));

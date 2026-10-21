@@ -85,6 +85,10 @@
 
 ## M7.4 响应压缩（deflate/gzip，3-4 天）
 
+> **状态（2026-10）**：已按 **zlib 后端**形态落地 —— `http::gzipMiddleware`（M9.1 同批）。
+> 依赖原则已改为「C ABI 即准入」，zlib 属于纯 C ABI 依赖；zlib 未探测到时自动降级为
+> identity，自研 deflate 由"必做项"降为"可选练习"。
+
 - **自研 deflate**（兼容 zlib wire format）：
   - 固定 Huffman 编码（快速路径）+ 动态 Huffman（高压缩率路径）
   - LZ77 滑动窗口 32KB

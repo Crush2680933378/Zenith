@@ -1,4 +1,4 @@
-# 单元测试（ZTEST 自研微框架）—— 链接静态库 zenith_core，逐可执行注册 ctest
+﻿# 单元测试（ZTEST 自研微框架）—— 链接静态库 zenith_core，逐可执行注册 ctest
 
 if(WIN32)
     set(ZT_NETLIB ws2_32)
@@ -18,7 +18,9 @@ set(ZENITH_TESTS
     test_http_e2e
     test_websocket
     test_redis
-    test_config)
+    test_config
+    test_stream
+    test_compress)
 
 foreach(t IN LISTS ZENITH_TESTS)
     add_executable(${t} ${t}.cpp)
@@ -94,6 +96,14 @@ if (ZENITH_HAS_TLS_PROP)
     zenith_set_warnings(test_m5_sec)
     add_test(NAME test_m5_sec COMMAND test_m5_sec)
     set_tests_properties(test_m5_sec PROPERTIES TIMEOUT 120)
+
+    # M9.2 非对称 JWT（RS256/ES256，OpenSSL 后端）
+    add_executable(test_jwt_asym test_jwt_asym.cpp)
+    target_link_libraries(test_jwt_asym PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_jwt_asym PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    zenith_set_warnings(test_jwt_asym)
+    add_test(NAME test_jwt_asym COMMAND test_jwt_asym)
+    set_tests_properties(test_jwt_asym PROPERTIES TIMEOUT 120)
 endif()
 
 # M5.3 可观测性（指标/Request-Id/status）
@@ -127,6 +137,57 @@ zenith_set_warnings(test_ai)
 add_test(NAME test_ai COMMAND test_ai)
 set_tests_properties(test_ai PROPERTIES TIMEOUT 120)
 
+# M8.1 ai_inference 插件（需插件已构建：mock 后端 + OpenAI 兼容层全链路）
+if (ZENITH_BUILD_PLUGINS)
+    add_executable(test_ai_inference test_ai_inference.cpp)
+    target_link_libraries(test_ai_inference PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_ai_inference PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_ai_inference PRIVATE
+        ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+    zenith_set_warnings(test_ai_inference)
+    add_test(NAME test_ai_inference COMMAND test_ai_inference)
+    set_tests_properties(test_ai_inference PROPERTIES TIMEOUT 180)
+endif()
+
+# M8.2 插件热重载（.new 交换协议；用 ai_inference 的 mock 后端，零成本）
+if (ZENITH_BUILD_PLUGINS)
+    add_executable(test_plugin_reload test_plugin_reload.cpp)
+    target_link_libraries(test_plugin_reload PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_plugin_reload PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_plugin_reload PRIVATE
+        ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+    zenith_set_warnings(test_plugin_reload)
+    add_test(NAME test_plugin_reload COMMAND test_plugin_reload)
+    set_tests_properties(test_plugin_reload PROPERTIES TIMEOUT 120)
+endif()
+# M8.1 两个引擎插件（都需要插件已构建；模型/引擎缺失时用例自行 SKIP）
+if (ZENITH_BUILD_PLUGINS)
+    add_executable(test_ai_llama test_ai_llama.cpp)
+    target_link_libraries(test_ai_llama PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_ai_llama PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_ai_llama PRIVATE
+        ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+    zenith_set_warnings(test_ai_llama)
+    add_test(NAME test_ai_llama COMMAND test_ai_llama)
+    set_tests_properties(test_ai_llama PROPERTIES TIMEOUT 900)
+
+    add_executable(test_ai_ninfer_native test_ai_ninfer_native.cpp)
+    target_link_libraries(test_ai_ninfer_native PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_ai_ninfer_native PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_ai_ninfer_native PRIVATE
+        ZENITH_TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}/plugins-native")
+    zenith_set_warnings(test_ai_ninfer_native)
+    add_test(NAME test_ai_ninfer_native COMMAND test_ai_ninfer_native)
+    set_tests_properties(test_ai_ninfer_native PROPERTIES TIMEOUT 900)
+    add_executable(test_ai_ninfer test_ai_ninfer.cpp)
+    target_link_libraries(test_ai_ninfer PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_ai_ninfer PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_ai_ninfer PRIVATE
+        ZENITH_TEST_PLUGIN_DIR="${ZENITH_PLUGIN_OUTPUT_DIR}")
+    zenith_set_warnings(test_ai_ninfer)
+    add_test(NAME test_ai_ninfer COMMAND test_ai_ninfer)
+    set_tests_properties(test_ai_ninfer PROPERTIES TIMEOUT 900)
+endif()
 # edge 插件测试（cobs/serial 编入核心库）
 add_executable(test_edge test_edge.cpp)
 target_link_libraries(test_edge PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})

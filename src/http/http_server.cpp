@@ -9,6 +9,7 @@ namespace {
 struct ConnState {
     explicit ConnState(size_t maxBody) : parser(maxBody) {}
     HttpRequestParser parser;
+    bool streaming = false; // M9.1：流式响应在途（不参与空闲踢除/keep-alive）
 };
 } // namespace
 
@@ -61,6 +62,9 @@ void HttpServer::armIdleTimer(const net::TcpConnection::Ptr& conn) {
             std::lock_guard<std::mutex> lk2(idleMtx_);
             idleTimers_.erase(reinterpret_cast<uintptr_t>(conn.get()));
             if (conn->connected() && inflight_.load() <= 0) {
+                // M9.1：SSE/分块流在途时不得踢除——长连接本身可能长时间无新字节
+                auto st = conn->context<ConnState>();
+                if (st != nullptr && st->streaming) return;
                 conn->forceClose(); // 空闲超限
             }
         });
@@ -206,6 +210,8 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     Context ctx(std::move(req));
     ctx.response().httpMajor = ctx.request().httpMajor;
     ctx.response().httpMinor = ctx.request().httpMinor;
+    ctx.setConnection(conn); // M9.1：流式响应写端需要连接
+    state->streaming = false;
 
     try {
         router_.dispatch(ctx);
@@ -220,8 +226,25 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
         ctx.status(500).text(500, "500 Internal Server Error");
     }
 
-    // 未显式写响应体的合法情形：handler 未设置 body → 200 空体
     const bool isHead = ctx.request().method == HttpMethod::Head;
+
+    // 流式响应（M9.1）：响应头已由 SseStream/ChunkWriter 写出，正文由 handler
+    // 持有的写端继续推送；服务器此刻既不补 Content-Length，也不关连接。
+    if (ctx.streaming()) {
+        state->streaming = true;
+        return;
+    }
+    // 只置了 chunked 却没开流（handler 误用）：补终止块，避免客户端一直等
+    if (ctx.response().chunked) {
+        std::string wire =
+            ctx.response().serialize(/*includeBody=*/!isHead, /*connKeepAlive=*/false);
+        if (!isHead) wire += "0\r\n\r\n";
+        conn->send(wire);
+        conn->shutdown();
+        return;
+    }
+
+    // 未显式写响应体的合法情形：handler 未设置 body → 200 空体
     bool keep = ctx.request().keepAlive();
     if (closing_.load()) keep = false; // 停机中：一律短连接
     const std::string wire = ctx.response().serialize(/*includeBody=*/!isHead, keep);

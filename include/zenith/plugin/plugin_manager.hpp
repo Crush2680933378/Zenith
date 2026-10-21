@@ -68,12 +68,25 @@ public:
     core::Result<void> stopAll();
     void unloadAll();
 
+    /// 按名字或路径查找已加载插件；未找到返回 nullptr。
+    PluginInfo* find(const std::string& nameOrPath);
+
+    /// 卸载单个插件（安全序：stop → removeByOwner → shutdown → dlclose）。
+    /// 返回是否找到并卸载。
+    bool unload(const std::string& nameOrPath);
+
+    /// 热重载：先卸载同名/同路径插件（若在），再重新 load + start。
+    /// 两种用途：① 磁盘上的 DLL 已被替换；② 配置变更后让插件重新 init()。
+    core::Result<PluginInfo*> reload(const std::string& path);
+
     [[nodiscard]] const std::vector<std::unique_ptr<PluginInfo>>& plugins() const noexcept {
         return plugins_;
     }
 
 private:
     core::Result<void> validateDesc(const zenith_plugin_desc* desc, const DynLib& lib);
+    /// 卸载单个插件对象（已从 plugins_ 摘除或未摘除都可用）
+    void doUnload(PluginInfo& p);
 
     ServiceRegistry&         registry_;
     concurrency::ThreadPool* pool_;

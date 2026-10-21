@@ -153,22 +153,76 @@ core::Result<void> PluginManager::stopAll() {
 
 void PluginManager::unloadAll() {
     for (auto it = plugins_.rbegin(); it != plugins_.rend(); ++it) {
-        PluginInfo& p = **it;
-        if (p.state == PluginState::Started) {
-            if (p.desc.stop != nullptr) p.desc.stop();
-            p.state = PluginState::Stopped;
-        }
-        // 1) 先清理本插件注册的服务（destroy 执行时代码仍在内存）
-        const size_t n = registry_.removeByOwner(static_cast<void*>(&p));
-        // 2) 再回调 shutdown / 卸载动态库
-        if (p.desc.shutdown != nullptr && p.state >= PluginState::Initialized) {
-            p.desc.shutdown();
-        }
-        if (p.lib != nullptr) p.lib->unload();
-        p.state = PluginState::Unloaded;
-        ZLOG_INFO("plugin unloaded: ", p.name, " (services cleaned: ", n, ")");
+        doUnload(**it);
     }
     plugins_.clear();
+}
+
+void PluginManager::doUnload(PluginInfo& p) {
+    if (p.state == PluginState::Started) {
+        if (p.desc.stop != nullptr) p.desc.stop();
+        p.state = PluginState::Stopped;
+    }
+    // 1) 先清理本插件注册的服务（destroy 执行时代码仍在内存）
+    const size_t n = registry_.removeByOwner(static_cast<void*>(&p));
+    // 2) 再回调 shutdown / 卸载动态库
+    if (p.desc.shutdown != nullptr && p.state >= PluginState::Initialized) {
+        p.desc.shutdown();
+    }
+    if (p.lib != nullptr) p.lib->unload();
+    p.state = PluginState::Unloaded;
+    ZLOG_INFO("plugin unloaded: ", p.name, " (services cleaned: ", n, ")");
+}
+
+PluginInfo* PluginManager::find(const std::string& nameOrPath) {
+    for (auto& p : plugins_) {
+        if (p->name == nameOrPath || p->path == nameOrPath) return p.get();
+    }
+    // 也允许只给文件名
+    for (auto& p : plugins_) {
+        if (fs::path(p->path).filename().string() == nameOrPath) return p.get();
+    }
+    return nullptr;
+}
+
+bool PluginManager::unload(const std::string& nameOrPath) {
+    for (auto it = plugins_.begin(); it != plugins_.end(); ++it) {
+        PluginInfo& p = **it;
+        const bool match = p.name == nameOrPath || p.path == nameOrPath ||
+                           fs::path(p.path).filename().string() == nameOrPath;
+        if (!match) continue;
+        doUnload(p);
+        plugins_.erase(it);
+        return true;
+    }
+    return false;
+}
+
+core::Result<PluginInfo*> PluginManager::reload(const std::string& path) {
+    // 同名或同路径的旧实例先卸掉（顺序：先摘表再卸库，避免 find 命中半卸载对象）
+    for (auto it = plugins_.begin(); it != plugins_.end(); ++it) {
+        PluginInfo& p = **it;
+        if (p.path != path) continue;
+        doUnload(p);
+        plugins_.erase(it);
+        break;
+    }
+    auto r = load(path);
+    if (!r) return r;
+    PluginInfo* info = r.value();
+    if (info->desc.start != nullptr) {
+        const zenith_status st = info->desc.start();
+        if (st != ZENITH_OK) {
+            return core::Result<PluginInfo*>::Err(
+                core::Error(9, "plugin start failed after reload (" + std::to_string(st) +
+                                   "): " + info->name));
+        }
+        info->state = PluginState::Started;
+    } else {
+        info->state = PluginState::Started;
+    }
+    ZLOG_INFO("plugin reloaded: ", info->name, " (", path, ")");
+    return core::Result<PluginInfo*>::Ok(info);
 }
 
 core::Result<void> PluginManager::validateDesc(const zenith_plugin_desc* desc,

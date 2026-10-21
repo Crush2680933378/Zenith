@@ -1,4 +1,4 @@
-# Zenith
+﻿# Zenith
 
 [![CI](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml/badge.svg)](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -33,7 +33,207 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 > P99：除 Python（5-10ms）外全部 ≤1ms。内存：Spring Boot 的 **1/17**、Node 的 **1/6**。
 > 局限：客户端与服务端共享同一物理机（loopback），更高速差需专用压测机验证。
 
-## M5.7（当前）：SPA 托管 + 实战沉淀
+## M8.1：LLM 推理网关（`ai_inference` + 进程监管 + OpenAI 兼容层）
+
+> 2026-10 重写：**进程内链接 llama.cpp 的那条路已删掉**，改成「监管本地引擎进程 + 说 OpenAI 协议」。
+> 依据见本节的引擎对接小节。
+
+- **`ai_inference` 插件**（纯 C ABI，服务 `zenith.ai.IInferenceService` v1）三种形态：
+  | 形态 | 做什么 |
+  |---|---|
+  | `engine` | **拉起并监管**本地引擎进程（NInfer / llama-server…），等日志就绪后转 OpenAI 协议对接；插件卸载时回收进程 |
+  | `openai` | 接已在跑的外部 OpenAI 兼容服务（vLLM / 云端 API / 你手动起的引擎） |
+  | `mock` | 确定性后端：无模型也能跑通全部契约（CI 用的就是它） |
+- **`EngineSupervisor`**：`CreateProcess`/`fork+exec` + stdout/stderr 管道 + 就绪标记探测 +
+  崩溃重启（限次）+ Job 对象（Windows `KILL_ON_JOB_CLOSE`，宿主退出不留孤儿占显存）+
+  **解析引擎控制台统计行**（`TTFT / prefill / decode / mtp accepted`）
+- **`zenith::ai::mountOpenAiApi(router, service, options)`**：OpenAI 兼容面在核心库，插件只管推理
+  - `GET /v1/models`、`POST /v1/chat/completions`（`stream=true` 走 SSE）、
+    `POST /v1/completions`、`POST /v1/embeddings`、`GET /zenith/ai/status`
+  - 参数域收敛、OpenAI 形状错误体、`reasoning_content` 分离透出（思考模型）
+  - **推理绝不占 EventLoop**：给 `options.pool` 就投递线程池；非流式用 chunked 延迟响应
+- **引擎遥测进 Prometheus**：`zenith_ai_decode_tps`、`zenith_ai_prefill_tps`、`zenith_ai_ttft_ms`、
+  `zenith_ai_draft_tokens_total`、`zenith_ai_draft_accepted_total`（投机解码接受率）、
+  `zenith_ai_engine_running`、`zenith_ai_cached_prompt_tokens_total`
+- 回归：`test_ai_inference`（11 例：契约 9 例 + 上游/引擎两个活体用例，未设环境变量自动跳过）
+
+```cpp
+// 宿主侧装配：加载插件 → 取服务 → 挂 OpenAI 路由（三行）
+plugin::PluginManager mgr(registry, &pool, &cfg);
+(void)mgr.loadDirectory("./plugins");
+auto* svc = static_cast<ai::IInferenceService*>(
+    registry.queryRaw(ai::IInferenceService::service_name(), 1));
+ai::mountOpenAiApi(server.router(), *svc, ai::OpenAiApiOptions{"/v1", &pool});
+server.listen("0.0.0.0", 8080);   // 之后 curl / OpenAI SDK 直接指过来
+```
+
+### 为什么不做进程内 llama.cpp
+
+| 取证 | 结论 |
+|---|---|
+| `llama.cpp-prism-b10709` 与 `infer-engine-sm120a` 都是**纯二进制发行版** | 没有 `llama.h`、没有 `.lib`/`.dll.a`，无法编译链接 |
+| 源码树 `C:\APP\GitHubCode\llama.cpp` 是 **b10603**，二进制是 **b10709** | 跨 106 个 build，`llama_context_params` 这类按值返回的结构体布局无保证 |
+| `--kv-mean-center` / `--spec mtp|dflash2` / KVMem 分页 | 全在 **server 层**，公开 C API 里没有对应入口 |
+
+结论：引擎的能力在进程内、只认自己的目录，硬链接既拿不到头文件也拿不到这些特性。
+正确形态是「宿主拉进程 + 说 OpenAI 协议」，插件负责生命周期与遥测。
+
+### 对接 NInfer 引擎（`infer-engine-sm120a-20261002`）
+
+该包是 **NInfer** 引擎：OpenAI 兼容 HTTP、`.ninfer` 权重、KVMem 分页、MTP/dflash2 投机解码。
+`backend=engine` 时插件按配置拉起它，并用 `--host/--port` 自动推出上游地址：
+
+```json
+{
+  "ai.inference.backend": "engine",
+  "ai.inference.engine.exe": "C:\\...\\infer-engine-sm120a-20261002\\engine\\ninfer-serve-120a.exe",
+  "ai.inference.engine.model": "C:\\...\\models\\Ternary-Bonsai-2-27B-ninfer-v3-mtponly.ninfer",
+  "ai.inference.engine.args": "<MODEL> --host 127.0.0.1 --port 8111 --model-id qwen3.8-27b --max-context 32768 --kv-capacity 8192 --kv-dtype k8v4 --host-kv-mib 4096 --prefill-chunk 1024 --spec mtp --draft-tokens 4 --default-max-tokens 32768 --default-reasoning-effort none --max-concurrency 1 --max-shared-prefixes 0 --presence-penalty 0 --temperature 0.7 --top-p 0.9 --top-k 20",
+  "ai.inference.engine.env": "NINFER_KV_WINDOW=16384;NINFER_KV_RETRIEVE=8192;NINFER_KV_RING=1;NINFER_HOST_PAGEABLE=1;NINFER_KV_REUSE_HOSTBACKED=1",
+  "ai.inference.engine.ready_line": "listening on",
+  "ai.inference.default_model": "qwen3.8-27b"
+}
+```
+
+实测（RTX 5070 Ti / sm_120a / PQ2-mtponly / 池 8192）：
+
+```
+[ engine ] pid=44076 running=1 last=... INFO api base http://127.0.0.1:8111/v1
+[ status ] backend=openai-upstream models=["qwen3.8-27b"]
+[ engine ] 测速：3887 ms 总耗时，正文 1000 字节：301 302 303 ...
+[ engine ] 控制台：reqs=2 ttft=340ms prefill=3340 decode=282.8 acc=778/883
+[ engine ] 流式分片 11 个，末片=[DONE]
+```
+
+即 1000 token 出：**TTFT 340 ms / 预填 3,340 tok/s / 解码 282.8 tok/s / 投机接受 88%**——
+与该包在 4080 SUPER 上标称的 3.52k / 278 同一量级。引擎在插件卸载时被回收，显存回到基线。
+
+> 思考模型提醒：`max_tokens` 小于思考长度时会只剩 `reasoning_content`、`content` 为空；
+> 网关把两者分开透出（`message.reasoning_content` / `delta.reasoning_content`）。
+
+
+### 两个引擎插件：C ABI 分野（2026-10-21）
+
+| | `ai_llama` | `ai_ninfer` |
+|---|---|---|
+| **C ABI** | ✅ `llama.h` 全部在 `extern "C"` 内，`llama_model` / `llama_context` 是不透明句柄 | ❌ **没有 C ABI**：发行版只有 `.exe`+DLL，无头文件/导入库；上游明写 headers 不作为 SDK 分发 |
+| **形态** | **进程内静态链接**（`libllama.a` 8.5 MB 直接编进插件） | **进程监管 + OpenAI HTTP**（拉起 `ninfer-serve-*.exe`） |
+| 服务名 | `zenith.ai.ILlamaInference` v1 | `zenith.ai.INinferInference` v1 |
+| 实测 | 10.18 GB `Qwen3.8-27B-UD-IQ3_XXS.gguf`：加载 **1.2 s**（mmap），24 token 生成 **4.7 s**（CPU 8 线程） | `Ternary-Bonsai-2-27B`：TTFT **339 ms** / 预填 **3,350 tok/s** / 解码 **282 tok/s** / 投机接受 **88%** |
+| 代价 | 换模型需重启进程；本机链接的是 CPU 后端（无 GPU 加速） | 每请求多一跳 loopback HTTP；引擎崩溃需重启 |
+
+**为什么 NInfer 不能进程内**（三条取证）：① 本机 `infer-engine-sm120a` 包只有 `ninfer-serve-120a.exe` + 运行时 DLL，无 `llama.h` 式头文件、无 `.lib`/`.dll.a`；② 上游 `Neroued/ninfer` README 明写 *"The in-tree C++ headers are not distributed as an installed SDK"*，对外只有 CLI 与 HTTP；③ KVMem 分页、MTP/DFlash2、视觉驻留全在 server 进程内，公开 C 入口不存在。
+
+⇒ `ai_ninfer` 的 `backend()` 直接返回 **`ninfer-http (no C ABI)`**，插件初始化时还会打一条 WARN 说明同一件事——不靠文档靠运行时可观测，避免运维误判它是库插件。详见 [plugins/ai_ninfer/README.md](plugins/ai_ninfer/README.md)。
+
+**llama.cpp 从源码构建**（本机实测，MinGW + CPU 后端）：
+
+```powershell
+cmake -S C:\APP\GitHubCode\llama.cpp -B ..\llama-build-mingw -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=OFF -DLLAMA_CURL=OFF -DBUILD_SHARED_LIBS=OFF `
+  -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_SERVER=OFF `
+  -DLLAMA_BUILD_TOOLS=OFF -DLLAMA_BUILD_COMMON=OFF
+cmake --build ..\llama-build-mingw --target llama
+# 然后把 include/llama.h + ggml 头、libllama.a + ggml*.a 装到前缀，配置时传：
+#   -DZENITH_LLAMA_ROOT=<前缀>
+```
+
+⚠️ ggml 默认开 OpenMP，静态库带 `GOMP_*` 引用——插件侧必须 `find_package(OpenMP)` 链接 `OpenMP::OpenMP_CXX`，否则链接失败（本仓已处理）。要 GPU 就改用 MSVC + CUDA 重编 llama.cpp，接口不变、插件源码一行不用改。
+
+**NInfer 也能进程内——但 C ABI 得我们自己补**（`ai_ninfer_native`）：
+
+| | `ai_llama` | `ai_ninfer_native` |
+|---|---|---|
+| C ABI 谁提供 | llama.cpp 自带 `llama.h` | **自研**：`zenith/ai/ninfer_c_api.h`（POD + opaque + 调用方缓冲 + C 回调） |
+| 编译器 | MinGW（和宿主一致） | **MSVC + CUDA**（引擎只能这样编），宿主 MinGW 只碰纯 C |
+| 产物 | 7.3 MB DLL | **550.8 MB DLL**（引擎 + CUDA kernel 全静态编入） |
+| 实测 | 10.18 GB GGUF：加载 1.0 s，24 token 4.4 s（CPU） | Ternary-Bonsai-2-27B v3：加载 **4.7 s**，485 ms 出 39 字节，**投机接受 36/104** |
+
+三条布局铁律：只用 C 类型/opaque 指针；缓冲由调用方给；内存同侧 new/delete。违反即崩溃。
+
+构建与踩坑（4 个，全已修）见 [plugins/ai_ninfer_native/README.md](plugins/ai_ninfer_native/README.md)；可复现补丁脚本在 `plugins/ai_ninfer_native/patches/`；
+完整实测数据（档位矩阵 / 思考开关 / 复现命令）见 [plugins/ai_ninfer_native/RESULTS.md](plugins/ai_ninfer_native/RESULTS.md)。
+
+**框架侧连带修复**：`DynLib::load` 在 Windows 改用 `LoadLibraryExA(..., LOAD_WITH_ALTERED_SEARCH_PATH)`——默认搜索顺序里没有"被加载 DLL 自己的目录"，导致插件自带的私有依赖 DLL 一律 126 失败。
+### 插件热重载（M8.2）
+
+`PluginManager` 支持**单个插件**卸载/重载，`PluginWatcher` 负责盯文件：
+
+```cpp
+plugin::PluginWatcher watcher(mgr, "./plugins", /*intervalMs=*/1000);
+watcher.onEvent([](const plugin::PluginWatcher::Event& e) {
+    if (!e.ok) ZLOG_ERROR("reload failed: ", e.message);
+});
+watcher.start();     // 后台轮询
+watcher.pollOnce();  // 或手动触发一轮（测试/CI 用）
+```
+
+**Windows 为什么必须走 `.new`**：运行中的 DLL 不能覆盖。换版本的正确姿势是
+「先把新文件落成 `foo.dll.new`」——watcher 检测到就：卸载旧插件 → 把旧文件挪开 →
+把 `.new` 改名成正式文件 → 重新加载并 `start()`。失败则回滚，宿主不受影响。
+
+| 能力 | 接口 |
+|---|---|
+| 单插件卸载 | `mgr.unload(name)`（stop → 清注册表 → shutdown → dlclose） |
+| 单插件重载 | `mgr.reload(path)`：卸载后重新 `load + init + start` |
+| 热替换 | `PluginWatcher::pollOnce()` / `start()`（`.new` 交换协议） |
+| 改配置生效 | 同样用 `mgr.reload(path)`——重载会重新 `init()`，插件重新读 config |
+
+**两条必须知道的规则**：
+1. **重载后旧服务指针失效**（旧实例已 destroy），消费者必须重新 `queryRaw`；
+2. 重载代价 = 插件 `init()` 的代价，AI 插件差别很大：
+
+| 插件 | 重载代价 | 说明 |
+|---|---|---|
+| `hello_cpp` / `hello_c` / `media_ffmpeg` / `edge_esp32` | 毫秒级 | 无重量级状态 |
+| `ai_inference` / `ai_comfyui` | 毫秒级 | mock/上游形态，仅重建 HTTP 客户端 |
+| `ai_llama` | ~1 s | 释放并重新 mmap 模型 |
+| `ai_ninfer`（子进程） | ~4–6 s | 引擎进程被杀掉重拉 |
+| `ai_ninfer_native`（进程内） | ~3.5 s | 引擎析构 + 重新加载 8.9 GB 权重（显存会先释放再占用） |
+
+回归：`test_plugin_reload`（3 例）——`.new` 交换后服务被重注册且可用；坏文件不崩宿主；
+真 GGUF（`Qwen3.8-27B-IQ3_XXS`）卸载后重载仍能推理。
+
+**配置文件变了也想让插件重新读配置**，不用重启宿主（三行）：
+
+```cpp
+config::HotReloader cfgFile("./zenith.json", 500);
+cfgFile.onChange([&](auto) {                 // 内容哈希变化才触发
+    for (const auto& p : mgr.plugins()) mgr.reload(p->path);   // 重新 init() → 重新读 config
+});
+cfgFile.start();
+```
+
+> AI 插件重载会连模型/引擎一起重建（见上表），配置这类"高频小改"更建议做成
+> 每请求读取而非重载插件。
+## M9（进行中）：流式响应 / 压缩 / 非对称身份
+
+- **`http::SseStream` + `http::ChunkWriter`** —— HTTP/1.1 分块流式响应。
+  `Context::sse()` 一行起流，事件帧（`event` / `id` / 多行 `data` / 心跳注释）由框架编码；
+  写端线程安全（任意工作线程可推送），流式连接不参与 keep-alive 复用，
+  空闲踢除自动让路。`ChunkWriter` 供大响应边算边传
+- **`http::gzipMiddleware`** —— 响应压缩（zlib 后端，未探测到即降级 identity）：
+  `Accept-Encoding` 协商（含 `q=0` 拒绝）、体积阈值、204/304/HEAD 自动跳过
+- **`jwt::asym`** —— RS256/384/512、ES256/384 签发与校验（OpenSSL 后端）：
+  ECDSA 按 JWS 要求输出定长 `R‖S`（非 DER），并显式拒绝 `none` / `HS*` 防算法混淆
+- 新增回归测试：`Stream.*`（5）、`Compress.*`（4）、`JwtAsym.*`（5）
+- 意义：`ai_inference` 的 token 流、`ai_mcp` 的 Streamable HTTP 响应流、
+  A2A 的 `message/stream` 三者共用同一地基，已不再被框架缺口卡住
+
+```cpp
+// 一行起流：SSE 头由框架写，正文按 WHATWG EventSource 语义编码
+server.router().get("/v1/chat/stream", [](http::Context& c) {
+    auto sse = c.sse(200, {{"X-Model", "zenith-7b"}});           // 响应头此刻已发出
+    sse->send(R"({"choices":[{"delta":{"content":"天顶"}}]})");   // data: <json>
+    sse->send("1", "progress", "evt-1");                         // event + id
+    sse->comment();                                              // 心跳，防反代超时
+    sse->close();                                                // 0\r\n\r\n + 关连接
+});
+// 推流不必发生在 handler 内：写端线程安全，可在任意工作线程继续 send()
+// 反例：流式响应不做整包压缩，也不复用 keep-alive（连接随流结束关闭）
+```
+
+## M5.7：SPA 托管 + 实战沉淀
 
 - **`http::spaHandler(rootDir)`**：单页应用静态服务——真实文件优先
   （ETag/304/Range/小文件缓存），未命中的前端路由回 index.html（带
@@ -185,7 +385,7 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 
 ## 插件生态
 
-### 已实装插件（v0.1.0）
+### 已实装插件（9 个）
 
 | 插件 | 功能 | 技术 |
 |---|---|---|
@@ -194,13 +394,16 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | `media_ffmpeg` | probe / 截图 / 转码（进度回调） | FFmpeg SDK |
 | `edge_esp32` | COBS 帧设备桥（TCP 网关 + 串口） | 自研协议 |
 | `ai_comfyui` | ComfyUI workflow 提交 + 产物下载 | 自研 HTTP |
+| `ai_inference` | 通用 LLM 网关：mock / 外部 OpenAI 上游 + SSE 流式 | 纯 C ABI 插件 |
+| `ai_llama` | **进程内 llama.cpp**（真·C ABI 静态链接，可加载本地 GGUF） | `llama.h` C ABI |
+| `ai_ninfer` | **NInfer 引擎**：进程监管 + OpenAI HTTP（引擎无 C ABI，见下文） | 子进程 + HTTP |
+| `ai_ninfer_native` | **NInfer 进程内**：自研纯 C ABI shim（MSVC 侧编进 550 MB DLL）+ 宿主适配器 | 自研 C ABI |
 
 ### 预计适配插件（M8 生态扩展，2026 最热方向）
 
 | 插件 | 功能 | 为什么最火 | 优先级 |
 |---|---|---|---|
-| `ai_inference` | LLM 推理网关（llama.cpp + **OpenAI 兼容 API** + SSE 流式） | 2026 推理之年，219% YoY 增长 | ⭐⭐⭐⭐⭐ |
-| `ai_mcp` | **MCP Server**——把 DB/Redis/媒体/设备暴露为 AI Agent 工具 | MCP 成为 Agent 生态标准协议 | ⭐⭐⭐⭐⭐ |
+| `ai_mcp` | **MCP Server**——把 DB/Redis/媒体/设备暴露为 AI Agent 工具（协议基线 **2026-07-28** 无状态版） | MCP 成为 Agent 生态标准协议 | ⭐⭐⭐⭐⭐ |
 | `db_vector` | 向量数据库（自研 HNSW + Qdrant 兼容 API） | RAG 检索增强是最普遍 AI 应用 | ⭐⭐⭐⭐⭐ |
 | `net_mqtt` | MQTT 3.1.1/5.0 broker（QoS/共享订阅/保留消息） | IoT 标准消息协议 | ⭐⭐⭐⭐ |
 | `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
@@ -222,15 +425,61 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   安全(SHA-256/JWT/CORS/限流)、zenith-bench、CI/安装导出/脚手架、热重载/多进程/管理台
 - **M6 ✅ v0.1.0 发布**：Release 基准(181K RPS)/连接上限/slowloris 防线/soak 1.64 亿零失败/
   Linux epoll 闭环/双平台发行版
+- **M9 🚧 流式与身份**：分块/SSE 流式响应、gzip 响应压缩、非对称 JWT（RS/ES）
 - **M7 📋 性能深挖**：Context 池化+arena、sendfile 零拷贝、deflate 压缩、io_uring/IOCP、HTTP/2
   → [docs/PLAN_M7.md](docs/PLAN_M7.md)
-- **M8 📋 生态扩展**：AI 推理/MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
+- **M8 🚧 生态扩展**：✅ M8.1 LLM 推理网关（引擎监管 + OpenAI 兼容 + SSE）；
+  📋 MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
   → [docs/PLAN_M8.md](docs/PLAN_M8.md)
 
 ## 依赖原则
 
-能自研的全部自研（JSON/HTTP/EventLoop/日志/线程池/WebSocket/配置/Redis 协议）；
-仅白名单允许三方：uORM（作者自有 MIT 库）、成熟 C ABI TLS 库、FFmpeg（M4 媒体插件）。
+**边界只有一条：C ABI。** 自研优先不变，但三方准入从「点名白名单」改为「边界规则」——
+**凡提供稳定 C ABI 的库，均可直接接入，不再逐个立项审批**。
+
+- **能自研的继续自研**：HTTP/1.1、WebSocket、JSON、EventLoop/Poller、路由、日志、
+  线程池/无锁队列、配置、Redis RESP、JWT、SHA-1/SHA-256、HMAC、Base64、deflate——
+  这些自己写，不受本原则放宽影响。
+- **其余只要能过 C ABI 就收**：`extern "C"` 符号 + 不透明句柄/自身结构体，头文件自洽，
+  不要求调用方与被调方 C++ ABI 一致。这与插件内核是同一条边界——宿主只认 C ABI，
+  跨编译器（MSVC/GCC/Clang）、跨 C++17/20 混编、跨二进制分发都不承担 C++ ABI 兼容义务。
+
+接入只过四道闸，不设名录审批：
+
+| 闸 | 要求 |
+|---|---|
+| 接口 | 纯 C ABI（`extern "C"` + 句柄/不透明指针），不把 STL/模板类型带过边界 |
+| 许可 | MIT / BSD / Apache-2.0 / zlib / ISC 直接接入；GPL、AGPL 不进链接树，只能独立进程 + IPC 调用且需作者确认 |
+| 可选 | 一律 `find_package` / `pkg-config` 探测 + 独立 `ZENITH_*` 开关；缺失即降级关闭，核心库照常链接 |
+| 隔离 | 阻塞调用不得占 EventLoop——统一 `post()` 到专用线程池；不接管线程/事件循环模型 |
+
+### 已接入 / 已排期的 C ABI 依赖
+
+| 依赖 | 用途 | 形态 | 状态 |
+|---|---|---|---|
+| uORM | ORM 服务化（作者自有，MIT，submodule） | C++ 核心 + `uorm_c.h`（C ABI 目标默认关闭） | 已接入 |
+| OpenSSL | TLS/DTLS、RSA/ECDSA 签名（JWS·ACME·Passkey·VAPID） | 纯 C | 已接入 |
+| mbedTLS / wolfSSL | TLS 备选后端 | 纯 C | `ZENITH_TLS=` 已留位 |
+| FFmpeg（libav*） | probe / 解码 / 转码 / 编码 | 纯 C | 已接入 |
+| SQLite / libmariadb / libpq | uORM 驱动 | 纯 C | 已接入（自动探测） |
+| zlib / libdeflate | deflate/gzip（已接入：`gzipMiddleware`；自研版可选留作练习） | 纯 C | 已接入 |
+| llama.cpp（`llama.h`） | 引擎核心：纯 C ABI，静态链接进 `ai_llama` | 纯 C | 已接入 |
+| ninfer-serve-*.exe | NInfer 引擎：**无 C ABI**，只能子进程 + OpenAI HTTP | 独立进程 | 已接入 |
+| whisper.cpp（`whisper.h`） | STT 后端 | 纯 C | M8.8 |
+| libsrtp | SRTP 媒体加密 | 纯 C | M8.6 |
+| wasmtime-c-api | 沙箱插件宿主（语言无关 + 崩溃隔离） | 纯 C | M9 候选 |
+| miniz / libarchive | ZIP 解包（DOCX/XLSX 读入、doc_parse） | 纯 C | M9 候选 |
+| libmupdf | PDF 文本层 / 渲染 | 纯 C | M9 候选 |
+
+> 选型口径：同一能力只留一个默认后端，其余走 `ZENITH_*` 开关——TLS 后端已经是这个模式。
+
+### 仍不引入
+
+| 情形 | 原因 |
+|---|---|
+| 纯 C++ 模板/头文件库，且无法薄封装成 C ABI | 会把 C++ ABI、STL 版本、编译器差异带进宿主 |
+| 要求 C++ ABI 一致的预编译二进制（.lib/.a） | 与「跨编译器一致」的内核目标直接冲突 |
+| 自带 reactor、要接管 fd 与线程的网络运行时 | 与自研 EventLoop 抢控制权 |
 
 ## 许可
 

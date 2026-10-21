@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "zenith/core/export.hpp"
@@ -56,5 +57,9 @@ struct Url {
     bool tls = false;
 };
 ZENITH_API core::Result<Url> parseUrl(const std::string& url);
+
+/// 分块编码单块（M9.1 流式响应/SSE）：
+/// "hex(长度)\r\n" + data + "\r\n"；data 为空返回空串（终止块另行写出 0\r\n\r\n）。
+ZENITH_API std::string chunkEncode(std::string_view data);
 
 } // namespace zenith::http

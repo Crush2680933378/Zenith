@@ -52,4 +52,33 @@ std::shared_ptr<Session> Context::session() const {
     return std::static_pointer_cast<Session>(context_);
 }
 
+// ---------------------------------------------------------------------------
+//  流式响应（M9.1）
+// ---------------------------------------------------------------------------
+std::shared_ptr<SseStream> Context::sse(int code, const SseStream::Headers& extraHeaders) {
+    if (conn_ == nullptr) return nullptr;
+    auto stream = SseStream::start(conn_, code, extraHeaders);
+    if (stream == nullptr) return nullptr;
+    resp_.status = code;
+    resp_.chunked = true;
+    streaming_ = true;
+    return stream;
+}
+
+std::shared_ptr<ChunkWriter> Context::chunkedStream(const std::string& contentType) {
+    if (conn_ == nullptr) return nullptr;
+    HttpResponse head;
+    head.status = resp_.status;
+    head.chunked = true;
+    // 沿用 handler 已设置的响应头（Content-Type 缺省补默认值）
+    for (const auto& [name, value] : resp_.headers.entries()) head.headers.set(name, value);
+    if (!head.headers.contains("Content-Type")) head.headers.set("Content-Type", contentType);
+
+    auto writer = ChunkWriter::start(conn_, head);
+    if (writer == nullptr) return nullptr;
+    resp_.chunked = true;
+    streaming_ = true;
+    return writer;
+}
+
 } // namespace zenith::http

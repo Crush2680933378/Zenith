@@ -167,18 +167,46 @@ std::string HttpResponse::serialize(bool includeBody, bool connKeepAlive) const 
     for (const auto& [k, v] : headers.entries()) {
         if (iequals(k, "Content-Length")) hasLen = true;
         if (iequals(k, "Connection")) continue; // 由参数统一控制
+        if (chunked && (iequals(k, "Transfer-Encoding") || iequals(k, "Content-Length"))) continue;
         out += k;
         out += ": ";
         out += v;
         out += "\r\n";
     }
     (void)hasLen; // Content-Length 统一由下方输出（此处仅探测，供未来 304 语义）
-    out += "Content-Length: ";
-    out += std::to_string(includeBody ? body.size() : 0);
-    out += "\r\nConnection: ";
+    if (chunked) {
+        // 流式响应（M9.1）：长度未知，改分块传输；终止块由写端（ChunkWriter）负责
+        out += "Transfer-Encoding: chunked\r\n";
+    } else {
+        out += "Content-Length: ";
+        out += std::to_string(includeBody ? body.size() : 0);
+        out += "\r\n";
+    }
+    out += "Connection: ";
     out += connKeepAlive ? "keep-alive" : "close";
     out += "\r\n\r\n";
-    if (includeBody && !body.empty()) out += body;
+    if (includeBody && !body.empty()) {
+        out += chunked ? chunkEncode(body) : body;
+    }
+    return out;
+}
+
+std::string chunkEncode(std::string_view data) {
+    if (data.empty()) return std::string();
+    static const char* kHex = "0123456789abcdef";
+    char digits[20];
+    size_t n = 0;
+    size_t v = data.size();
+    do {
+        digits[n++] = kHex[v & 0xF];
+        v >>= 4;
+    } while (v != 0);
+    std::string out;
+    out.reserve(data.size() + n + 4);
+    for (size_t i = n; i > 0; --i) out.push_back(digits[i - 1]);
+    out += "\r\n";
+    out.append(data.data(), data.size());
+    out += "\r\n";
     return out;
 }
 

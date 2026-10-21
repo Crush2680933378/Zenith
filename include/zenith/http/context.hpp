@@ -14,6 +14,7 @@
 
 #include "zenith/http/http_message.hpp"
 #include "zenith/http/multipart.hpp"
+#include "zenith/http/sse.hpp"
 #include "zenith/json/json.hpp"
 
 namespace zenith::http {
@@ -139,6 +140,17 @@ public:
     [[nodiscard]] HttpResponse& response() noexcept { return resp_; }
     [[nodiscard]] bool aborted() const noexcept { return aborted_; }
 
+    /* ---- 流式响应（M9.1）---- */
+    /// 切换为 SSE 流：立即写响应头并返回写端，此后服务器不再自动发送响应。
+    /// 未绑定连接（直接构造 Context 的单测场景）返回 nullptr。
+    std::shared_ptr<SseStream> sse(int code = 200, const SseStream::Headers& extraHeaders = {});
+    /// 切换为通用 chunked 流（大响应/边算边传）。
+    std::shared_ptr<ChunkWriter> chunkedStream(
+        const std::string& contentType = "application/octet-stream");
+    [[nodiscard]] bool streaming() const noexcept { return streaming_; }
+    /// 由 HttpServer 在派发前注入（用户代码无需调用）。
+    void setConnection(std::shared_ptr<net::TcpConnection> conn) { conn_ = std::move(conn); }
+
 private:
     friend class Router;
     friend class HttpServer;
@@ -155,6 +167,8 @@ private:
     std::vector<Handler> chain_;
     std::shared_ptr<void> context_;                      // session 等附带状态
     mutable std::shared_ptr<std::vector<multipart::FormPart>> formCache_;
+    std::shared_ptr<net::TcpConnection> conn_;            // 流式响应写端（M9.1）
+    bool streaming_ = false;
     size_t idx_ = 0;
     bool aborted_ = false;
 };

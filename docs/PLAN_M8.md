@@ -1,4 +1,4 @@
-# Zenith M8 计划 —— 生态扩展（2026 最热技术方向 × Zenith 插件体系）
+﻿# Zenith M8 计划 —— 生态扩展（2026 最热技术方向 × Zenith 插件体系）
 
 > 前置：M1–M6 完成（v0.1.0），M7 性能优化路线就绪。
 > M8 目标：用 8 个新插件覆盖 2026 年最火的后端技术方向——AI 推理服务、
@@ -21,7 +21,33 @@
 
 ### M8.1 `ai-inference` — LLM 推理服务插件 ⭐⭐⭐⭐⭐
 
-**定位**：Zenith 成为高性能 AI 推理网关——封装 llama.cpp，暴露 OpenAI 兼容 API。
+> **状态（2026-10）：✅ 已实装（2026-10-21 重写为「进程监管」形态）。** 与本节原计划的偏差：
+> 1. **OpenAI 兼容面下沉到核心库**（`zenith::ai::mountOpenAiApi`），插件只实现
+>    `zenith.ai.IInferenceService` 并注册服务——路由不属于插件职责，与
+>    media_ffmpeg/edge_esp32 的「插件提供能力、宿主装配 HTTP」同构。
+> 2. **接口改为回调式**（`chat(req, onToken, onReasoning)` 同步返回 `ChatResult`），
+>    不是原设计的 `loadModel/chat(cb)` 异步句柄：推理线程由宿主的线程池决定，
+>    插件不持有推理线程，卸载时序因此简单（stop → 服务销毁）。
+> 3. **进程内 llama.cpp 后端已删除，改为「监管本地引擎进程 + OpenAI 协议」。** 取证：
+>    - 两套发行版（`llama.cpp-prism-b10709`、`infer-engine-sm120a-20261002`）都是
+>      **纯二进制**，没有 `llama.h`、没有导入库；
+>    - 源码树 `C:\APP\GitHubCode\llama.cpp` 是 **b10603**，二进制是 **b10709**，
+>      跨 106 个 build，按值返回的 `llama_context_params` 布局无保证；
+>    - `--kv-mean-center`（Prism）与 `--spec mtp|dflash2` / KVMem 分页（NInfer）
+>      全在 **server 层**，公开 C API 里没有入口。
+>
+>    结论：这些引擎的能力在进程内、只认自己目录的 DLL，硬链既拿不到头文件也拿不到特性。
+>    插件改为 `EngineSupervisor`（`CreateProcess`/`fork+exec` + 管道 + 就绪标记 + 崩溃重启 +
+>    Job 对象回收）+ OpenAI 上游后端，并把引擎控制台统计行解析成遥测。
+> 4. **实测（RTX 5070 Ti / sm_120a / NInfer PQ2-mtponly / 池 8192）**：
+>    1000 token 出 —— **TTFT 340 ms、预填 3,340 tok/s、解码 282.8 tok/s、
+>    投机接受 778/883（88%）**，总耗时 3.9 s；流式 SSE 11 片；引擎在插件卸载时被回收。
+>    （同包在 4080 SUPER 上标称 3.52k / 278，同一量级。）
+>
+> 剩余待补：模型热插拔（换 `.ninfer` 需重启引擎）、多引擎/多卡路由、
+> `logprobs`、WebSocket 通道（SSE 已通）、视觉输入（引擎已 `--vision`，网关侧未暴露）。
+
+**定位（实际落地）**：Zenith 成为高性能 AI 推理网关——**监管本地引擎进程**（NInfer / llama-server）并暴露 OpenAI 兼容 API。
 
 **功能清单**：
 - llama.cpp C ABI 封装（模型加载/推理/SSE 流式 token 推送）
@@ -42,14 +68,18 @@
      /v1/chat/completions                    gguf 模型文件
 ```
 
-**接口设计**：
+**接口设计（实际落地）**：
 ```cpp
 class IInferenceService : public zenith::plugin::IService {
     ZENITH_SERVICE_DECL(IInferenceService, "zenith.ai.IInferenceService", 1)
-    virtual Result<ModelHandle> loadModel(const ModelConfig&) = 0;
-    virtual void chat(const ChatRequest&, ChatCallback) = 0;  // 异步流式
-    virtual void embeddings(const std::string& text, EmbedCallback) = 0;
+    virtual std::vector<ModelInfo> models() = 0;
+    virtual ChatResult chat(const ChatRequest&, const TokenCallback& onToken = nullptr,
+                            const TokenCallback& onReasoning = nullptr) = 0;
+    virtual EmbeddingResult embeddings(const std::string& model, const std::string& input) = 0;
+    virtual std::string backend() const = 0;        // "openai-upstream" / "mock"
+    virtual EngineState engineState() const { return {}; }  // 引擎进程运行态
 };
+// 宿主侧：ai::mountOpenAiApi(router, service, {.prefix="/v1", .pool=&threadPool});
 ```
 
 **预估**：~2000 行 C++（llama.cpp 封装 800 行 + OpenAI API 路由 600 行 +
@@ -62,31 +92,58 @@ C++ 生态 + C ABI 插件系统支持模型热插拔
 
 ### M8.2 `ai-mcp` — MCP (Model Context Protocol) 服务器插件 ⭐⭐⭐⭐⭐
 
+> **规范基线：MCP `2026-07-28`（无状态核心）**，不是 2025-11-25 及更早的会话式协议。
+> 逐条差异见 <https://modelcontextprotocol.io/specification/2026-07-28/changelog>。
+> 旧写法（`initialize` 握手 + `Mcp-Session-Id` + HTTP+SSE 传输 + `resources/subscribe`）
+> 实现出来即过时，以下清单已按新规范改写。
+
 **定位**：Zenith 作为 MCP Server——把数据库/Redis/文件/媒体/设备暴露为 AI Agent 可调用的工具。
 
-**功能清单**：
-- MCP 协议实现（JSON-RPC 2.0 over HTTP + SSE）
-  - `initialize` / `tools/list` / `tools/call` / `resources/list` / `resources/read`
-- **工具桥接**——把 Zenith ServiceRegistry 里的服务自动映射为 MCP 工具：
-  - `zenith_db_query(sql)` → uORM 执行
-  - `zenith_redis_command(cmd)` → Redis 客户端
-  - `zenith_media_transcode(input, output)` → FFmpeg 插件
-  - `zenith_device_rpc(device, method)` → edge_esp32 设备
-  - `zenith_file_read(path)` / `zenith_file_write(path, content)` → 安全沙箱文件
-- SSE 事件流（工具执行进度推送）
-- 工具权限与沙箱（可配置白名单/黑名单/速率限制）
+**协议层（无状态形态）**：
+- 传输只做 **Streamable HTTP**：一个 POST 的响应体即 SSE 流（`text/event-stream`），
+  客户端需发 `Accept: application/json, text/event-stream`；HTTP+SSE 旧传输已废弃
+- **无握手、无会话**：不实现 `initialize` / `notifications/initialized`，也没有 `Mcp-Session-Id`。
+  每个请求自带协议版本与能力——`_meta` 里的
+  `io.modelcontextprotocol/protocolVersion`、`clientCapabilities`、`clientInfo`；
+  服务端在结果 `_meta` 回 `serverInfo`；版本不符回 `UnsupportedProtocolVersion`
+- **`server/discover`（MUST）**：声明支持的协议版本、capabilities 与身份
+- 列表/读方法：`tools/list`、`prompts/list`、`resources/list`、`resources/read`、
+  `resources/templates/list`，结果必须带 `ttlMs` + `cacheScope`（`CacheableResult`）；
+  `tools/list` 需**稳定排序**（提升 LLM prompt cache 命中率）
+- 变更通知统一走 **`subscriptions/listen`**（一条长驻 POST 响应流），取代旧 GET 端点与
+  `resources/subscribe` / `resources/unsubscribe`；通知打 `io.modelcontextprotocol/subscriptionId`。
+  请求级通知（`notifications/progress` / `notifications/message`）仍走该请求自己的响应流
+- **MRTR（多轮请求）**：不再发 server→client 主动请求。需要补输入时返回
+  `resultType: "input_required"` + `inputRequests`，客户端带 `inputResponses` 重试原请求；
+  所有结果都带 `resultType`（`complete` / `input_required`）
+- Streamable HTTP POST 必须校验 **`Mcp-Method` / `Mcp-Name`** 头；工具参数可映射自定义头（`x-mcp-header`）
+- 错误码分区：实现自定义用 `-32000..-32019`；规范保留 `-32020..-32099`
+  （HeaderMismatch `-32020`、MissingRequiredClientCapability `-32021`、
+  UnsupportedProtocolVersion `-32022`）；资源不存在由 `-32002` 改为 `-32602`
+- **明确不做**：SSE `Last-Event-ID` 续传（规范移除，断流由客户端重发新请求）；
+  Roots/Sampling/Logging（已废弃，日志级别改为每请求 `_meta.logLevel`）
 
-**架构**：
-```
-[AI Agent (LangGraph/CrewAI/Claude)] ←→ MCP 协议 ←→ [Zenith ai-mcp 插件]
-                                                        ↓ ServiceRegistry
-                                          [uORM] [Redis] [FFmpeg] [ESP32] [文件]
-```
+**工具桥接（Zenith 独有优势）**：
+- `tools/list` 由 **ServiceRegistry 自动生成**：注册进来的服务直接映射为工具 schema
+  - `zenith_db_query` → uORM 执行
+  - `zenith_redis_command` → Redis 客户端
+  - `zenith_media_transcode` → FFmpeg 插件
+  - `zenith_device_rpc` → edge_esp32 设备
+  - `zenith_file_read` / `zenith_file_write` → 沙箱根目录白名单
+- 工具级 ACL + 令牌桶限流；危险工具（执行类）走 `agent_sandbox`（M9 候选）隔离
 
-**预估**：~1200 行（MCP 协议栈 500 行 + 工具桥接 400 行 + SSE 200 行 + 配置 100 行）
+**可观测与鉴权**：
+- `_meta` 里的 W3C `traceparent` / `tracestate` / `baggage` 全链路透传（与 `obs_otel` 共用）
+- Authorization 按规范做 OAuth 2.1 资源服务器：校验 RFC 9207 `iss`；
+  客户端注册改用 **Client ID Metadata Documents**（DCR 已废弃）
+
+**依赖**：零三方——HTTP/1.1、JSON-RPC、SSE 全在 Zenith 内
+（SSE/分块写端已随 M9.1 落地：`zenith::http::SseStream`）
+
+**预估**：~1500 行（协议栈 600 + 工具桥接 500 + SSE 帧 200 + 鉴权/配置 200）
 
 **为什么 Zenith 做最好**：ServiceRegistry 就是现成的工具注册中心；JSON-RPC/SSE
-底层协议 Zenith 已全部自研实现
+底层协议 Zenith 已全部自研实现；无状态化后正好吃满 181K RPS 的 HTTP 基线，不再需要会话表
 
 ---
 
@@ -234,7 +291,7 @@ M8 插件可与 M7 并行开发：
 | 插件 | 新增行数 | 依赖 |
 |---|---|---|
 | ai-inference | ~2000 | llama.cpp SDK |
-| ai-mcp | ~1200 | 无（全自研） |
+| ai-mcp | ~1500 | 无（全自研；协议基线 MCP 2026-07-28） |
 | db-vector | ~1500 | 无（全自研 HNSW） |
 | net-mqtt | ~2500 | 无（全自研） |
 | net-grpc | ~4000 | HTTP/2 (M7.7) |
@@ -257,4 +314,4 @@ M8 完成后 Zenith 将具备：
 | 实时通信 | WebRTC + FFmpeg 转码 |
 | 可观测 | Prometheus + OpenTelemetry |
 | 语音 | whisper.cpp STT |
-| **总计 17 个插件** | 覆盖 2026 后端全场景 |
+| **总计 13 个插件** | 覆盖 2026 后端全场景 |

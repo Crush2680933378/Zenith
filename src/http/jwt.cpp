@@ -71,4 +71,20 @@ VerifyResult verify(const std::string& secret, const std::string& token, int64_t
     return r;
 }
 
+std::string headerAlg(const std::string& token) {
+    const size_t d1 = token.find('.');
+    if (d1 == std::string::npos) return std::string();
+    auto hdr = detail::unb64url(token.substr(0, d1));
+    if (!hdr.has_value()) return std::string();
+    const size_t key = hdr->find("\"alg\"");
+    if (key == std::string::npos) return std::string();
+    const size_t colon = hdr->find(':', key + 5);
+    if (colon == std::string::npos) return std::string();
+    const size_t q1 = hdr->find('"', colon + 1);
+    if (q1 == std::string::npos) return std::string();
+    const size_t q2 = hdr->find('"', q1 + 1);
+    if (q2 == std::string::npos) return std::string();
+    return hdr->substr(q1 + 1, q2 - q1 - 1);
+}
+
 } // namespace zenith::http::jwt

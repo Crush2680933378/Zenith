@@ -38,7 +38,11 @@ core::Result<void> DynLib::load() {
     }
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-    handle_ = static_cast<void*>(LoadLibraryA(path_.c_str()));
+    // LOAD_WITH_ALTERED_SEARCH_PATH：让 Windows 解析**该 DLL 自身的依赖**时，
+    // 先去它所在目录找。默认搜索顺序只看 exe 目录/系统目录/PATH——插件把私有
+    // 依赖 DLL 放在自己旁边（例如 CUDA/FFmpeg 运行时）时会一律 126 加载失败。
+    handle_ = static_cast<void*>(LoadLibraryExA(path_.c_str(), nullptr,
+                                                LOAD_WITH_ALTERED_SEARCH_PATH));
 #else
     handle_ = dlopen(path_.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
