@@ -1,4 +1,4 @@
-﻿#include "zenith/ai/openai_api.hpp"
+#include "zenith/ai/openai_api.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -178,8 +178,9 @@ void countTokens(bool enabled, const Usage& usage) {
 void recordEngineStats(bool enabled, const EngineStats& stats) {
     if (!enabled || !stats.valid) return;
     auto& reg = metrics::Registry::instance();
-    reg.gauge("zenith_ai_prefill_tps").set(static_cast<int64_t>(stats.prefillTps));
-    reg.gauge("zenith_ai_decode_tps").set(static_cast<int64_t>(stats.decodeTps));
+    reg.gauge("zenith_ai_prefill_tps").set(stats.prefillTps);
+    reg.gauge("zenith_ai_decode_tps").set(stats.decodeTps);
+    if (stats.firstTokenMs > 0) reg.gauge("zenith_ai_ttft_ms").set(stats.firstTokenMs);
     reg.counter("zenith_ai_draft_tokens_total").inc(stats.draftTotal);
     reg.counter("zenith_ai_draft_accepted_total").inc(stats.draftAccepted);
     reg.counter("zenith_ai_cached_prompt_tokens_total").inc(stats.cachedTokens);
@@ -194,10 +195,10 @@ void recordEngineState(bool enabled, const EngineState& st) {
     reg.gauge("zenith_ai_engine_requests").set(st.requests);
     if (st.lastTtftMs > 0) reg.gauge("zenith_ai_ttft_ms").set(static_cast<int64_t>(st.lastTtftMs));
     if (st.lastPrefillTps > 0) {
-        reg.gauge("zenith_ai_prefill_tps").set(static_cast<int64_t>(st.lastPrefillTps));
+        reg.gauge("zenith_ai_prefill_tps").set(st.lastPrefillTps);
     }
     if (st.lastDecodeTps > 0) {
-        reg.gauge("zenith_ai_decode_tps").set(static_cast<int64_t>(st.lastDecodeTps));
+        reg.gauge("zenith_ai_decode_tps").set(st.lastDecodeTps);
     }
 }
 
@@ -255,9 +256,11 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
         sendError(c, 400, "invalid_request_error", err);
         return;
     }
-    // 非标准扩展：思考模式开关（-1 关 / 0 后端默认 / 1 开），GUI 与 NInfer 后端共用
+    // 非标准扩展：思考模式开关（-1 关 / 0 后端默认 / 1 开），GUI 与 NInfer 后端共用。
+    // 请求里没写就用宿主配置的默认值（网关 --thinking 落在这里）。
+    req.thinking = opt.defaultThinking;
     if (body.has("thinking")) {
-        int t = static_cast<int>(body["thinking"].asInt(0));
+        const int t = static_cast<int>(body["thinking"].asInt(0));
         req.thinking = t < -1 ? -1 : (t > 1 ? 1 : t);
     }
     countRequest(opt.metricsEnabled, "chat");

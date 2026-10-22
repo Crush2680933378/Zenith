@@ -1,4 +1,4 @@
-﻿#include "zenith/ai/ninfer_c_api_client.hpp"
+#include "zenith/ai/ninfer_c_api_client.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -108,6 +108,9 @@ public:
         }
         if (out.decode_seconds > 0.0) {
             r.stats.decodeTps = static_cast<double>(out.completion_tokens) / out.decode_seconds;
+        }
+        if (out.first_token_seconds > 0.0) {
+            r.stats.firstTokenMs = out.first_token_seconds * 1000.0;
         }
         r.stats.draftTotal = static_cast<int64_t>(out.drafted_tokens);
         r.stats.draftAccepted = static_cast<int64_t>(out.accepted_tokens);

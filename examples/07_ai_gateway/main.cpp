@@ -61,6 +61,7 @@ struct Options {
     int prefillChunk = 0;          ///< NInfer 预填分块（须为 128 的倍数）
     int maxConcurrency = 0;        ///< NInfer 并发上限（1..8）
     int device = -1;               ///< NInfer 设备序号
+    int thinking = 0;              ///< 后端默认思考模式：-1 关 / 0 默认 / 1 开
 };
 
 std::string lower(std::string s) {
@@ -119,6 +120,8 @@ Options parseArgs(int argc, char** argv) {
             o.maxConcurrency = std::atoi(next().c_str());
         } else if (a == "--device") {
             o.device = std::atoi(next().c_str());
+        } else if (a == "--thinking") {
+            o.thinking = std::atoi(next().c_str());
         } else if (a.rfind("--", 0) == 0) {
             std::fprintf(stderr, "[gateway] 忽略未知参数: %s\n", a.c_str());
         } else {
@@ -274,6 +277,8 @@ int main(int argc, char** argv) {
                 "threads=%d gpu_layers=%d batch=%d\n",
                 opt.ctx, opt.spec, opt.draft, opt.kvDtype, opt.prefillChunk, opt.maxConcurrency,
                 opt.device, opt.threads, opt.gpuLayers, opt.batch);
+    std::printf("[gateway] 思考模式默认: %s\n",
+                opt.thinking < 0 ? "关" : (opt.thinking > 0 ? "开" : "后端默认"));
     std::printf("[gateway] backend=%s  模型=%s\n", svc.backend().c_str(),
                 svc.models().empty() ? "?" : svc.models().front().id.c_str());
 
@@ -301,6 +306,7 @@ int main(int argc, char** argv) {
 
     ai::OpenAiApiOptions apiOpt;
     apiOpt.pool = &pool;
+    apiOpt.defaultThinking = opt.thinking; // 启动参数定默认，单次请求可覆盖
     ai::mountOpenAiApi(r, svc, apiOpt);
 
     if (!server.listen("127.0.0.1", opt.port)) {

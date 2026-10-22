@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  zenith::ai::IInferenceService —— LLM 推理服务契约（M8.1）
 //  宿主与 ai_inference 插件之间的共享接口；第三方可依同契约写别的后端
 //  （llama.cpp / vLLM / 远端 API），OpenAI 兼容层只认这个接口。
@@ -52,6 +52,7 @@ struct EngineStats {
     int64_t draftTotal = 0;    // draft_n（投机解码候选数）
     int64_t draftAccepted = 0; // draft_n_accepted
     int64_t cachedTokens = 0;  // cache_n / prompt cache 命中
+    double firstTokenMs = 0;   // 首 token 延迟（进程内后端才有）
 };
 
 /// 引擎进程运行态（仅「本地引擎」形态有内容）

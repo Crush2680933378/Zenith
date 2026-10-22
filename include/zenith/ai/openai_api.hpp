@@ -26,6 +26,9 @@ struct OpenAiApiOptions {
     bool includeUsageInStream = true;
     /// 是否打点 Prometheus 指标（zenith_ai_*）
     bool metricsEnabled = true;
+    /// 后端默认的思考模式（-1 关 / 0 用后端默认 / 1 开）。
+    /// 请求体里的 `thinking` 字段若存在则覆盖它——用于"启动参数定默认、单次请求可改"。
+    int defaultThinking = 0;
 };
 
 /// 挂载 OpenAI 兼容路由。service 生命周期须覆盖 router 的调用期。
