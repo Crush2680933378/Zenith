@@ -223,7 +223,21 @@ Picked pickService(plugin::ServiceRegistry& registry, const std::string& backend
         }
     }
     if (backend == "llama" && take("zenith.ai.ILlamaInference", "llama.cpp（进程内）")) return p;
-    if (backend == "ninfer" && take("zenith.ai.INinferInference", "ninfer（子进程）")) return p;
+    if (backend == "ninfer") {
+        if (take("zenith.ai.INinferInference", "ninfer（子进程）")) return p;
+        // 选了子进程形态，但目录里只有原生插件 —— 自动回退，别让用户卡死在启动失败
+        if (void* table = registry.queryRaw("zenith.ai.INinferCApi", 1); table != nullptr) {
+            p.owned = ai::wrapNinferCAbiService(table, stemOf(o.model), o.model);
+            if (p.owned != nullptr) {
+                p.service = p.owned.get();
+                p.how = "ninfer c-abi（进程内，已从「子进程」模式自动回退）";
+                std::fprintf(stderr,
+                             "[gateway] 注意：后端指定为 ninfer（子进程），但插件目录里只有 "
+                             "zenith_ai_ninfer_native.dll，已自动改用进程内形态。\n");
+                return p;
+            }
+        }
+    }
     if (take("zenith.ai.IInferenceService", "ai_inference（mock/上游/引擎）")) return p;
     if (take("zenith.ai.ILlamaInference", "llama.cpp（进程内）")) return p;
     if (take("zenith.ai.INinferInference", "ninfer（子进程）")) return p;
@@ -265,8 +279,10 @@ int main(int argc, char** argv) {
     if (picked.service == nullptr) {
         std::fprintf(stderr,
                      "[gateway] 没有可用的推理服务（backend=%s）\n"
-                     "          llama 需要 zenith_ai_llama.dll；ninfer 需要 "
-                     "zenith_ai_ninfer.dll / zenith_ai_ninfer_native.dll\n",
+                     "          llama  → zenith_ai_llama.dll\n"
+                     "          ninfer 子进程 → zenith_ai_ninfer.dll（注意不是 _native）\n"
+                     "          ninfer 进程内 → zenith_ai_ninfer_native.dll\n"
+                     "          当前目录里的插件：见上面的“插件目录 …（N 个）”计数\n",
                      backend.c_str());
         return 2;
     }

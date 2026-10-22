@@ -281,6 +281,8 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
         const bool metricsOn = opt.metricsEnabled;
         const bool withUsage = opt.includeUsageInStream;
         runAsync(opt, [service, req, id, created, model, sse, metricsOn, withUsage]() {
+            std::size_t streamedContent = 0;
+            std::size_t streamedReasoning = 0;
             auto emitDelta = [&](std::string_view delta) {
                 JsonValue chunk = chatChunkBase(id, created, model);
                 JsonValue choices = JsonValue::array();
@@ -293,6 +295,7 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
                 choices.push_back(std::move(choice));
                 chunk["choices"] = std::move(choices);
                 sse->send(chunk.dump());
+                streamedContent += delta.size();
             };
             // 思考模型的推理过程单独成帧（llama.cpp 的 reasoning_content 语义）
             auto emitReasoning = [&](std::string_view delta) {
@@ -307,6 +310,7 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
                 choices.push_back(std::move(choice));
                 chunk["choices"] = std::move(choices);
                 sse->send(chunk.dump());
+                streamedReasoning += delta.size();
             };
 
             ChatResult r = service->chat(
@@ -321,6 +325,15 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
                     emitReasoning(delta);
                     return true;
                 });
+
+            // 有些后端（如进程内 NInfer 的 C ABI）只在 generate 返回时给出完整
+            // reasoning/content，流式回调里不推。若不补发，客户端会看到"空回复"。
+            if (r.ok && !sse->closed() && !r.reasoning.empty() && streamedReasoning == 0) {
+                emitReasoning(r.reasoning);
+            }
+            if (r.ok && !sse->closed() && !r.content.empty() && streamedContent == 0) {
+                emitDelta(r.content);
+            }
 
             if (!r.ok && !sse->closed()) {
                 // 流已开启只能以 error 事件收尾（客户端会看到而非静默截断）
