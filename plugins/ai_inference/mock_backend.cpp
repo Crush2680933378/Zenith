@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  MockBackend —— 确定性推理后端（M8.1）
 //  作用：没有模型/没有 llama.cpp 时，OpenAI 兼容层的契约（JSON 形状、SSE 帧、
 //  usage、中止语义）依然可被全链路验证 —— CI 里跑的就是这套。
@@ -25,11 +25,18 @@ int countWords(const std::string& s) {
     return n;
 }
 
-/// 固定宽度切片：保证流式分片拼接后与完整回复逐字节一致
+/// 固定宽度切片：保证流式分片拼接后与完整回复逐字节一致。
+/// 必须在 UTF-8 字符边界收口——按字节硬切会把中文/emoji 劈成非法序列，
+/// 客户端 JSON 解析后就是乱码（GUI 上表现为 "???"）。
 std::vector<std::string> sliceTokens(const std::string& text, size_t width) {
     std::vector<std::string> out;
-    for (size_t i = 0; i < text.size(); i += width) {
-        out.push_back(text.substr(i, std::min(width, text.size() - i)));
+    size_t i = 0;
+    while (i < text.size()) {
+        size_t end = std::min(text.size(), i + width);
+        // 0b10xxxxxx 是续字节：往后推到下一个字符起始，避免切断多字节序列
+        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) ++end;
+        out.push_back(text.substr(i, end - i));
+        i = end;
     }
     return out;
 }

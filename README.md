@@ -167,6 +167,10 @@ cmake --build ..\llama-build-mingw --target llama
 构建与踩坑（4 个，全已修）见 [plugins/ai_ninfer_native/README.md](plugins/ai_ninfer_native/README.md)；可复现补丁脚本在 `plugins/ai_ninfer_native/patches/`；
 完整实测数据（档位矩阵 / 思考开关 / 复现命令）见 [plugins/ai_ninfer_native/RESULTS.md](plugins/ai_ninfer_native/RESULTS.md)。
 
+**配套桌面端**：`examples/07_ai_gateway` 把 AI 插件挂成 OpenAI 兼容网关
+（`/v1/*` + `/zenith/ai/status` + `/metrics`），仓库外的 `../ZenithDesk`
+（React 19 + Electron 45）可直接连它做流式对话与引擎状态面板。
+
 **框架侧连带修复**：`DynLib::load` 在 Windows 改用 `LoadLibraryExA(..., LOAD_WITH_ALTERED_SEARCH_PATH)`——默认搜索顺序里没有"被加载 DLL 自己的目录"，导致插件自带的私有依赖 DLL 一律 126 失败。
 ### 插件热重载（M8.2）
 

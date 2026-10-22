@@ -1,4 +1,4 @@
-#include "zenith/ai/openai_api.hpp"
+﻿#include "zenith/ai/openai_api.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -254,6 +254,11 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
     if (!buildChatRequest(body, req, stream, err)) {
         sendError(c, 400, "invalid_request_error", err);
         return;
+    }
+    // 非标准扩展：思考模式开关（-1 关 / 0 后端默认 / 1 开），GUI 与 NInfer 后端共用
+    if (body.has("thinking")) {
+        int t = static_cast<int>(body["thinking"].asInt(0));
+        req.thinking = t < -1 ? -1 : (t > 1 ? 1 : t);
     }
     countRequest(opt.metricsEnabled, "chat");
 
