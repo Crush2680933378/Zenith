@@ -304,7 +304,11 @@ int main(int argc, char** argv) {
     ai::mountOpenAiApi(r, svc, apiOpt);
 
     if (!server.listen("127.0.0.1", opt.port)) {
-        std::fprintf(stderr, "[gateway] 监听 %u 失败\n", static_cast<unsigned>(opt.port));
+        std::fprintf(stderr,
+                     "[gateway] 监听 %u 失败：端口可能已被占用\n"
+                     "          多半是上次没退干净的 ai_gateway.exe —— "
+                     "taskkill /IM ai_gateway.exe /F 后再试\n",
+                     static_cast<unsigned>(opt.port));
         return 3;
     }
 
