@@ -2,6 +2,8 @@
 
 #include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,15 +14,30 @@ namespace {
 
 /// 回调上下文：C 函数指针 + user 指针，跨 DLL 只传这两个
 struct CallbackCtx {
-    const TokenCallback* onToken = nullptr;
+    const TokenCallback* onToken = nullptr;     ///< 正文
+    const TokenCallback* onReasoning = nullptr; ///< 思考过程（ABI v2）
     bool aborted = false;
 };
 
-int32_t NZ_CALL tokenTrampoline(const char* piece, int32_t len, void* user) {
+/// ABI v1 回调（只有正文）。v2 宿主仍支持它：思考内容退化为聚合结果。
+int32_t NZ_CALL tokenTrampolineV1(const char* piece, int32_t len, void* user) {
     auto* ctx = static_cast<CallbackCtx*>(user);
-    if (ctx == nullptr || ctx->onToken == nullptr || !(*ctx->onToken)) return 0;
-    if (len <= 0) return 0;
+    if (ctx == nullptr || len <= 0 || ctx->onToken == nullptr || !(*ctx->onToken)) return 0;
     if (!(*ctx->onToken)(std::string_view(piece, static_cast<size_t>(len)))) {
+        ctx->aborted = true;
+        return 1;
+    }
+    return 0;
+}
+
+/// ABI v2：按 channel 分流到正文/思考回调
+int32_t NZ_CALL tokenTrampoline(const char* piece, int32_t len, int32_t channel, void* user) {
+    auto* ctx = static_cast<CallbackCtx*>(user);
+    if (ctx == nullptr || len <= 0) return 0;
+    const bool isReasoning = channel == ZENITH_NZ_CHANNEL_REASONING;
+    const TokenCallback* sink = isReasoning ? ctx->onReasoning : ctx->onToken;
+    if (sink == nullptr || !(*sink)) return 0; // 这一路没人要，继续跑但丢弃
+    if (!(*sink)(std::string_view(piece, static_cast<size_t>(len)))) {
         ctx->aborted = true;
         return 1; // 请求引擎中止
     }
@@ -30,7 +47,8 @@ int32_t NZ_CALL tokenTrampoline(const char* piece, int32_t len, void* user) {
 class NinferCAbiService final : public IInferenceService {
 public:
     NinferCAbiService(const zenith_nz_service* svc, std::string modelId, std::string artifactPath)
-        : svc_(svc), modelId_(std::move(modelId)), artifact_(std::move(artifactPath)) {}
+        : svc_(svc), modelId_(std::move(modelId)), artifact_(std::move(artifactPath)),
+          abiVersion_(svc != nullptr ? svc->version : 0u) {}
 
     [[nodiscard]] std::vector<ModelInfo> models() override {
         ModelInfo info;
@@ -47,7 +65,6 @@ public:
 
     ChatResult chat(const ChatRequest& req, const TokenCallback& onToken,
                     const TokenCallback& onReasoning) override {
-        (void)onReasoning; // shim 目前只回传正文回调；推理片段走 reasoning 字段
         ChatResult r;
         r.model = req.model.empty() ? modelId_ : req.model;
         if (svc_ == nullptr || svc_->generate == nullptr || svc_->engine == nullptr) {
@@ -85,10 +102,16 @@ public:
         out.struct_size = sizeof(zenith_nz_result);
         CallbackCtx ctx;
         ctx.onToken = &onToken;
+        ctx.onReasoning = &onReasoning; // ABI v2：思考过程实时回调
 
+        // v1 插件的回调只接受 (piece,len,user)；把 3 参数函数传进 4 参数槽是安全的
+        // —— Win64 下被调方忽略多余的 channel 实参。v2 则走带 channel 的版本。
+        const zenith_nz_token_cb cb =
+            abiVersion_ >= 2 ? &tokenTrampoline
+                             : reinterpret_cast<zenith_nz_token_cb>(&tokenTrampolineV1);
         const int32_t rc =
             svc_->generate(svc_->engine, msgs.data(), static_cast<int32_t>(msgs.size()),
-                           req.maxTokens, &sampling, &tokenTrampoline, &ctx, &out);
+                           req.maxTokens, &sampling, cb, &ctx, &out);
         if (rc != 0 || out.status != 0) {
             r.error = out.error[0] != '\0' ? std::string(out.error)
                                            : (svc_->last_error != nullptr
@@ -159,6 +182,7 @@ private:
     }
 
     const zenith_nz_service* svc_;
+    std::uint32_t abiVersion_ = 0;
     std::string modelId_;
     std::string artifact_;
 };
@@ -170,7 +194,14 @@ std::unique_ptr<IInferenceService> wrapNinferCAbiService(const void* serviceTabl
                                                          std::string artifactPath) {
     if (serviceTable == nullptr) return nullptr;
     const auto* svc = static_cast<const zenith_nz_service*>(serviceTable);
-    if (svc->version != ZENITH_NINFER_C_API_VERSION || svc->engine == nullptr ||
+    // 兼容 v1（只有正文回调，思考内容走聚合结果）与 v2（思考也实时流式）
+    if (svc->version != 1 && svc->version != ZENITH_NINFER_C_API_VERSION) {
+        std::fprintf(stderr,
+                     "[ninfer-c-abi] 不支持的 ABI 版本：插件 v%u，宿主支持 v1 / v%u\n",
+                     svc->version, ZENITH_NINFER_C_API_VERSION);
+        return nullptr;
+    }
+    if (svc->engine == nullptr ||
         svc->generate == nullptr) {
         return nullptr;
     }

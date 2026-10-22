@@ -1,4 +1,4 @@
-﻿# ai_ninfer_native —— **进程内** NInfer（自研 C ABI，MSVC 侧）
+# ai_ninfer_native —— **进程内** NInfer（自研 C ABI，MSVC 侧）
 
 > 这是 `ai_ninfer`（子进程 + HTTP）的第二个形态：**引擎跑在宿主进程里**，
 > 没有 loopback HTTP、没有子进程管理。代价是引擎崩溃＝宿主崩溃。
@@ -79,6 +79,32 @@ CUDA kernel 全部静态编入）。运行时还要把 **FFmpeg / cuBLAS** 的 D
 | `LoadLibrary 失败 err=126` | 依赖 DLL 在插件目录，但默认搜索路径不含"被加载 DLL 自己的目录" | `LOAD_WITH_ALTERED_SEARCH_PATH` |
 | `kv_capacity is outside the usable range for max_context` | NInfer 约束 `kv_capacity ≥ max_context`，且页数在区间内 | 配置同时给出 `max_context`，默认让两者相等（8192） |
 | `test_ai_llama` 在 ctest 里 SEGFAULT | 550 MB 的 MSVC/CUDA 插件被放进了通用插件目录，所有测试都会加载它 | 原生插件独立目录 `plugins-native/`，只有本测试加载 |
+
+## 4a. ABI v2：思考过程也流式回调
+
+v1 的回调签名是 `zenith_nz_token_cb(piece, len, user)`——**没有 channel**，
+所以 shim 只能转发正文；思考内容只存在于 `generate()` 返回的聚合结果里，
+流式时客户端拿不到（表现为"想完了才开始出字"，或思考占满预算时收到空回复）。
+
+v2 起：
+
+```c
+typedef enum zenith_nz_channel {
+    ZENITH_NZ_CHANNEL_CONTENT   = 0,   // 正文
+    ZENITH_NZ_CHANNEL_REASONING = 1,   // 思考过程
+} zenith_nz_channel;
+
+typedef int32_t (NZ_CALL *zenith_nz_token_cb)(const char* piece, int32_t len,
+                                             int32_t channel, void* user);
+```
+
+- shim 在 `BridgeSink::publish` 里按 `OutputChannel` 填 channel，两路都实时回调
+- 宿主适配器按 channel 分流到 `onToken` / `onReasoning`
+- **版本必须两侧一致**：宿主检查 `svc->version == ZENITH_NINFER_C_API_VERSION`，
+  不一致会打印「插件 ABI v1，宿主需要 v2」并拒绝加载（不会静默跑错语义）
+
+改完 ABI 后必须重编原生插件（`cmake --build _deps/ninfer-build --target
+zenith_ai_ninfer_native`），宿主侧（MinGW）单独重编即可。
 
 ## 5. 实测（RTX 5070 Ti / Ternary-Bonsai-2-27B v3 / kv 8192 / MTP 4）
 

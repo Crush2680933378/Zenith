@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  zenith/ai/ninfer_c_api.h —— NInfer 引擎的 **纯 C ABI 边界**（M8.1 进程内方案）
 //
 //  为什么需要这一层：NInfer 只提供 C++ 类 API（ninfer::Engine，
@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 /// 契约版本：布局变更时 +1，宿主据此拒绝不匹配的 shim
-#define ZENITH_NINFER_C_API_VERSION 1u
+#define ZENITH_NINFER_C_API_VERSION 2u
 
 /// 引擎配置（POD，字段全部定宽）
 typedef struct zenith_nz_config {
@@ -90,7 +90,17 @@ typedef struct zenith_nz_sampling {
 } zenith_nz_sampling;
 
 /// 流式回调：返回 0 继续、非 0 请求中止
-typedef int32_t (NZ_CALL *zenith_nz_token_cb)(const char* piece, int32_t len, void* user);
+/// 流式片段所属通道（ABI v2 新增）
+typedef enum zenith_nz_channel {
+    ZENITH_NZ_CHANNEL_CONTENT = 0,   ///< 正式回复
+    ZENITH_NZ_CHANNEL_REASONING = 1, ///< 思考过程（思考模型）
+} zenith_nz_channel;
+
+/// 流式回调：piece/len 是 UTF-8 片段，channel 见 zenith_nz_channel。
+/// 返回 0 继续、非 0 请求中止。
+/// 注意：v1 的回调没有 channel 参数，只有 content；v2 起两路都实时回调。
+typedef int32_t (NZ_CALL *zenith_nz_token_cb)(const char* piece, int32_t len, int32_t channel,
+                                             void* user);
 
 /// 结果（调用方分配；内部只用固定缓冲，绝不交出内部分配的指针）
 typedef struct zenith_nz_result {
