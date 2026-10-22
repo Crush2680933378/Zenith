@@ -55,6 +55,12 @@ struct Options {
     int enginePort = 8123;         ///< 子进程引擎监听端口
     int spec = 0;                  ///< 0 用插件默认(MTP)，1 MTP，2 DFlash，3 DFlash2
     int draft = 0;                 ///< 0 用插件默认(4)；DFlash2 建议 12
+    int batch = 0;                 ///< llama.cpp prompt 批大小（0=插件默认 512）
+    int flashAttn = -1;            ///< llama.cpp flash attention（-1=默认）
+    int kvDtype = -1;              ///< NInfer KV 精度（0..8，-1=默认 K8V4）
+    int prefillChunk = 0;          ///< NInfer 预填分块（须为 128 的倍数）
+    int maxConcurrency = 0;        ///< NInfer 并发上限（1..8）
+    int device = -1;               ///< NInfer 设备序号
 };
 
 std::string lower(std::string s) {
@@ -101,6 +107,18 @@ Options parseArgs(int argc, char** argv) {
             o.spec = std::atoi(next().c_str());
         } else if (a == "--draft") {
             o.draft = std::atoi(next().c_str());
+        } else if (a == "--batch") {
+            o.batch = std::atoi(next().c_str());
+        } else if (a == "--flash-attn") {
+            o.flashAttn = std::atoi(next().c_str());
+        } else if (a == "--kv-dtype") {
+            o.kvDtype = std::atoi(next().c_str());
+        } else if (a == "--prefill-chunk") {
+            o.prefillChunk = std::atoi(next().c_str());
+        } else if (a == "--max-concurrency") {
+            o.maxConcurrency = std::atoi(next().c_str());
+        } else if (a == "--device") {
+            o.device = std::atoi(next().c_str());
         } else if (a.rfind("--", 0) == 0) {
             std::fprintf(stderr, "[gateway] 忽略未知参数: %s\n", a.c_str());
         } else {
@@ -139,6 +157,8 @@ void applyBackendConfig(core::KeyValueConfig& cfg, const Options& o, const std::
         cfg.set("ai.llama.context", std::to_string(o.ctx));
         cfg.set("ai.llama.gpu_layers", std::to_string(o.gpuLayers));
         if (o.threads > 0) cfg.set("ai.llama.threads", std::to_string(o.threads));
+        if (o.batch > 0) cfg.set("ai.llama.batch", std::to_string(o.batch));
+        if (o.flashAttn >= 0) cfg.set("ai.llama.flash_attn", std::to_string(o.flashAttn));
         return;
     }
     if (backend == "ninfer" || backend == "ninfer-native") {
@@ -155,6 +175,14 @@ void applyBackendConfig(core::KeyValueConfig& cfg, const Options& o, const std::
         cfg.set("ai.ninfer_native.kv_tokens", std::to_string(o.ctx));
         if (o.spec > 0) cfg.set("ai.ninfer_native.spec", std::to_string(o.spec));
         if (o.draft > 0) cfg.set("ai.ninfer_native.draft_tokens", std::to_string(o.draft));
+        if (o.kvDtype >= 0) cfg.set("ai.ninfer_native.kv_dtype", std::to_string(o.kvDtype));
+        if (o.prefillChunk > 0) {
+            cfg.set("ai.ninfer_native.prefill_chunk", std::to_string(o.prefillChunk));
+        }
+        if (o.maxConcurrency > 0) {
+            cfg.set("ai.ninfer_native.max_concurrency", std::to_string(o.maxConcurrency));
+        }
+        if (o.device >= 0) cfg.set("ai.ninfer_native.device", std::to_string(o.device));
         return;
     }
     if (backend == "openai") {
@@ -241,6 +269,11 @@ int main(int argc, char** argv) {
     }
     ai::IInferenceService& svc = *picked.service;
     std::printf("[gateway] 推理服务: %s\n", picked.how.c_str());
+    // 回显生效参数：界面「将执行」和真实执行不一致时，一眼能看出来
+    std::printf("[gateway] 参数: ctx=%d spec=%d draft=%d kv=%d prefill=%d conc=%d dev=%d "
+                "threads=%d gpu_layers=%d batch=%d\n",
+                opt.ctx, opt.spec, opt.draft, opt.kvDtype, opt.prefillChunk, opt.maxConcurrency,
+                opt.device, opt.threads, opt.gpuLayers, opt.batch);
     std::printf("[gateway] backend=%s  模型=%s\n", svc.backend().c_str(),
                 svc.models().empty() ? "?" : svc.models().front().id.c_str());
 
