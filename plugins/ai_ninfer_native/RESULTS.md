@@ -74,6 +74,28 @@
 [ measure ] 前 60 字符：设水池容量为 1。
 ```
 
+## 3a. ABI v2 逐字流式验证（2026-10-22）
+
+同一 prompt（"帮我写一个坦克世界大战的网页游戏使用three.js"）、`--thinking 1`、
+`max_tokens=300`，直接看网关 SSE：
+
+| 版本 | content 帧 | reasoning 帧 | 客户端观感 |
+|---|---:|---:|---|
+| v1（原） | 0 | 0 | 完全空白，只有收尾帧 |
+| v1 + 聚合补发 | 0 | 1（整段 1163 字） | 结束后一次性出现思考 |
+| **v2（本机重编后）** | 0 | **126** | **逐字实时出现** |
+
+前 5 个 reasoning 片段（v2）：
+
+```
+"The"  " user is asking for a tank"  " World"  " War"  " game ("
+```
+
+> 为什么 v1 拿不到：`zenith_nz_token_cb(piece, len, user)` 没有 channel，
+> shim 只转发 `OutputChannel::Content`；思考内容只存在于 `generate()` 的聚合结果里。
+> v2 起回调带 `channel`（CONTENT=0 / REASONING=1），两路都实时回调。
+> 宿主同时兼容 v1（思考退化为聚合结果）与 v2。
+
 ## 4. 复现
 
 ```powershell
