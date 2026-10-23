@@ -320,6 +320,25 @@ int main(int argc, char** argv) {
         c.response().body = metrics::Registry::instance().exportPrometheus();
     });
 
+    // 插件库存：给桌面端的「插件」页提供真实数据（名称/版本/描述/作者/路径）
+    r.get("/zenith/plugins", [&mgr](http::Context& c) {
+        http::json::JsonValue v = http::json::JsonValue::object();
+        http::json::JsonValue list = http::json::JsonValue::array();
+        for (const auto& p : mgr.plugins()) {
+            if (!p) continue;
+            http::json::JsonValue item = http::json::JsonValue::object();
+            item["name"] = p->name;
+            item["version"] = p->version;
+            item["description"] = p->description;
+            item["author"] = p->author;
+            item["path"] = p->path;
+            list.push_back(std::move(item));
+        }
+        v["count"] = static_cast<int>(mgr.plugins().size());
+        v["plugins"] = std::move(list);
+        c.json(200, v);
+    });
+
     ai::OpenAiApiOptions apiOpt;
     apiOpt.pool = &pool;
     apiOpt.defaultThinking = opt.thinking; // 启动参数定默认，单次请求可覆盖

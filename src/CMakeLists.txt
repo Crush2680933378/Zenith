@@ -79,6 +79,7 @@ set(ZENITH_SOURCES
     io/cobs.cpp
     vector/hnsw.cpp
     agent/agent.cpp
+    crew/crew.cpp
     mcp/mcp_client.cpp
     mcp/mcp_server.cpp
     io/serial_port.cpp

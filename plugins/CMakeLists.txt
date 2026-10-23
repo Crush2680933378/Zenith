@@ -13,3 +13,4 @@ add_subdirectory(ai_ninfer)    # NInfer 引擎（无 C ABI ⇒ 进程监管 + HT
 add_subdirectory(db_vector)
 add_subdirectory(ai_mcp)
 add_subdirectory(ai_agent)
+add_subdirectory(ai_crew)

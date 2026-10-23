@@ -87,6 +87,14 @@ zenith_set_warnings(test_m10)
 add_test(NAME test_m10 COMMAND test_m10)
 set_tests_properties(test_m10 PROPERTIES TIMEOUT 180)
 
+# M11 多 Agent 集群（crew 全流程/投票/缺陷环/门禁/REST+SSE）
+add_executable(test_m11 test_m11.cpp)
+target_link_libraries(test_m11 PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m11 PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m11)
+add_test(NAME test_m11 COMMAND test_m11)
+set_tests_properties(test_m11 PROPERTIES TIMEOUT 180)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

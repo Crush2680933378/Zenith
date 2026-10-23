@@ -150,6 +150,9 @@ public:
     [[nodiscard]] bool streaming() const noexcept { return streaming_; }
     /// 由 HttpServer 在派发前注入（用户代码无需调用）。
     void setConnection(std::shared_ptr<net::TcpConnection> conn) { conn_ = std::move(conn); }
+    [[nodiscard]] std::shared_ptr<net::TcpConnection> connection() const noexcept {
+        return conn_;
+    }
 
 private:
     friend class Router;
