@@ -63,6 +63,13 @@ struct EngineState {
     int restarts = 0;
     int64_t requests = 0; // 引擎控制台累计请求数
     double lastTtftMs = 0;
+    // KV / 上下文占用（进程内后端由 C ABI v3 的 runtime() 提供）
+    int64_t kvUsedTokens = 0;
+    int64_t kvCapacityTokens = 0;
+    int64_t kvHostUsedBytes = 0;
+    int64_t kvHostCapacityBytes = 0;
+    int64_t reusedTokens = 0;      // 前缀缓存复用（累计）
+    int64_t lastContextTokens = 0; // 最近一次请求占用（prompt + completion）
     double lastPrefillTps = 0;
     double lastDecodeTps = 0;
     int64_t draftAccepted = 0;

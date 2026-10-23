@@ -194,6 +194,11 @@ void recordEngineState(bool enabled, const EngineState& st) {
     reg.gauge("zenith_ai_engine_running").set(st.running ? 1 : 0);
     reg.gauge("zenith_ai_engine_requests").set(st.requests);
     if (st.lastTtftMs > 0) reg.gauge("zenith_ai_ttft_ms").set(static_cast<int64_t>(st.lastTtftMs));
+    if (st.kvCapacityTokens > 0) {
+        reg.gauge("zenith_ai_kv_used_tokens").set(st.kvUsedTokens);
+        reg.gauge("zenith_ai_kv_capacity_tokens").set(st.kvCapacityTokens);
+    }
+    if (st.lastContextTokens > 0) reg.gauge("zenith_ai_last_context_tokens").set(st.lastContextTokens);
     if (st.lastPrefillTps > 0) {
         reg.gauge("zenith_ai_prefill_tps").set(st.lastPrefillTps);
     }
@@ -640,6 +645,16 @@ void handleStatus(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
     engine["draft_accepted"] = st.draftAccepted;
     engine["draft_total"] = st.draftTotal;
     engine["last_line"] = st.lastLine;
+    engine["kv_used_tokens"] = st.kvUsedTokens;
+    engine["kv_capacity_tokens"] = st.kvCapacityTokens;
+    engine["kv_host_used_bytes"] = st.kvHostUsedBytes;
+    engine["kv_host_capacity_bytes"] = st.kvHostCapacityBytes;
+    engine["reused_tokens"] = st.reusedTokens;
+    engine["last_context_tokens"] = st.lastContextTokens;
+    engine["kv_percent"] =
+        st.kvCapacityTokens > 0
+            ? static_cast<double>(st.kvUsedTokens) * 100.0 / static_cast<double>(st.kvCapacityTokens)
+            : 0.0;
     root["engine"] = std::move(engine);
 
     auto& reg = metrics::Registry::instance();

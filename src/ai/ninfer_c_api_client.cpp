@@ -137,6 +137,7 @@ public:
         }
         r.stats.draftTotal = static_cast<int64_t>(out.drafted_tokens);
         r.stats.draftAccepted = static_cast<int64_t>(out.accepted_tokens);
+        lastContextTokens_ = static_cast<int64_t>(r.usage.promptTokens) + r.usage.completionTokens;
         r.ok = !ctx.aborted || !r.content.empty();
         if (ctx.aborted) r.finishReason = "aborted";
         return r;
@@ -166,6 +167,20 @@ public:
             st.lastLine = artifact_.empty() ? std::string("in-process engine")
                                             : ("in-process: " + artifact_);
         }
+        // 最近一次请求占用的上下文（v1/v2 插件只有这个数）
+        st.lastContextTokens = lastContextTokens_;
+        // ABI v3 起能读到 KV 真实占用
+        if (abiVersion_ >= 3 && svc_->runtime != nullptr && svc_->engine != nullptr) {
+            zenith_nz_runtime rt{};
+            rt.struct_size = sizeof(zenith_nz_runtime);
+            if (svc_->runtime(svc_->engine, &rt) == 0) {
+                st.kvUsedTokens = static_cast<int64_t>(rt.kv_used_tokens);
+                st.kvCapacityTokens = static_cast<int64_t>(rt.kv_capacity_tokens);
+                st.kvHostUsedBytes = static_cast<int64_t>(rt.host_kv_used_bytes);
+                st.kvHostCapacityBytes = static_cast<int64_t>(rt.host_kv_capacity_bytes);
+                st.reusedTokens = static_cast<int64_t>(rt.reused_tokens);
+            }
+        }
         return st;
     }
 
@@ -183,6 +198,7 @@ private:
 
     const zenith_nz_service* svc_;
     std::uint32_t abiVersion_ = 0;
+    std::int64_t lastContextTokens_ = 0;
     std::string modelId_;
     std::string artifact_;
 };
@@ -195,9 +211,9 @@ std::unique_ptr<IInferenceService> wrapNinferCAbiService(const void* serviceTabl
     if (serviceTable == nullptr) return nullptr;
     const auto* svc = static_cast<const zenith_nz_service*>(serviceTable);
     // 兼容 v1（只有正文回调，思考内容走聚合结果）与 v2（思考也实时流式）
-    if (svc->version != 1 && svc->version != ZENITH_NINFER_C_API_VERSION) {
+    if (svc->version < 1 || svc->version > ZENITH_NINFER_C_API_VERSION) {
         std::fprintf(stderr,
-                     "[ninfer-c-abi] 不支持的 ABI 版本：插件 v%u，宿主支持 v1 / v%u\n",
+                     "[ninfer-c-abi] 不支持的 ABI 版本：插件 v%u，宿主支持 v1..v%u\n",
                      svc->version, ZENITH_NINFER_C_API_VERSION);
         return nullptr;
     }

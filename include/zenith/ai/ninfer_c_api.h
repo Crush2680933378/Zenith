@@ -38,7 +38,7 @@ extern "C" {
 #endif
 
 /// 契约版本：布局变更时 +1，宿主据此拒绝不匹配的 shim
-#define ZENITH_NINFER_C_API_VERSION 2u
+#define ZENITH_NINFER_C_API_VERSION 3u
 
 /// 引擎配置（POD，字段全部定宽）
 typedef struct zenith_nz_config {
@@ -125,6 +125,20 @@ typedef struct zenith_nz_result {
     char     error[512];
 } zenith_nz_result;
 
+/// 运行时资源占用（ABI v3）。调用方填 struct_size，插件按自己认识的字段写入。
+typedef struct zenith_nz_runtime {
+    uint32_t struct_size;
+    uint32_t kv_used_tokens;        ///< 当前 KV 占用（token 数，含租约）
+    uint32_t kv_capacity_tokens;    ///< KV 池容量（token 数）
+    uint32_t kv_occupied_pages;     ///< 已占用页数（引擎内部单位）
+    uint32_t kv_capacity_pages;     ///< 容量页数
+    uint64_t host_kv_used_bytes;    ///< 落在 host 内存的 KV 占用
+    uint64_t host_kv_capacity_bytes;
+    uint64_t reused_tokens;         ///< 前缀缓存复用（累计）
+    uint32_t last_prompt_tokens;    ///< 最近一次请求
+    uint32_t last_completion_tokens;
+} zenith_nz_runtime;
+
 /// 引擎句柄（不透明）
 typedef struct zenith_nz_engine zenith_nz_engine;
 
@@ -142,6 +156,8 @@ typedef struct zenith_nz_service {
                              uint64_t* completion_tokens, uint64_t* accepted, uint64_t* drafted);
     /// 最近一次错误文本（引擎内静态缓冲，调用方不得释放）
     const char* (NZ_CALL* last_error)(void* engine);
+    /// 运行时资源占用（ABI v3；v2 及更早的表没有这一项）。返回 0 成功
+    int32_t (NZ_CALL* runtime)(void* engine, zenith_nz_runtime* out);
 } zenith_nz_service;
 
 #ifdef __cplusplus

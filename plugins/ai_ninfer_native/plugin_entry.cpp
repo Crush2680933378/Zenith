@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  plugin_entry.cpp —— Zenith 插件外壳（MSVC 编译，与 CUDA 引擎同侧）
 //
 //  它把 ninfer_c_shim.cpp 的纯 C 函数装成一张 **C 服务表**（zenith_nz_service），
@@ -21,6 +21,7 @@ zenith_nz_engine* zenith_nz_create(const char* artifact_path, const zenith_nz_co
 const char* zenith_nz_last_create_error(void);
 void zenith_nz_destroy(zenith_nz_engine* e);
 const char* zenith_nz_last_error(zenith_nz_engine* e);
+int32_t NZ_CALL zenith_nz_query_runtime(zenith_nz_engine* e, zenith_nz_runtime* out);
 int32_t zenith_nz_generate(zenith_nz_engine* e, const zenith_nz_message* messages, int32_t count,
                            int32_t max_tokens, const zenith_nz_sampling* sampling,
                            zenith_nz_token_cb cb, void* user, zenith_nz_result* out);
@@ -78,6 +79,11 @@ const char* NZ_CALL svcLastError(void* engine) {
     return zenith_nz_last_error(static_cast<zenith_nz_engine*>(engine));
 }
 
+/// ABI v3：KV / 上下文占用（转发给 shim）
+int32_t NZ_CALL svcRuntime(void* engine, zenith_nz_runtime* out) {
+    return zenith_nz_query_runtime(static_cast<zenith_nz_engine*>(engine), out);
+}
+
 /// 插件卸载时销毁引擎（释放显存），服务表本身是静态的
 void destroyService(void*) {
     if (g_service.engine != nullptr) {
@@ -125,6 +131,7 @@ zenith_status pluginInit(const zenith_host_api* host) {
     g_service.generate = &svcGenerate;
     g_service.stats = &svcStats;
     g_service.last_error = &svcLastError;
+    g_service.runtime = &svcRuntime;
 
     logAt(ZENITH_LOG_INFO, "ai_ninfer_native: engine ready (in-process, no C++ across boundary)");
     return host->register_service(host->registry_ctx, host->plugin_token, "zenith.ai.INinferCApi", 1,

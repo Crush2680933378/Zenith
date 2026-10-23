@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  ninfer_c_shim.cpp —— 把 NInfer 的 C++ API 包成纯 C（MSVC 编译，CUDA 引擎侧）
 //
 //  这是「像 llama.cpp 一样链接」的唯一可行做法：C++ 对象（ninfer::Engine、
@@ -28,6 +28,8 @@ struct zenith_nz_engine {
     uint64_t completionTokens = 0;
     uint64_t accepted = 0;
     uint64_t drafted = 0;
+    uint32_t lastPrompt = 0;
+    uint32_t lastCompletion = 0;
 };
 
 namespace {
@@ -95,15 +97,19 @@ public:
     void timing(ninfer::GenerationTimingObservation) override {}
 
     void publish(ninfer::OutputDelta delta) override {
-        if (delta.channel == ninfer::OutputChannel::Content) {
+        const bool isContent = delta.channel == ninfer::OutputChannel::Content;
+        if (isContent) {
             content += delta.text;
-            if (cb_ != nullptr && !delta.text.empty()) {
-                if (cb_(delta.text.data(), static_cast<int32_t>(delta.text.size()), user_) != 0) {
-                    aborted = true;
-                }
-            }
         } else {
             reasoning += delta.text;
+        }
+        // ABI v2：两路都实时回调，用 channel 区分（v1 只能回 content）
+        if (cb_ != nullptr && !delta.text.empty()) {
+            const int32_t channel =
+                isContent ? ZENITH_NZ_CHANNEL_CONTENT : ZENITH_NZ_CHANNEL_REASONING;
+            if (cb_(delta.text.data(), static_cast<int32_t>(delta.text.size()), channel, user_) != 0) {
+                aborted = true;
+            }
         }
     }
 
@@ -254,6 +260,9 @@ NZ_EXPORT int32_t NZ_CALL zenith_nz_generate(zenith_nz_engine* e,
             out->completion_tokens = static_cast<uint32_t>(res.generated_token_ids.size());
             out->reasoning_tokens = res.reasoning_tokens;
             out->reused_prompt_tokens = res.reused_prompt_tokens;
+            // 供 runtime() 回报"最近一次请求占了多少上下文"
+            e->lastPrompt = out->prompt_tokens;
+            e->lastCompletion = out->completion_tokens;
             out->first_token_seconds = res.timings.first_token_seconds;
             out->prefill_seconds = res.timings.prefill_seconds;
             out->decode_seconds = res.timings.decode_seconds;
@@ -275,6 +284,39 @@ NZ_EXPORT int32_t NZ_CALL zenith_nz_generate(zenith_nz_engine* e,
     } catch (...) {
         setError(e, out, "unknown native exception");
         return -5;
+    }
+}
+
+/// ABI v3：KV / 上下文占用。数据来自 ninfer::Engine::runtime_stats()。
+NZ_EXPORT int32_t NZ_CALL zenith_nz_query_runtime(zenith_nz_engine* e, zenith_nz_runtime* out) {
+    if (e == nullptr || out == nullptr || e->engine == nullptr) return -1;
+    if (out->struct_size < sizeof(zenith_nz_runtime)) return -2;
+    try {
+        // 容量在 MemorySummary，实时占用在 RuntimeStats —— 两个接口都要读
+        const ninfer::MemorySummary mem = e->engine->memory_summary();
+        const ninfer::RuntimeStats st = e->engine->runtime_stats();
+
+        const uint32_t pages = mem.kv_capacity_page_groups;
+        const uint32_t cap = mem.kv_capacity;
+        // 每页组覆盖多少 token（容量 / 页组数），再乘占用页数
+        const double perPage = pages != 0 ? static_cast<double>(cap) / pages : 0.0;
+        const uint32_t occupied =
+            st.device_main_kv_occupied_pages + st.device_main_kv_lease_pages;
+
+        out->kv_capacity_tokens = cap;
+        out->kv_capacity_pages = pages;
+        out->kv_occupied_pages = occupied;
+        out->kv_used_tokens =
+            perPage > 0.0 ? static_cast<uint32_t>(occupied * perPage) : 0u;
+        if (cap != 0 && out->kv_used_tokens > cap) out->kv_used_tokens = cap;
+        out->host_kv_used_bytes = static_cast<uint64_t>(st.host_kv_occupied_bytes);
+        out->host_kv_capacity_bytes = static_cast<uint64_t>(mem.host_kv_capacity_bytes);
+        out->reused_tokens = st.hybrid_reused_tokens;
+        out->last_prompt_tokens = e->lastPrompt;
+        out->last_completion_tokens = e->lastCompletion;
+        return 0;
+    } catch (...) {
+        return -3;
     }
 }
 
