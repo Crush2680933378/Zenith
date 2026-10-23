@@ -137,7 +137,8 @@ bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std
     if (body.has("model")) req.model = body["model"].asString();
     if (body.has("temperature")) req.temperature = body["temperature"].asDouble(0.7);
     if (body.has("top_p")) req.topP = body["top_p"].asDouble(1.0);
-    if (body.has("max_tokens")) req.maxTokens = static_cast<int>(body["max_tokens"].asInt(512));
+    // 不传 max_tokens = 不限制；显式 <=0 同样视为不限制
+    req.maxTokens = body.has("max_tokens") ? static_cast<int>(body["max_tokens"].asInt(-1)) : -1;
     if (body.has("seed")) req.seed = static_cast<int>(body["seed"].asInt(-1));
     if (const JsonValue* stop = body.find("stop"); stop != nullptr) {
         if (stop->isString()) {
@@ -155,8 +156,11 @@ bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std
     if (req.temperature > 2.0) req.temperature = 2.0;
     if (req.topP <= 0.0) req.topP = 1.0;
     if (req.topP > 1.0) req.topP = 1.0;
-    if (req.maxTokens <= 0) req.maxTokens = 512;
-    if (req.maxTokens > 32768) req.maxTokens = 32768;
+    // kUnlimited：足够大的上限。真正的终止条件是 EOS / 停止串 / 上下文满，
+    // 不是这个数字——所以"不限制"就是把它设得远超上下文。
+    constexpr int kUnlimitedTokens = 1 << 20; // 1,048,576
+    if (req.maxTokens <= 0) req.maxTokens = kUnlimitedTokens;
+    if (req.maxTokens > kUnlimitedTokens) req.maxTokens = kUnlimitedTokens;
     return true;
 }
 
@@ -473,7 +477,8 @@ void handleCompletions(http::Context& c, IInferenceService& svc, const OpenAiApi
     ChatRequest req;
     req.model = body["model"].asString();
     req.messages.push_back(ChatMessage{"user", prompt, ""});
-    if (body.has("max_tokens")) req.maxTokens = static_cast<int>(body["max_tokens"].asInt(512));
+    // 不传 max_tokens = 不限制；显式 <=0 同样视为不限制
+    req.maxTokens = body.has("max_tokens") ? static_cast<int>(body["max_tokens"].asInt(-1)) : -1;
     if (body.has("temperature")) req.temperature = body["temperature"].asDouble(0.7);
     if (body.has("top_p")) req.topP = body["top_p"].asDouble(1.0);
     if (req.maxTokens <= 0) req.maxTokens = 512;
