@@ -79,6 +79,14 @@ zenith_set_warnings(test_m6)
 add_test(NAME test_m6 COMMAND test_m6)
 set_tests_properties(test_m6 PROPERTIES TIMEOUT 120)
 
+# M10 AI Agent 后端（HNSW/MCP/Agent/Qdrant API）
+add_executable(test_m10 test_m10.cpp)
+target_link_libraries(test_m10 PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m10 PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m10)
+add_test(NAME test_m10 COMMAND test_m10)
+set_tests_properties(test_m10 PROPERTIES TIMEOUT 180)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

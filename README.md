@@ -18,7 +18,8 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 |---|---|---|
 | **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
 | **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
-| **M8 生态扩展** | 🚧 **1/8 实装** | ✅ M8.1 LLM 推理网关（**衍生成 4 个插件**）；M8.2–M8.8 待做 → [PLAN_M8](docs/PLAN_M8.md) |
+| **M8 生态扩展** | 🚧 **2/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP **+ M8.3 向量库提前落地**（M10 三件套：ai_mcp/db_vector/ai_agent）→ [PLAN_M8](docs/PLAN_M8.md) |
+| **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
 | **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
 | **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，29–30 套测试 |
@@ -420,13 +421,14 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | `ai_llama` | **进程内 llama.cpp**（真·C ABI 静态链接，可加载本地 GGUF） | `llama.h` C ABI |
 | `ai_ninfer` | **NInfer 引擎**：进程监管 + OpenAI HTTP（引擎无 C ABI，见下文） | 子进程 + HTTP |
 | `ai_ninfer_native` | **NInfer 进程内**：自研纯 C ABI shim（MSVC 侧编进 550 MB DLL）+ 宿主适配器 | 自研 C ABI |
+| `db_vector` | **向量存储**：自研 HNSW（Malkov'16 全实现：启发式选邻/多层图/墓碑删除/持久化）+ Qdrant 兼容 API | 纯 C ABI 插件 |
+| `ai_mcp` | **MCP 网关**（2026-07-28 基线）：JSON-RPC over HTTP，把向量库/推理自动桥接为 Agent 工具 | 纯 C ABI 插件 |
+| `ai_agent` | **Agent 运行时**：ReAct 工具循环（JSON 协议+容错降级）、会话滚动记忆、RAG 召回注入、MCP 远端工具 | 纯 C ABI 插件 |
 
 ### 预计适配插件（M8 生态扩展，2026 最热方向）
 
 | 插件 | 功能 | 为什么最火 | 优先级 |
 |---|---|---|---|
-| `ai_mcp` | **MCP Server**——把 DB/Redis/媒体/设备暴露为 AI Agent 工具（协议基线 **2026-07-28** 无状态版） | MCP 成为 Agent 生态标准协议 | ⭐⭐⭐⭐⭐ |
-| `db_vector` | 向量数据库（自研 HNSW + Qdrant 兼容 API） | RAG 检索增强是最普遍 AI 应用 | ⭐⭐⭐⭐⭐ |
 | `net_mqtt` | MQTT 3.1.1/5.0 broker（QoS/共享订阅/保留消息） | IoT 标准消息协议 | ⭐⭐⭐⭐ |
 | `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
 | `media_webrtc` | WebRTC 实时通信（ICE/DTLS/SRTP + FFmpeg 转码联动） | 视频会议/AI 实时视频 | ⭐⭐⭐ |

@@ -10,3 +10,6 @@ add_subdirectory(ai_comfyui)
 add_subdirectory(ai_inference)
 add_subdirectory(ai_llama)     # 进程内 llama.cpp（纯 C ABI 静态链接）
 add_subdirectory(ai_ninfer)    # NInfer 引擎（无 C ABI ⇒ 进程监管 + HTTP）
+add_subdirectory(db_vector)
+add_subdirectory(ai_mcp)
+add_subdirectory(ai_agent)

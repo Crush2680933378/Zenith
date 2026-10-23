@@ -77,6 +77,10 @@ set(ZENITH_SOURCES
     net/signal.cpp
     net/worker_supervisor_posix.cpp
     io/cobs.cpp
+    vector/hnsw.cpp
+    agent/agent.cpp
+    mcp/mcp_client.cpp
+    mcp/mcp_server.cpp
     io/serial_port.cpp
     ${ZENITH_TLS_SOURCES}
 )
