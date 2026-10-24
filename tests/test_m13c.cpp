@@ -254,7 +254,11 @@ public:
         ::setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO,
                      reinterpret_cast<const char*>(&tv), sizeof(tv));
         client_ = ::accept(fd_, nullptr, nullptr);
+#if defined(_WIN32)
         ::closesocket(fd_);
+#else
+        ::close(fd_);
+#endif
         fd_ = -1;
         if (client_ < 0) return;
         for (;;) {

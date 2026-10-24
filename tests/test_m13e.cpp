@@ -386,8 +386,9 @@ ZTEST(Desk, WebSocketWatchAndEvents) {
         &cloop, opt,
         [&](const net::WebSocketSession::Ptr& s0) {
             auto s = s0;
+            // s 按值捕获：open 回调返回后其栈帧销毁，按引用捕获会悬垂（CI UAF）
             s->setMessageCallback(
-                [&](const net::WebSocketSession::Ptr&, std::string m, bool) {
+                [&, s](const net::WebSocketSession::Ptr&, std::string m, bool) {
                     const int n = ++frames;
                     auto v = json::JsonValue::parse(m);
                     const std::string type =
