@@ -130,16 +130,29 @@ async function detailView(id){
   $('#crumb').textContent='/ '+id;
   $('#view').innerHTML=
    '<div class="row" style="margin-bottom:14px"><a href="#">&larr; 任务列表</a>'+
-   '<span id="phase"></span><span id="runst" class="muted"></span></div>'+
+   '<span id="phase"></span><span id="runst" class="muted"></span>'+
+   '<span id="cost" class="muted"></span>'+
+   '<button id="cancelBtn" style="display:none">取消任务</button>'+
+   '<button id="resumeBtn" style="display:none">断点恢复</button></div>'+
    '<div class="panel"><h2>角色状态</h2><div class="grid" id="agents"></div></div>'+
    '<div class="panel" id="apprPanel" style="display:none">'+
    '<h2>人工审批门禁</h2><div class="row"><span class="muted">任务等待放行</span>'+
+   '<input type="text" id="apprComment" placeholder="审批评论（可选，入事件流）" style="width:320px">'+
    '<button class="warn" id="approveBtn">批准继续</button></div></div>'+
    '<div class="panel"><h2>实时事件 <span class="muted" id="evcount"></span></h2><div id="events"></div></div>'+
    '<div class="panel"><h2>投票记录</h2><div id="votes"></div></div>'+
    '<div class="panel"><h2>产物库</h2><div id="arts"></div></div>';
   $('#approveBtn').onclick=async()=>{
-    await fetch('/crew/tasks/'+id+'/approve',{method:'POST'});
+    await fetch('/crew/tasks/'+id+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({comment:$('#apprComment').value})});
+    refreshBoard();
+  };
+  $('#cancelBtn').onclick=async()=>{
+    await fetch('/crew/tasks/'+id+'/cancel',{method:'POST'});
+    refreshBoard();
+  };
+  $('#resumeBtn').onclick=async()=>{
+    await fetch('/crew/tasks/'+id+'/resume',{method:'POST'});
     refreshBoard();
   };
 
@@ -149,7 +162,11 @@ async function detailView(id){
     const b=await r.json();
     $('#phase').innerHTML=phaseBadge(b.phase);
     $('#runst').textContent=b.running?'● 运行中':'○ 已结束';
+    $('#cost').textContent=b.cost_usd>0
+      ?('$'+b.cost_usd.toFixed(4)+' · '+(b.tokens_in+b.tokens_out)+' tok'):'';
     $('#apprPanel').style.display=b.phase==='awaiting_approval'?'':'none';
+    $('#cancelBtn').style.display=b.running?'':'none';
+    $('#resumeBtn').style.display=b.resumable?'':'none';
     const g=$('#agents');g.innerHTML='';
     (b.agents||[]).forEach(a=>{
       g.insertAdjacentHTML('beforeend',
@@ -184,8 +201,10 @@ async function detailView(id){
     if(!(ja.artifacts||[]).length) ad.innerHTML='<span class="muted">暂无</span>';
   }
 
+  const quietTypes={'token':1,'webhook':1};
   function appendEvent(e){
     const box=$('#events');if(!box)return;
+    if(quietTypes[e.type]&&box.children.length>60)return; // token 流限流
     const line='<div class="ev '+esc(e.type)+'"><span class="t">#'+e.seq+'</span> '+
      '<span class="ph">['+esc(e.phase)+']</span> <span class="who">'+esc(e.agent)+
      '</span> '+esc(e.detail)+'</div>';

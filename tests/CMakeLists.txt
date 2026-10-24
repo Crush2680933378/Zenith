@@ -131,6 +131,14 @@ zenith_set_warnings(test_m13c)
 add_test(NAME test_m13c COMMAND test_m13c)
 set_tests_properties(test_m13c PROPERTIES TIMEOUT 180)
 
+# M14：ai_crew 全面强化（取消/成本/持久化/记忆/辩论/子 crew/…）
+add_executable(test_m13d test_m13d.cpp)
+target_link_libraries(test_m13d PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m13d PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m13d)
+add_test(NAME test_m13d COMMAND test_m13d)
+set_tests_properties(test_m13d PROPERTIES TIMEOUT 300)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)
