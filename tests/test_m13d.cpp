@@ -474,6 +474,10 @@ ZTEST(CrewM14, ExecVerifyRunsCommands) {
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
     std::string detail;
+    for (const crew::CrewEvent& e : eng.events(id)) {
+        if (e.type == "exec") {
+        }
+    }
     ZEXPECT_TRUE(hasEvent(eng, id, "exec", &detail));
     ZEXPECT_TRUE(detail.find("crew-ok-9d21") != std::string::npos);
     ZEXPECT_TRUE(detail.find("pass") != std::string::npos);
