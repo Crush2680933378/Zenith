@@ -19,6 +19,7 @@ RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入�
 | **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
 | **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
 | **M8 生态扩展** | 🚧 **2/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP **+ M8.3 向量库提前落地**（M10 三件套：ai_mcp/db_vector/ai_agent）→ [PLAN_M8](docs/PLAN_M8.md) |
+| **M12 多厂商 LLM 路由** | ✅ 完成 | **DeepSeek Harness 式接入**：openai-chat(DeepSeek/OpenAI/Kimi/GLM/SiliconFlow) + anthropic-messages(Claude) + gemini(Google) 三协议适配器；模型发现/embeddings/$ENV: 密钥/通配路由/默认兜底 |
 | **M11 多 Agent 集群** | ✅ 完成 | **SDLC-Crew**：7 角色协作引擎(PM/架构/后端/前端/测试/运维/交付)——投票决策(架构师加权)/产物库/缺陷环/人工门禁/SSE 实时状态板；`POST /crew/tasks` 一句话开任务 |
 | **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
@@ -425,6 +426,7 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | `db_vector` | **向量存储**：自研 HNSW（Malkov'16 全实现：启发式选邻/多层图/墓碑删除/持久化）+ Qdrant 兼容 API | 纯 C ABI 插件 |
 | `ai_mcp` | **MCP 网关**（2026-07-28 基线）：JSON-RPC over HTTP，把向量库/推理自动桥接为 Agent 工具 | 纯 C ABI 插件 |
 | `ai_agent` | **Agent 运行时**：ReAct 工具循环（JSON 协议+容错降级）、会话滚动记忆、RAG 召回注入、MCP 远端工具 | 纯 C ABI 插件 |
+| `ai_router` | **多厂商 LLM 路由**：三协议适配器（openai-chat/anthropic/gemini 双向 wire 翻译）、模型→厂商路由（精确/通配/兜底）、/models 发现、embeddings、`$ENV:` 密钥引用——ai_crew/ai_agent/网关零改动获得多厂商 | 纯 C ABI 插件 |
 | `ai_crew` | **多 Agent SDLC 集群**：7 角色引擎——确定性状态机编排+LLM 内容生成、全员投票(架构师票权2)、版本化产物库、缺陷路由环、`/crew/tasks` 单入口 + SSE 状态板(前端仪表盘就绪) | 纯 C ABI 插件 |
 
 ### 预计适配插件（M8 生态扩展，2026 最热方向）

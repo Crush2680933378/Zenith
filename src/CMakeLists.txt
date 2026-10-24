@@ -80,6 +80,7 @@ set(ZENITH_SOURCES
     vector/hnsw.cpp
     agent/agent.cpp
     crew/crew.cpp
+    ai/provider_router.cpp
     mcp/mcp_client.cpp
     mcp/mcp_server.cpp
     io/serial_port.cpp

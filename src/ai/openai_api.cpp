@@ -233,6 +233,11 @@ void handleModels(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
         JsonValue meta = JsonValue::object();
         meta["backend"] = m.backend;
         meta["context_size"] = m.contextSize;
+        // 能力位：桌面端据此决定附件按钮是否可用（image.modelUnsupported）
+        JsonValue caps = JsonValue::object();
+        caps["vision"] = false;  // 当前引擎管线只吃文本
+        caps["tools"] = false;
+        meta["capabilities"] = std::move(caps);
         item["zenith_meta"] = meta; // 扩展字段（OpenAI 客户端会忽略）
         data.push_back(std::move(item));
     }

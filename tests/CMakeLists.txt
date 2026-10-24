@@ -95,6 +95,14 @@ zenith_set_warnings(test_m11)
 add_test(NAME test_m11 COMMAND test_m11)
 set_tests_properties(test_m11 PROPERTIES TIMEOUT 180)
 
+# M12 多厂商 LLM 路由（3 协议 mock 厂商）
+add_executable(test_m12 test_m12.cpp)
+target_link_libraries(test_m12 PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m12 PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m12)
+add_test(NAME test_m12 COMMAND test_m12)
+set_tests_properties(test_m12 PROPERTIES TIMEOUT 120)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)
