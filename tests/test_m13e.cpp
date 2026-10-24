@@ -253,9 +253,10 @@ namespace {
 struct Http {
     net::EventLoop loop;
     net::EventLoopThreadPool io{1};
-    http::HttpServer srv{&loop, &io};
-    std::thread t;
+    // 声明顺序 = 析构反序：srv 先于 eng 销毁（WS 会话回调不再触达死引擎）
     crew::CrewEngine eng;
+    std::thread t;
+    http::HttpServer srv{&loop, &io};
     std::string baseUrl;
 
     explicit Http(crew::EngineOptions opt = {}) : eng(std::move(opt)) {}

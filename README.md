@@ -7,25 +7,30 @@
 
 **天顶，顶点，万物之巅。** Zenith 是一款 C++17 高并发后端框架（对标 Java Spring Boot / Go Gin 的定位），
 以**纯 C ABI 插件内核**为地基：一切扩展能力——数据库、TLS、FFmpeg 媒体、**LLM 推理网关**
-（进程内 llama.cpp / NInfer 引擎 / OpenAI 兼容上游）、ComfyUI 绘画、ESP32 与泰山派
-RK3566/RK3576 边缘设备——都通过稳定 ABI 或可选编译模块接入。
+（进程内 llama.cpp / NInfer 引擎 / OpenAI 兼容上游）、**多厂商 LLM 路由**（DeepSeek/Kimi/GLM/
+Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集群**（7 角色 SDLC-Crew + 组织记忆 +
+断点恢复 + 2.5D 可视化契约）、ComfyUI 绘画、ESP32 与泰山派 RK3566/RK3576 边缘设备——都通过
+稳定 ABI 或可选编译模块接入。
 
 前端交给 React，Zenith 只提供 API。
 
-## 📌 进度总览（2026-10-21）
+## 📌 进度总览（2026-10-25）
 
 | 里程碑 | 状态 | 关键产出 |
 |---|---|---|
 | **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
 | **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
 | **M8 生态扩展** | 🚧 **2/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP **+ M8.3 向量库提前落地**（M10 三件套：ai_mcp/db_vector/ai_agent）→ [PLAN_M8](docs/PLAN_M8.md) |
+| **M15 ZenithDesk 契约** | ✅ 完成 | 2.5D 可视化前端全套 API：`/crew/roster`（角色↔AI 立绘映射）、逐票 `vote_cast`/`handoff`/`bug_assigned` 结构化协作事件、`/crew/ws` WebSocket 双向、`/crew/board` 多任务聚合、CORS 即开即用 → [CREW_EVENTS.md](docs/CREW_EVENTS.md) |
+| **M14 Crew 全面强化** | ✅ 完成 | 21 项：取消/断点恢复+持久化、每角色模型路由、结构化输出自修正、token 流/成本记账、真实缺陷环(工单派单)、后端∥前端真并行、story 子环、组织记忆、多轮辩论、人工选民、OTel、评分卡、webhook、导出、写鉴权 |
+| **M13 全栈补强** | ✅ 完成 | ProviderRouter **https/TLS 直连**、三协议**流式 SSE→token** 翻译、db_vector 持久化快照、crew 内嵌仪表盘；路由 **failover+熔断+成本记账**；**ai_guard**(注入/PII 护栏)、**ai_stt/ai_tts** 语音接口；sched_cron / obs_otel(OTLP) / auth_oauth(PKCE) / **net_mqtt**(3.1.1 客户端) |
 | **M12 多厂商 LLM 路由** | ✅ 完成 | **DeepSeek Harness 式接入**：openai-chat(DeepSeek/OpenAI/Kimi/GLM/SiliconFlow) + anthropic-messages(Claude) + gemini(Google) 三协议适配器；模型发现/embeddings/$ENV: 密钥/通配路由/默认兜底 |
 | **M11 多 Agent 集群** | ✅ 完成 | **SDLC-Crew**：7 角色协作引擎(PM/架构/后端/前端/测试/运维/交付)——投票决策(架构师加权)/产物库/缺陷环/人工门禁/SSE 实时状态板；`POST /crew/tasks` 一句话开任务 |
 | **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
 | **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
-| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，29–30 套测试 |
-| **插件** | 9 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·**ai_inference·ai_llama·ai_ninfer·ai_ninfer_native** |
+| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，38 套测试全绿 |
+| **插件** | 16 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·ai_inference·ai_llama·ai_ninfer·ai_ninfer_native·db_vector·ai_mcp·ai_agent·ai_router·ai_crew·**ai_guard**·**ai_speech** |
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
 
@@ -410,7 +415,7 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 
 ## 插件生态
 
-### 已实装插件（9 个）
+### 已实装插件（14 个 + 2 示例）
 
 | 插件 | 功能 | 技术 |
 |---|---|---|
@@ -423,21 +428,23 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | `ai_llama` | **进程内 llama.cpp**（真·C ABI 静态链接，可加载本地 GGUF） | `llama.h` C ABI |
 | `ai_ninfer` | **NInfer 引擎**：进程监管 + OpenAI HTTP（引擎无 C ABI，见下文） | 子进程 + HTTP |
 | `ai_ninfer_native` | **NInfer 进程内**：自研纯 C ABI shim（MSVC 侧编进 550 MB DLL）+ 宿主适配器 | 自研 C ABI |
-| `db_vector` | **向量存储**：自研 HNSW（Malkov'16 全实现：启发式选邻/多层图/墓碑删除/持久化）+ Qdrant 兼容 API | 纯 C ABI 插件 |
-| `ai_mcp` | **MCP 网关**（2026-07-28 基线）：JSON-RPC over HTTP，把向量库/推理自动桥接为 Agent 工具 | 纯 C ABI 插件 |
+| `db_vector` | **向量存储**：自研 HNSW（启发式选邻/多层图/墓碑删除）+ Qdrant 兼容 API + **原子快照持久化**（定期落盘/启动加载/停机终拍） | 纯 C ABI 插件 |
+| `ai_mcp` | **MCP 网关**：JSON-RPC over HTTP，把向量库/推理自动桥接为 Agent 工具 | 纯 C ABI 插件 |
 | `ai_agent` | **Agent 运行时**：ReAct 工具循环（JSON 协议+容错降级）、会话滚动记忆、RAG 召回注入、MCP 远端工具 | 纯 C ABI 插件 |
-| `ai_router` | **多厂商 LLM 路由**：三协议适配器（openai-chat/anthropic/gemini 双向 wire 翻译）、模型→厂商路由（精确/通配/兜底）、/models 发现、embeddings、`$ENV:` 密钥引用——ai_crew/ai_agent/网关零改动获得多厂商 | 纯 C ABI 插件 |
-| `ai_crew` | **多 Agent SDLC 集群**：7 角色引擎——确定性状态机编排+LLM 内容生成、全员投票(架构师票权2)、版本化产物库、缺陷路由环、`/crew/tasks` 单入口 + SSE 状态板(前端仪表盘就绪) | 纯 C ABI 插件 |
+| `ai_router` | **多厂商 LLM 路由**：三协议适配器（openai-chat/anthropic/gemini）、**https/TLS 直连**、**三协议流式 SSE→token 翻译**、failover+熔断+成本记账、模型发现/embeddings/`$ENV:` 密钥——crew/agent/网关零改动获得多厂商 | 纯 C ABI 插件 |
+| `ai_crew` | **多 Agent SDLC 集群**：7 角色（可配置）+ 投票辩论/工单缺陷环/真并行/story 子环/**组织记忆/断点恢复/成本记账/评分卡** + SSE·WS 实时流 + 内嵌仪表盘 + **ZenithDesk 2.5D 可视化契约**（[CREW_EVENTS.md](docs/CREW_EVENTS.md)） | 纯 C ABI 插件 |
+| `ai_guard` | **LLM 输入护栏**：提示注入短语检测 + PII 扫描（邮箱/手机/身份证/银行卡 Luhn/API 密钥）与掩码，风险分阻断 | 纯本地规则，零依赖 |
+| `ai_speech` | **语音服务**：ISpeechToText/ITextToSpeech 接口 + 可播 WAV mock 后端（whisper/kokoro 同接口预留） | 纯 C ABI 插件 |
 
 ### 预计适配插件（M8 生态扩展，2026 最热方向）
 
 | 插件 | 功能 | 为什么最火 | 优先级 |
 |---|---|---|---|
-| `net_mqtt` | MQTT 3.1.1/5.0 broker（QoS/共享订阅/保留消息） | IoT 标准消息协议 | ⭐⭐⭐⭐ |
+| `net_mqtt` | ~~MQTT 客户端~~ ✅ **已入核心**（M13：3.1.1 客户端——变长编码/QoS1 PUBACK/心跳/下行分发）；broker 形态仍在计划 | IoT 标准消息协议 | ⭐⭐⭐⭐ |
 | `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
 | `media_webrtc` | WebRTC 实时通信（ICE/DTLS/SRTP + FFmpeg 转码联动） | 视频会议/AI 实时视频 | ⭐⭐⭐ |
-| `obs_otel` | OpenTelemetry 分布式追踪（OTLP + W3C Trace Context） | 云原生可观测标准 | ⭐⭐⭐ |
-| `ai_stt` | 语音识别（whisper.cpp + 实时流式 + VAD） | 语音 AI 入口 | ⭐⭐⭐ |
+| `obs_otel` | ~~OTLP 导出~~ ✅ **已入核心**（M13：OTLP/HTTP-JSON 批量导出+失败回队；crew 全链路 span 已接） | 云原生可观测标准 | ⭐⭐⭐ |
+| `ai_stt` | ~~语音接口~~ ✅ **已实装**（`ai_speech`：STT/TTS 抽象 + mock 后端；whisper.cpp 接入预留） | 语音 AI 入口 | ⭐⭐⭐ |
 
 → 完整方案见 [docs/PLAN_M8.md](docs/PLAN_M8.md)（功能/架构/代码量/依赖逐项标注）
 
@@ -456,6 +463,17 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 - **M9 ✅ 流式与身份**：分块/SSE 流式响应、gzip 响应压缩、非对称 JWT（RS/ES）
 - **M7 📋 性能深挖**：Context 池化+arena、sendfile 零拷贝、deflate 压缩、io_uring/IOCP、HTTP/2
   → [docs/PLAN_M7.md](docs/PLAN_M7.md)
+- **M13 ✅ 全栈补强（2026-10-24）**：ProviderRouter TLS 直连 https 上游（SNI/证书校验/insecure）+
+  三协议流式 SSE 翻译成 token 增量；db_vector 快照持久化；crew 内嵌 Web 仪表盘；
+  路由 failover+熔断+成本记账；ai_guard 注入/PII 护栏；ai_stt/ai_tts 语音抽象（mock 可播 WAV）；
+  核心新增 sched_cron（5 字段 cron+调度器）、obs_otel（OTLP 导出）、auth_oauth（授权码+PKCE）、
+  net_mqtt（3.1.1 客户端）
+- **M14 ✅ Crew 全面强化（2026-10-24）**：21 项——取消/恢复+持久化断点、每角色模型、结构化自修正、
+  token 流/成本、真实缺陷环、真并行、story 子环、组织记忆、辩论、人工选民、OTel、评分卡、webhook、
+  导出、写鉴权、受管线程池
+- **M15 ✅ ZenithDesk 契约（2026-10-25）**：roster/meta/聚合 board、逐票 vote_cast、handoff、
+  bug_assigned、test_result、story/debate 事件、`/crew/ws` WebSocket、CORS
+  → [docs/CREW_EVENTS.md](docs/CREW_EVENTS.md)
 - **M8 🚧 生态扩展（1/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
   （`ai_inference` 网关 / `ai_llama` 进程内 llama.cpp / `ai_ninfer` 子进程 /
   `ai_ninfer_native` 自研 C ABI 进程内），实测 prefill 3.65k · decode 729 tok/s；

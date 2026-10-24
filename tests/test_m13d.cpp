@@ -53,13 +53,14 @@ public:
             models_[role].push_back(req.model);
         }
         ++chatCount;
-        if (chatSleepMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(chatSleepMs));
         const bool impl = role == "backend" || role == "frontend";
+        // 入口即计数（睡眠前）——并发重叠测量与线程启动抖动解耦
         if (impl) {
             const int n = ++implInFlight;
             int cur = implMaxInFlight.load();
             while (n > cur && !implMaxInFlight.compare_exchange_weak(cur, n)) {}
         }
+        if (chatSleepMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(chatSleepMs));
         if (streamDeltas && onToken) {
             onToken("abcdefghijklmnopqrstuvwxyz012345"); // 32 字符 → 触发节流事件
         }
@@ -301,7 +302,7 @@ ZTEST(CrewM14, StrictRetestPrompt) {
 ZTEST(CrewM14, ParallelImplementOverlap) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->chatSleepMs = 150; // backend/frontend 各 150ms → 并行时重叠
+    rec->chatSleepMs = 300; // 慢机器（CI）下也保证两线程窗口重叠
     eng.setInference(rec);
     const std::string id = eng.createTask("parallel impl");
     const auto st = waitTerminal(eng, id);

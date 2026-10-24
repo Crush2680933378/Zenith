@@ -20,6 +20,13 @@
 namespace zenith::net::mqtt {
 namespace {
 
+/// 平台套接字句柄（Windows: SOCKET(u64)；POSIX: int）
+#if defined(_WIN32)
+using SockT = SOCKET;
+#else
+using SockT = int;
+#endif
+
 constexpr uint8_t kTypeConnect = 1, kTypeConnack = 2, kTypePublish = 3,
                   kTypePuback = 4, kTypeSubscribe = 8, kTypeSuback = 9,
                   kTypePingreq = 12, kTypePingresp = 13, kTypeDisconnect = 14;
@@ -27,7 +34,7 @@ constexpr uint8_t kTypeConnect = 1, kTypeConnack = 2, kTypePublish = 3,
 void closeSock(int64_t fd) {
     if (fd < 0) return;
 #if defined(_WIN32)
-    ::closesocket(static_cast<SOCKET>(fd));
+    ::closesocket(static_cast<SockT>(fd));
 #else
     ::close(static_cast<int>(fd));
 #endif
@@ -36,9 +43,9 @@ void closeSock(int64_t fd) {
 void sockTimeout(int64_t fd, int recvMs, int sendMs) {
 #if defined(_WIN32)
     DWORD r = static_cast<DWORD>(recvMs), s = static_cast<DWORD>(sendMs);
-    ::setsockopt(static_cast<SOCKET>(fd), SOL_SOCKET, SO_RCVTIMEO,
+    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_RCVTIMEO,
                  reinterpret_cast<const char*>(&r), sizeof(r));
-    ::setsockopt(static_cast<SOCKET>(fd), SOL_SOCKET, SO_SNDTIMEO,
+    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_SNDTIMEO,
                  reinterpret_cast<const char*>(&s), sizeof(s));
 #else
     timeval tv{};
@@ -102,7 +109,7 @@ core::Result<MqttClient> MqttClient::connect(const std::string& host, uint16_t p
         return core::Result<MqttClient>::Err(core::Error(502, "mqtt: socket()"));
     }
     sockTimeout(fd, timeoutMs, timeoutMs);
-    if (::connect(static_cast<SOCKET>(fd), res->ai_addr,
+    if (::connect(static_cast<SockT>(fd), res->ai_addr,
                   static_cast<int>(res->ai_addrlen)) != 0) {
         ::freeaddrinfo(res);
         closeSock(fd);
@@ -174,7 +181,7 @@ MqttClient& MqttClient::operator=(MqttClient&& o) noexcept {
 bool MqttClient::sendAll(const std::string& bytes) {
     size_t sent = 0;
     while (sent < bytes.size()) {
-        const int n = ::send(static_cast<SOCKET>(fd_), bytes.data() + sent,
+        const int n = ::send(static_cast<SockT>(fd_), bytes.data() + sent,
                              static_cast<int>(bytes.size() - sent), 0);
         if (n <= 0) return false;
         sent += static_cast<size_t>(n);
@@ -185,7 +192,7 @@ bool MqttClient::sendAll(const std::string& bytes) {
 bool MqttClient::recvAll(char* buf, size_t n) {
     size_t got = 0;
     while (got < n) {
-        const int r = ::recv(static_cast<SOCKET>(fd_), buf + got,
+        const int r = ::recv(static_cast<SockT>(fd_), buf + got,
                              static_cast<int>(n - got), 0);
         if (r <= 0) return false;
         got += static_cast<size_t>(r);
