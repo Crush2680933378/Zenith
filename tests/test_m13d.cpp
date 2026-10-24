@@ -47,10 +47,6 @@ public:
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
         const std::string role = tagOf(sys);
-        if (role == "tester" || role == "vote") {
-            std::fprintf(stderr, "DBG-REC role=%s user=[%.200s]\n", role.c_str(),
-                         user.c_str());
-        }
         {
             std::lock_guard<std::mutex> lk(m);
             prompts[role].push_back(user);
@@ -116,9 +112,6 @@ public:
                     j["commands"] = std::move(cmds);
                 }
                 r.content = j.dump();
-            }
-            if (role == "tester") {
-                std::fprintf(stderr, "DBG-RESP=[%.300s]\n", r.content.c_str());
             }
         } else if (role == "devops") {
             r.content = R"({"files":[{"path":"Dockerfile","content":"FROM x"}],"deploy":{"strategy":"docker"}})";
@@ -281,7 +274,6 @@ ZTEST(CrewM14, QualityScorecard) {
     }
     ZEXPECT_FALSE(cardText.empty());
     auto card = json::JsonValue::parse(cardText);
-    std::fprintf(stderr, "DBG-CARD=[%s]\n", cardText.c_str());
     ZEXPECT_TRUE(static_cast<bool>(card));
     ZEXPECT_TRUE(card.value()["test_cases"].asInt(0) >= 1);
     ZEXPECT_TRUE(card.value()["score"].asInt(0) >= 90);
@@ -484,11 +476,9 @@ ZTEST(CrewM14, ExecVerifyRunsCommands) {
     std::string detail;
     for (const crew::CrewEvent& e : eng.events(id)) {
         if (e.type == "exec") {
-            std::fprintf(stderr, "DBG-EXEC=[%s]\n", e.detail.c_str());
         }
     }
     ZEXPECT_TRUE(hasEvent(eng, id, "exec", &detail));
-    std::fprintf(stderr, "DBG-FIRST-EXEC=[%s]\n", detail.c_str());
     ZEXPECT_TRUE(detail.find("crew-ok-9d21") != std::string::npos);
     ZEXPECT_TRUE(detail.find("pass") != std::string::npos);
 }

@@ -1338,14 +1338,16 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
             prompt += "\nProduce test cases and results JSON now.";
         }
         const std::string tr = chatJson(t, "tester", prompt, {"cases", "results"});
-        std::fprintf(stderr, "DBG-SAVE-TESTS=[%.200s]\n", tr.c_str());
         saveArtifact(t, "tests", "tester", tr);
         const json::JsonValue results = extractJson(tr)["results"];
         const auto* arr = results.asArray();
 
-        // 可选真执行验证：commands[] 逐条跑，exit!=0 → 记失败事件
+        // 可选真执行验证：commands[] 逐条跑，exit!=0 → 记失败事件。
+        // 注意必须先具名持有解析结果：asArray() 指向 JsonValue 内部，
+        // 绑到临时对象上会在完整表达式结束后悬垂（Linux glibc 即崩数据）
         if (t->cfg.execVerify) {
-            const auto* cmds = extractJson(tr)["commands"].asArray();
+            const json::JsonValue trJson = extractJson(tr);
+            const auto* cmds = trJson["commands"].asArray();
             if (cmds != nullptr && !cmds->empty()) {
                 for (const json::JsonValue& c : *cmds) {
                     const std::string cmd = c.asString();
@@ -1440,11 +1442,12 @@ json::JsonValue CrewEngine::buildScorecard(const TaskPtr& t) {
             if (a.type == "release") latestRel = a.content;
         }
     }
-    if (const auto* cases = extractJson(latestTests)["cases"].asArray()) {
+    // 具名持有解析结果（asArray() 的指针只在所属对象存活期内有效）
+    const json::JsonValue testsJson = extractJson(latestTests);
+    if (const auto* cases = testsJson["cases"].asArray()) {
         testCases = cases->size();
     }
-    std::fprintf(stderr, "DBG-CARD-TESTS=[%.200s]\n", latestTests.c_str());
-    if (const auto* rs = extractJson(latestTests)["results"].asArray()) {
+    if (const auto* rs = testsJson["results"].asArray()) {
         for (const json::JsonValue& r : *rs) {
             if (r["status"].asString() == "pass") ++testPass;
         }
@@ -1452,8 +1455,10 @@ json::JsonValue CrewEngine::buildScorecard(const TaskPtr& t) {
     if (auto cj = json::JsonValue::parse(latestContract)) {
         if (const auto* api = cj.value().asArray()) contractEndpoints = api->size();
     }
-    if (const auto* fb = extractJson(latestBe)["files"].asArray()) files += fb->size();
-    if (const auto* ff = extractJson(latestFe)["files"].asArray()) files += ff->size();
+    const json::JsonValue beJson = extractJson(latestBe);
+    if (const auto* fb = beJson["files"].asArray()) files += fb->size();
+    const json::JsonValue feJson = extractJson(latestFe);
+    if (const auto* ff = feJson["files"].asArray()) files += ff->size();
 
     card["test_cases"] = static_cast<int64_t>(testCases);
     card["test_pass_ratio"] =
