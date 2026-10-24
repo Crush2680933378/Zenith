@@ -47,6 +47,10 @@ public:
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
         const std::string role = tagOf(sys);
+        if (role == "tester" || role == "vote") {
+            std::fprintf(stderr, "DBG-REC role=%s user=[%.200s]\n", role.c_str(),
+                         user.c_str());
+        }
         {
             std::lock_guard<std::mutex> lk(m);
             prompts[role].push_back(user);
@@ -112,6 +116,9 @@ public:
                     j["commands"] = std::move(cmds);
                 }
                 r.content = j.dump();
+            }
+            if (role == "tester") {
+                std::fprintf(stderr, "DBG-RESP=[%.300s]\n", r.content.c_str());
             }
         } else if (role == "devops") {
             r.content = R"({"files":[{"path":"Dockerfile","content":"FROM x"}],"deploy":{"strategy":"docker"}})";
