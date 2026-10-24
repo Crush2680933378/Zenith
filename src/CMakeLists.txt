@@ -85,6 +85,10 @@ set(ZENITH_SOURCES
     ai/provider_router.cpp
     ai/guard_service.cpp
     ai/speech_mock.cpp
+    concurrency/cron.cpp
+    http/otel.cpp
+    http/oauth.cpp
+    net/mqtt.cpp
     mcp/mcp_client.cpp
     mcp/mcp_server.cpp
     io/serial_port.cpp
