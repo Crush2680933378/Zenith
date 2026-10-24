@@ -11,8 +11,10 @@
 //    gemini        POST /models/{m}:generateContent   Google Gemini
 //
 //  模型发现：openai 协议走 GET {baseURL}/models（data[].id）。
-//  流式：内部 chat 走非流式（stream:false）整包翻译；对外 SSE 由
-//  openai_api 网关层承担（整段一次推出）。逐 token 上游流式列 M12 后续。
+//  流式（M13.3）：chat() 传入 onToken 时走上游真流式（stream:true /
+//  streamGenerateContent?alt=sse），三种协议的 SSE 事件在内部翻译成统一
+//  token 增量回调（openai delta.content / anthropic text_delta / gemini
+//  parts[].text；reasoning 增量同理）。onToken 为空保持整包非流式路径。
 //
 //  配置（JSON，同 DeepSeek Harness providers 语义）：
 //  {
@@ -62,6 +64,8 @@ struct ProviderConfig {
     std::string apiKey;          // 支持 "$ENV:VAR" 引用
     std::vector<std::string> models;
     int timeoutMs = 120000;
+    bool insecure = false;       // 跳过证书校验（自签/测试网关）
+    std::string fallbackTo;      // 失败转移目标厂商名（M13 第二批）
 };
 
 struct RouterConfig {
@@ -99,9 +103,12 @@ public:
     [[nodiscard]] size_t providerCount() const noexcept { return cfg_.providers.size(); }
 
 private:
-    ChatResult chatOpenAi(const ProviderConfig& p, const ChatRequest& req);
-    ChatResult chatAnthropic(const ProviderConfig& p, const ChatRequest& req);
-    ChatResult chatGemini(const ProviderConfig& p, const ChatRequest& req);
+    ChatResult chatOpenAi(const ProviderConfig& p, const ChatRequest& req,
+                          const TokenCallback& onToken, const TokenCallback& onReasoning);
+    ChatResult chatAnthropic(const ProviderConfig& p, const ChatRequest& req,
+                             const TokenCallback& onToken, const TokenCallback& onReasoning);
+    ChatResult chatGemini(const ProviderConfig& p, const ChatRequest& req,
+                          const TokenCallback& onToken, const TokenCallback& onReasoning);
 
     RouterConfig cfg_;
     std::map<std::string, size_t> byName_; // 厂商名 → 下标
@@ -112,16 +119,21 @@ private:
 /// 供 ProviderRouter 调用厂商端点（https 上游经前置反代或本机代理转 http）。
 struct ZENITH_API SimpleHttpCall {
     std::string method = "POST";
-    std::string url; // http://host[:port]/path[?query]
+    std::string url; // http:// 或 https://host[:port]/path[?query]
     std::string body;
     std::vector<std::pair<std::string, std::string>> headers;
     int timeoutMs = 120000;
+    bool insecureTls = false;                    // 跳过证书校验
+    /// 流式回调：逐片喂正文（chunked 已解码；TLS 同样生效）；
+    /// 返回 false 中止。为空 → 整包读入 body。
+    std::function<bool(std::string_view)> onData;
 };
 struct ZENITH_API SimpleHttpResult {
     bool ok = false;
     int status = 0;
-    std::string body;
+    std::string body;    // 未用 onData 时的完整正文
     std::string error;
+    std::string peer;    // "host:port"（诊断）
 };
 ZENITH_API SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call);
 

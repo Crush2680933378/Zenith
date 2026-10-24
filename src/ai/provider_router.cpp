@@ -7,6 +7,11 @@
 #include "zenith/core/platform.hpp"
 #include "zenith/core/string.hpp"
 
+#if defined(ZENITH_TLS_OPENSSL)
+  #include <openssl/err.h>
+  #include <openssl/ssl.h>
+#endif
+
 #if defined(ZENITH_PLATFORM_WINDOWS)
   #ifndef NOMINMAX
     #define NOMINMAX
@@ -71,9 +76,7 @@ bool parseUrl(const std::string& url, UrlParts& out) {
     const size_t scheme = url.find("://");
     size_t hostBegin = scheme == std::string::npos ? 0 : scheme + 3;
     if (url.compare(0, 7, "http://") == 0) hostBegin = 7;
-    if (scheme != std::string::npos && url.compare(0, 8, "https://") == 0) {
-        return false; // TLS 上游需前置反代（文件头注释已声明）
-    }
+    // https 由 simpleHttpRequest 的 TLS 路径处理（ZENITH_TLS_OPENSSL 门控）
     const size_t slash = url.find('/', hostBegin);
     std::string hostPort =
         slash == std::string::npos ? url.substr(hostBegin) : url.substr(hostBegin, slash - hostBegin);
@@ -101,10 +104,17 @@ void closeSock(SockFd s) {
 SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
     SimpleHttpResult out;
     UrlParts parts;
-    if (!parseUrl(call.url, parts)) {
-        out.error = "https not supported directly (front with a plain-http proxy)";
+    const bool tls = call.url.compare(0, 8, "https://") == 0;
+    if (call.url.compare(0, 7, "http://") != 0 && !tls) {
+        out.error = "only http:// and https:// supported";
         return out;
     }
+    if (!parseUrl(call.url, parts)) {
+        out.error = "invalid url";
+        return out;
+    }
+    if (tls && parts.port == 80) parts.port = 443;
+    out.peer = parts.host + ":" + std::to_string(parts.port);
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
     static std::once_flag wsaOnce;
@@ -119,15 +129,19 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
         out.error = "socket() failed";
         return out;
     }
-    // 超时（连接与读写）
 #if defined(ZENITH_PLATFORM_WINDOWS)
     DWORD tv = static_cast<DWORD>(call.timeoutMs);
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
+    DWORD ctv = static_cast<DWORD>(call.timeoutMs < 15000 ? call.timeoutMs : 15000);
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&ctv), sizeof(ctv));
 #else
     timeval tv{};
     tv.tv_sec = call.timeoutMs / 1000;
     tv.tv_usec = (call.timeoutMs % 1000) * 1000;
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    timeval ctv{};
+    ctv.tv_sec = (call.timeoutMs < 15000 ? call.timeoutMs : 15000) / 1000;
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &ctv, sizeof(ctv));
 #endif
 
     addrinfo hints{};
@@ -141,18 +155,91 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
         return out;
     }
     if (::connect(fd, res->ai_addr, static_cast<int>(res->ai_addrlen)) != 0) {
-        out.error = "connect failed: " + parts.host + ":" + std::to_string(parts.port);
+        out.error = "connect failed: " + out.peer;
         freeaddrinfo(res);
         closeSock(fd);
         return out;
     }
     freeaddrinfo(res);
 
+    // ---- TLS 包裹（阻塞 OpenSSL；SNI + 主机名校验；insecure 跳过校验）----
+#if defined(ZENITH_TLS_OPENSSL)
+    SSL_CTX* ownCtx = nullptr;  // insecure 专用（独立 ctx 免串扰）
+    SSL* ssl = nullptr;
+    if (tls) {
+        static SSL_CTX* sharedCtx = [] {
+            SSL_CTX* c = SSL_CTX_new(TLS_client_method());
+            if (c != nullptr) {
+                SSL_CTX_set_min_proto_version(c, TLS1_2_VERSION);
+                SSL_CTX_set_default_verify_paths(c);
+                SSL_CTX_set_verify(c, SSL_VERIFY_PEER, nullptr); // 证书校验失败必须致命
+                SSL_CTX_set_options(c, SSL_OP_NO_COMPRESSION);
+            }
+            return c;
+        }();
+        SSL_CTX* ctx = sharedCtx;
+        if (call.insecureTls) {
+            ownCtx = SSL_CTX_new(TLS_client_method());
+            if (ownCtx != nullptr) SSL_CTX_set_verify(ownCtx, SSL_VERIFY_NONE, nullptr);
+            ctx = ownCtx;
+        }
+        ssl = ctx != nullptr ? SSL_new(ctx) : nullptr;
+        if (ssl == nullptr) {
+            out.error = "tls ctx setup failed";
+            if (ownCtx != nullptr) SSL_CTX_free(ownCtx);
+            closeSock(fd);
+            return out;
+        }
+        SSL_set_fd(ssl, static_cast<int>(fd));
+#if defined(__GNUC__)
+// 宏内自带 C 风格转换（OpenSSL 头），局部豁免 -Wold-style-cast
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+        SSL_set_tlsext_host_name(ssl, parts.host.c_str()); // SNI
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+        if (!call.insecureTls) {
+            SSL_set1_host(ssl, parts.host.c_str());         // 证书主机名校验
+        }
+        if (SSL_connect(ssl) != 1) {
+            out.error = std::string("tls handshake failed: ") +
+                        ERR_reason_error_string(ERR_get_error());
+            SSL_free(ssl);
+            if (ownCtx != nullptr) SSL_CTX_free(ownCtx);
+            closeSock(fd);
+            return out;
+        }
+    }
+#else
+    if (tls) {
+        out.error = "https requires ZENITH_TLS=openssl build";
+        closeSock(fd);
+        return out;
+    }
+#endif
+
+    auto sendFn = [&](const char* data, size_t n) -> int {
+#if defined(ZENITH_TLS_OPENSSL)
+        if (ssl != nullptr) return SSL_write(ssl, data, static_cast<int>(n));
+#endif
+        return ::send(fd, data, static_cast<int>(n), 0);
+    };
+    auto recvFn = [&](char* data, size_t n) -> int {
+#if defined(ZENITH_TLS_OPENSSL)
+        if (ssl != nullptr) return SSL_read(ssl, data, static_cast<int>(n));
+#endif
+        return ::recv(fd, data, static_cast<int>(n), 0);
+    };
+
     std::string req;
     req.reserve(256 + call.body.size());
     req += call.method + " " + parts.pathAndQuery + " HTTP/1.1\r\n";
     req += "Host: " + parts.host;
-    if (parts.port != 80) req += ":" + std::to_string(parts.port);
+    if ((!tls && parts.port != 80) || (tls && parts.port != 443)) {
+        req += ":" + std::to_string(parts.port);
+    }
     req += "\r\n";
     for (const auto& [k, v] : call.headers) req += k + ": " + v + "\r\n";
     if (!call.body.empty() || call.method == "POST" || call.method == "PUT") {
@@ -163,26 +250,55 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
 
     size_t sent = 0;
     while (sent < req.size()) {
-        const int n = ::send(fd, req.data() + sent,
-                             static_cast<int>(req.size() - sent), 0);
+        const int n = sendFn(req.data() + sent, req.size() - sent);
         if (n <= 0) {
             out.error = "send failed";
+#if defined(ZENITH_TLS_OPENSSL)
+            if (ssl != nullptr) {
+                SSL_free(ssl);
+                if (ownCtx != nullptr) SSL_CTX_free(ownCtx);
+            }
+#endif
             closeSock(fd);
             return out;
         }
         sent += static_cast<size_t>(n);
     }
 
+    // ---- 收包：onData 流式（原始字节，SSE 解析归调用方）或整包 ----
     std::string all;
     char buf[16384];
+    bool aborted = false;
     for (;;) {
-        const int n = ::recv(fd, buf, sizeof(buf), 0);
+        const int n = recvFn(buf, sizeof(buf));
         if (n <= 0) break;
-        all.append(buf, static_cast<size_t>(n));
+        if (call.onData) {
+            if (!call.onData(std::string_view(buf, static_cast<size_t>(n)))) {
+                aborted = true;
+                break;
+            }
+        } else {
+            all.append(buf, static_cast<size_t>(n));
+        }
     }
+#if defined(ZENITH_TLS_OPENSSL)
+    if (ssl != nullptr) {
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+        if (ownCtx != nullptr) SSL_CTX_free(ownCtx);
+    }
+#endif
     closeSock(fd);
 
-    // 解析状态行 + 头 + 体（chunked 解码）
+    if (call.onData) {
+        out.ok = !aborted; // 状态行解析归调用方（流式契约见头注释）
+        return out;
+    }
+    if (aborted) {
+        out.ok = false;
+        return out;
+    }
+
     const size_t headEnd = all.find("\r\n\r\n");
     if (headEnd == std::string::npos) {
         out.error = "bad response (no header terminator)";
@@ -214,6 +330,190 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
 }
 
 // ---------------------------------------------------------------------------
+// SseTranslator —— 上游流式响应 → 统一 token 增量（M13.3）
+//  输入：simpleHttpRequest onData 的原始字节（状态行+头+chunked 或明文 body）
+//  行为：增量解码 chunked、按 SSE 帧切事件、按协议方言抽取 delta 文本，
+//        即时回调 onToken/onReasoning；同时累积全文与 usage/finish 元数据。
+// ---------------------------------------------------------------------------
+namespace {
+struct SseTranslator {
+    ProviderApi api;
+    std::string* contentOut;
+    std::string* reasoningOut;
+    const TokenCallback* onToken;
+    const TokenCallback* onReasoning;
+
+    SseTranslator(ProviderApi a, std::string* content, std::string* reasoning,
+                  const TokenCallback* tok, const TokenCallback* rea)
+        : api(a), contentOut(content), reasoningOut(reasoning), onToken(tok),
+          onReasoning(rea) {}
+
+    bool headOk = false;
+    bool headDone = false;
+    bool chunked = false;
+    bool chunkDone = false;
+    bool wantChunkHeader = true;
+    size_t chunkRemain = 0;
+    bool sawAny = false;   // 至少翻译出一个 delta
+    std::string buf;       // 未消费原始字节
+    std::string ev;        // 当前 SSE 事件（含换行）
+    std::string data;      // 当前事件 data 字段（多行 '\n' 连接）
+    std::string error;
+    std::string finish;
+    int promptTokens = -1;
+    int completionTokens = -1;
+
+    bool emitToken(const std::string& t) {
+        sawAny = true;
+        *contentOut += t;
+        return onToken == nullptr || (*onToken)(t);
+    }
+    bool emitReasoning(const std::string& t) {
+        sawAny = true;
+        *reasoningOut += t;
+        return onReasoning == nullptr || (*onReasoning)(t);
+    }
+
+    /// 返回 false = 中止（onToken 拒绝或非 2xx）
+    bool feed(std::string_view raw) {
+        buf.append(raw.data(), raw.size());
+        if (!headDone) {
+            const size_t eoh = buf.find("\r\n\r\n");
+            if (eoh == std::string::npos) return true;
+            const std::string head = buf.substr(0, eoh);
+            buf.erase(0, eoh + 4);
+            const size_t sp = head.find(' ');
+            const int status = sp == std::string::npos ? 0 : std::atoi(head.c_str() + sp + 1);
+            headOk = status >= 200 && status < 300;
+            chunked = core::string_util::toLower(head).find(
+                          "transfer-encoding: chunked") != std::string::npos;
+            headDone = true;
+            if (!headOk) {
+                error = "http " + std::to_string(status) + ": " + buf.substr(0, 200);
+                return false;
+            }
+        }
+        std::string plain;
+        if (chunked) {
+            while (!chunkDone) {
+                if (wantChunkHeader) {
+                    const size_t nl = buf.find("\r\n");
+                    if (nl == std::string::npos) break;
+                    const long len = std::strtol(buf.substr(0, nl).c_str(), nullptr, 16);
+                    buf.erase(0, nl + 2);
+                    if (len <= 0) {
+                        chunkDone = true;
+                        break;
+                    }
+                    chunkRemain = static_cast<size_t>(len);
+                    wantChunkHeader = false;
+                }
+                if (buf.size() < chunkRemain + 2) break; // 等整块到齐（含尾 \r\n）
+                plain.append(buf, 0, chunkRemain);
+                buf.erase(0, chunkRemain + 2);
+                wantChunkHeader = true;
+            }
+        } else {
+            plain = std::move(buf);
+            buf.clear();
+        }
+        for (char ch : plain) {
+            ev.push_back(ch);
+            if (ev.size() >= 2 && ev[ev.size() - 2] == '\n' && ev.back() == '\n') {
+                ev.pop_back();
+                ev.pop_back();
+                if (!dispatchEvent()) return false;
+                ev.clear();
+            }
+        }
+        return true;
+    }
+
+    bool dispatchEvent() {
+        data.clear();
+        size_t pos = 0;
+        while (pos <= ev.size()) {
+            const size_t nl = ev.find('\n', pos);
+            std::string line = ev.substr(pos, nl == std::string::npos ? ev.size() - pos
+                                                                      : nl - pos);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.compare(0, 5, "data:") == 0) {
+                size_t off = 5;
+                if (off < line.size() && line[off] == ' ') ++off;
+                if (!data.empty()) data.push_back('\n');
+                data.append(line, off, std::string::npos);
+            } // event:/id:/retry:/注释行 —— 方言信息都在 data JSON 里，忽略
+            if (nl == std::string::npos) break;
+            pos = nl + 1;
+        }
+        if (data.empty()) return true;
+        if (data == "[DONE]") return true;
+        auto v = json::JsonValue::parse(data);
+        if (!v) return true; // 容忍坏帧
+        switch (api) {
+            case ProviderApi::OpenAiChat: {
+                if (const auto* chs = v.value()["choices"].asArray()) {
+                    if (!chs->empty()) {
+                        const json::JsonValue& d = chs->at(size_t{0})["delta"];
+                        std::string rc = d["reasoning_content"].asString();
+                        if (!rc.empty() && !emitReasoning(rc)) return false;
+                        std::string t = d["content"].asString();
+                        if (!t.empty() && !emitToken(t)) return false;
+                        std::string fr = chs->at(size_t{0})["finish_reason"].asString();
+                        if (!fr.empty()) finish = fr;
+                    }
+                }
+                if (v.value()["usage"].isObject()) {
+                    int pt = static_cast<int>(v.value()["usage"]["prompt_tokens"].asInt(-1));
+                    int ct = static_cast<int>(v.value()["usage"]["completion_tokens"].asInt(-1));
+                    if (pt >= 0) promptTokens = pt;
+                    if (ct >= 0) completionTokens = ct;
+                }
+                break;
+            }
+            case ProviderApi::Anthropic: {
+                const std::string type = v.value()["type"].asString();
+                if (type == "content_block_delta") {
+                    const json::JsonValue& d = v.value()["delta"];
+                    const std::string dt = d["type"].asString();
+                    if (dt == "text_delta") {
+                        std::string t = d["text"].asString();
+                        if (!t.empty() && !emitToken(t)) return false;
+                    } else if (dt == "thinking_delta") {
+                        std::string t = d["thinking"].asString();
+                        if (!t.empty() && !emitReasoning(t)) return false;
+                    }
+                } else if (type == "message_delta") {
+                    std::string fr = v.value()["delta"]["stop_reason"].asString();
+                    if (!fr.empty()) finish = fr;
+                    int ot = static_cast<int>(v.value()["usage"]["output_tokens"].asInt(-1));
+                    if (ot >= 0) completionTokens = ot;
+                }
+                break;
+            }
+            case ProviderApi::Gemini: {
+                if (const auto* cands = v.value()["candidates"].asArray()) {
+                    if (!cands->empty()) {
+                        if (const auto* parts =
+                                cands->at(size_t{0})["content"]["parts"].asArray()) {
+                            for (const json::JsonValue& part : *parts) {
+                                std::string t = part["text"].asString();
+                                if (!t.empty() && !emitToken(t)) return false;
+                            }
+                        }
+                        std::string fr = cands->at(size_t{0})["finishReason"].asString();
+                        if (!fr.empty()) finish = fr;
+                    }
+                }
+                break;
+            }
+        }
+        return true;
+    }
+};
+} // namespace
+
+// ---------------------------------------------------------------------------
 // RouterConfig
 // ---------------------------------------------------------------------------
 core::Result<RouterConfig> RouterConfig::fromJson(const json::JsonValue& v) {
@@ -236,6 +536,7 @@ core::Result<RouterConfig> RouterConfig::fromJson(const json::JsonValue& v) {
         pc.baseURL = p["baseURL"].asString();
         pc.apiKey = p["apiKey"].asString();
         pc.timeoutMs = static_cast<int>(p["timeoutMs"].asInt(120000));
+        pc.insecure = p["insecure"].asBool(false);
         if (pc.apiKey.compare(0, 5, "$ENV:") == 0) {
             const char* env = std::getenv(pc.apiKey.c_str() + 5);
             pc.apiKey = env != nullptr ? env : "";
@@ -318,8 +619,8 @@ EngineState ProviderRouter::engineState() const {
     return st;
 }
 
-ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback&,
-                                const TokenCallback&) {
+ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onToken,
+                                const TokenCallback& onReasoning) {
     const std::string model = req.model.empty()
                                   ? (cfg_.defaultProvider.empty() ? ""
                                                                   : cfg_.providers.front().models.empty()
@@ -337,16 +638,18 @@ ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback&,
     lastProviderUsed = p->name;
     ChatResult r;
     switch (p->api) {
-        case ProviderApi::OpenAiChat: r = chatOpenAi(*p, req); break;
-        case ProviderApi::Anthropic: r = chatAnthropic(*p, req); break;
-        case ProviderApi::Gemini: r = chatGemini(*p, req); break;
+        case ProviderApi::OpenAiChat: r = chatOpenAi(*p, req, onToken, onReasoning); break;
+        case ProviderApi::Anthropic: r = chatAnthropic(*p, req, onToken, onReasoning); break;
+        case ProviderApi::Gemini: r = chatGemini(*p, req, onToken, onReasoning); break;
     }
     r.model = model;
     return r;
 }
 
 // ---- OpenAI Chat Completions（DeepSeek/OpenAI/Kimi/GLM/SiliconFlow…）----
-ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest& req) {
+ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest& req,
+                                      const TokenCallback& onToken,
+                                      const TokenCallback& onReasoning) {
     json::JsonValue body = json::JsonValue::object();
     body["model"] = req.model;
     json::JsonValue msgs = json::JsonValue::array();
@@ -359,7 +662,8 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
     body["messages"] = std::move(msgs);
     body["temperature"] = req.temperature;
     body["max_tokens"] = static_cast<int64_t>(req.maxTokens);
-    body["stream"] = false;
+    body["stream"] = static_cast<bool>(onToken);
+    if (onToken) body["stream_options"]["include_usage"] = true;
 
     SimpleHttpCall call;
     call.url = p.baseURL + "/chat/completions";
@@ -367,6 +671,28 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
     call.headers = {{"Content-Type", "application/json"},
                     {"Authorization", "Bearer " + p.apiKey}};
     call.timeoutMs = p.timeoutMs;
+    call.insecureTls = p.insecure;
+
+    if (onToken) {
+        std::string content, reasoning;
+        SseTranslator tr{ProviderApi::OpenAiChat, &content, &reasoning, &onToken,
+                         &onReasoning};
+        call.onData = [&](std::string_view sv) { return tr.feed(sv); };
+        auto res = simpleHttpRequest(call);
+        ChatResult r;
+        if (!tr.sawAny) {
+            r.error = "[" + p.name + "] " + (tr.error.empty() ? res.error : tr.error);
+            return r;
+        }
+        r.ok = true;
+        r.content = std::move(content);
+        r.reasoning = std::move(reasoning);
+        r.finishReason = tr.finish.empty() ? "stop" : tr.finish;
+        if (tr.promptTokens >= 0) r.usage.promptTokens = tr.promptTokens;
+        if (tr.completionTokens >= 0) r.usage.completionTokens = tr.completionTokens;
+        return r;
+    }
+
     auto res = simpleHttpRequest(call);
 
     ChatResult r;
@@ -390,7 +716,9 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
 }
 
 // ---- Anthropic Messages ----
-ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequest& req) {
+ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequest& req,
+                                         const TokenCallback& onToken,
+                                         const TokenCallback& onReasoning) {
     json::JsonValue body = json::JsonValue::object();
     body["model"] = req.model;
     body["max_tokens"] = static_cast<int64_t>(req.maxTokens > 0 ? req.maxTokens : 8192);
@@ -411,6 +739,7 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
     }
     body["messages"] = std::move(msgs);
     if (!system.empty()) body["system"] = system;
+    body["stream"] = static_cast<bool>(onToken);
 
     // baseURL 约定到根（https://api.anthropic.com）→ 拼 /v1/messages
     std::string base = p.baseURL;
@@ -422,6 +751,27 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
                     {"x-api-key", p.apiKey},
                     {"anthropic-version", "2023-06-01"}};
     call.timeoutMs = p.timeoutMs;
+    call.insecureTls = p.insecure;
+
+    if (onToken) {
+        std::string content, reasoning;
+        SseTranslator tr{ProviderApi::Anthropic, &content, &reasoning, &onToken,
+                         &onReasoning};
+        call.onData = [&](std::string_view sv) { return tr.feed(sv); };
+        auto res = simpleHttpRequest(call);
+        ChatResult r;
+        if (!tr.sawAny) {
+            r.error = "[" + p.name + "] " + (tr.error.empty() ? res.error : tr.error);
+            return r;
+        }
+        r.ok = true;
+        r.content = std::move(content);
+        r.reasoning = std::move(reasoning);
+        r.finishReason = tr.finish.empty() ? "stop" : tr.finish;
+        if (tr.completionTokens >= 0) r.usage.completionTokens = tr.completionTokens;
+        return r;
+    }
+
     auto res = simpleHttpRequest(call);
 
     ChatResult r;
@@ -451,7 +801,9 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
 }
 
 // ---- Google Gemini generateContent ----
-ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest& req) {
+ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest& req,
+                                      const TokenCallback& onToken,
+                                      const TokenCallback& onReasoning) {
     json::JsonValue body = json::JsonValue::object();
     std::string system;
     json::JsonValue contents = json::JsonValue::array();
@@ -488,11 +840,31 @@ ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest
     std::string base = p.baseURL;
     while (!base.empty() && base.back() == '/') base.pop_back();
     SimpleHttpCall call;
-    call.url = base + "/models/" + req.model + ":generateContent";
+    call.url = base + "/models/" + req.model +
+               (onToken ? ":streamGenerateContent?alt=sse" : ":generateContent");
     call.body = body.dump();
     call.headers = {{"Content-Type", "application/json"},
                     {"x-goog-api-key", p.apiKey}};
     call.timeoutMs = p.timeoutMs;
+    call.insecureTls = p.insecure;
+
+    if (onToken) {
+        std::string content, reasoning;
+        SseTranslator tr{ProviderApi::Gemini, &content, &reasoning, &onToken,
+                         &onReasoning};
+        call.onData = [&](std::string_view sv) { return tr.feed(sv); };
+        auto res = simpleHttpRequest(call);
+        ChatResult r;
+        if (!tr.sawAny) {
+            r.error = "[" + p.name + "] " + (tr.error.empty() ? res.error : tr.error);
+            return r;
+        }
+        r.ok = true;
+        r.content = std::move(content);
+        r.finishReason = tr.finish.empty() ? "STOP" : tr.finish;
+        return r;
+    }
+
     auto res = simpleHttpRequest(call);
 
     ChatResult r;
@@ -541,6 +913,7 @@ EmbeddingResult ProviderRouter::embeddings(const std::string& model,
     call.headers = {{"Content-Type", "application/json"},
                     {"Authorization", "Bearer " + p->apiKey}};
     call.timeoutMs = p->timeoutMs;
+    call.insecureTls = p->insecure;
     auto res = simpleHttpRequest(call);
     if (!res.ok) {
         r.error = "[" + p->name + "] " + res.error;
@@ -581,6 +954,7 @@ core::Result<std::vector<std::string>> ProviderRouter::discoverModels(
     call.url = p.baseURL + "/models";
     call.headers = {{"Authorization", "Bearer " + p.apiKey}};
     call.timeoutMs = p.timeoutMs;
+    call.insecureTls = p.insecure;
     auto res = simpleHttpRequest(call);
     if (!res.ok) {
         return core::Result<std::vector<std::string>>::Err(

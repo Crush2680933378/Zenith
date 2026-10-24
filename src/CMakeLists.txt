@@ -11,6 +11,7 @@ if (ZENITH_TLS STREQUAL "openssl")
         list(APPEND ZENITH_TLS_SOURCES tls/tls_context.cpp http/jwt_asym.cpp)
         set(ZENITH_TLS_LIBS ${OPENSSL_SSL_LIB} ${OPENSSL_CRYPTO_LIB})
         set(ZENITH_HAS_OPENSSL ON)
+        set(ZENITH_TLS_DEFINE ZENITH_TLS_OPENSSL=1)
         set_property(GLOBAL PROPERTY ZENITH_HAS_TLS ON)
         message(STATUS "Zenith TLS: OpenSSL backend enabled")
     else()
@@ -78,6 +79,7 @@ set(ZENITH_SOURCES
     net/worker_supervisor_posix.cpp
     io/cobs.cpp
     vector/hnsw.cpp
+    vector/vector_persist.cpp
     agent/agent.cpp
     crew/crew.cpp
     ai/provider_router.cpp
@@ -113,7 +115,7 @@ if (ZENITH_BUILD_STATIC)
     add_library(zenith_core STATIC ${ZENITH_SOURCES} ${ZENITH_PUBLIC_HEADERS})
     zenith_target_include_public(zenith_core)
     zenith_set_warnings(zenith_core)
-    target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC)
+    target_compile_definitions(zenith_core PUBLIC ZENITH_STATIC ${ZENITH_TLS_DEFINE})
     if (ZENITH_HAS_OPENSSL)
         target_compile_definitions(zenith_core PUBLIC ZENITH_HAS_OPENSSL=1)
     endif()
@@ -131,7 +133,7 @@ if (ZENITH_BUILD_SHARED)
     add_library(zenith SHARED ${ZENITH_SOURCES} ${ZENITH_PUBLIC_HEADERS})
     zenith_target_include_public(zenith)
     zenith_set_warnings(zenith)
-    target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY)
+    target_compile_definitions(zenith PRIVATE ZENITH_BUILDING_LIBRARY ${ZENITH_TLS_DEFINE})
     if (ZENITH_HAS_OPENSSL)
         target_compile_definitions(zenith PUBLIC ZENITH_HAS_OPENSSL=1)
     endif()

@@ -7,6 +7,7 @@
 //  OpenAI API 提供真实推理，ai_crew 插件自动经 IInferenceService 接入）。
 //
 //  端点：
+//    GET  /crew/dashboard          内嵌仪表盘（M13.4：列表/角色卡/SSE/产物/投票/审批）
 //    POST /crew/tasks            {"brief":"团队投票应用"}   ← 用户唯一入口
 //    GET  /crew/tasks/:id/board  状态板（前端仪表盘就绪）
 //    GET  /crew/tasks/:id/events 事件流（增量轮询）
@@ -19,6 +20,7 @@
 
 #include "zenith/crew/crew.hpp"
 #include "zenith/crew/crew_api.hpp"
+#include "zenith/crew/crew_dashboard.hpp"
 #include "zenith/http/http_server.hpp"
 #include "zenith/http/observability.hpp"
 #include "zenith/log/console_logger.hpp"
@@ -100,9 +102,11 @@ int main() {
     auto engine = std::make_shared<crew::CrewEngine>();
     engine->setInference(std::make_shared<MockCrewInference>());
     crew::mountCrewApi(server.router(), engine);
+    crew::mountCrewDashboard(server.router());
 
     if (!server.listen("0.0.0.0", 8093)) return 1;
     ZLOG_INFO("Zenith Crew demo on http://127.0.0.1:8093");
+    ZLOG_INFO("  浏览器打开 http://127.0.0.1:8093/crew/dashboard  ← 内嵌仪表盘");
     ZLOG_INFO("  curl -X POST localhost:8093/crew/tasks -d '{\"brief\":\"team polling app\"}' -H 'Content-Type: application/json'");
     ZLOG_INFO("  curl localhost:8093/crew/tasks/<id>/board");
     ZLOG_INFO("  curl -N localhost:8093/crew/tasks/<id>/events/stream   # SSE 实时");

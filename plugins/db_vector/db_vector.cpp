@@ -12,11 +12,23 @@
 
 #include "zenith/abi/zenith_abi.h"
 
+#include "zenith/vector/vector_persist.hpp"
 #include "zenith/vector/vector_service.hpp"
+
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <thread>
 
 namespace {
 
 const zenith_host_api* g_host = nullptr;
+std::string g_persistDir;
+std::atomic<bool> g_persistStop{false};
+std::thread g_persistThread;
+
+class VectorStoreImpl; // 前置（快照线程引用）
+VectorStoreImpl* g_store = nullptr;
 
 class VectorStoreImpl final : public zenith::vector::IVectorStoreService {
 public:
@@ -189,6 +201,35 @@ public:
         return n;
     }
 
+    // ---- M13.2 持久化 ----
+    void snapshotTo(const std::string& dir) {
+        std::shared_lock<std::shared_mutex> lk(mtx_);
+        for (const auto& [name, c] : cols_) {
+            auto r = zenith::vector::saveCollection(dir, name, *c.index);
+            if (!r && g_host != nullptr) {
+                g_host->log_write(g_host->log_ctx, ZENITH_LOG_WARN, "db_vector", 0,
+                                  ("snapshot failed for '" + name + "': " +
+                                   r.error().message).c_str());
+            }
+        }
+    }
+
+    size_t loadFrom(const std::string& dir) {
+        size_t n = 0;
+        for (const std::string& name : zenith::vector::listCollections(dir)) {
+            auto idx = zenith::vector::loadCollection(dir, name);
+            if (!idx) continue;
+            Collection c;
+            c.cfg.dim = idx.value()->config().dim;
+            c.cfg.metric = idx.value()->config().metric;
+            c.index = std::move(idx).value();
+            std::unique_lock<std::shared_mutex> lk(mtx_);
+            cols_[name] = std::move(c);
+            ++n;
+        }
+        return n;
+    }
+
 private:
     mutable std::shared_mutex mtx_;
     std::map<std::string, Collection> cols_;
@@ -205,6 +246,38 @@ zenith_status pluginInit(const zenith_host_api* host) {
                     "mountVectorApi)");
     auto* svc = new (std::nothrow) VectorStoreImpl();
     if (svc == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
+    g_store = svc;
+
+    // 持久化（可选）：vector.persist.dir
+    const char* pv = nullptr;
+    if (host->config_get(host->config_ctx, "vector.persist.dir", "", &pv) == ZENITH_OK &&
+        pv != nullptr && pv[0] != ' ') {
+        g_persistDir = pv;
+        const size_t loaded = svc->loadFrom(g_persistDir);
+        host->log_write(host->log_ctx, ZENITH_LOG_INFO, "db_vector", 0,
+                        ("db_vector: loaded " + std::to_string(loaded) +
+                         " snapshot(s) from " + g_persistDir).c_str());
+        int intervalMs = 30000;
+        const char* iv = nullptr;
+        if (host->config_get(host->config_ctx, "vector.persist.intervalMs", "", &iv) ==
+                ZENITH_OK &&
+            iv != nullptr && iv[0] != ' ') {
+            intervalMs = std::atoi(iv);
+        }
+        if (intervalMs < 1000) intervalMs = 1000;
+        g_persistStop.store(false);
+        const int every = intervalMs;
+        g_persistThread = std::thread([every] {
+            while (!g_persistStop.load(std::memory_order_acquire)) {
+                for (int i = 0; i < every / 100; ++i) {
+                    if (g_persistStop.load(std::memory_order_acquire)) return;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                if (g_store != nullptr) g_store->snapshotTo(g_persistDir);
+            }
+        });
+    }
+
     return host->register_service(host->registry_ctx, host->plugin_token,
                                   zenith::vector::IVectorStoreService::service_name(),
                                   zenith::vector::IVectorStoreService::service_version(),
@@ -219,8 +292,8 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "db_vector",
-    "0.1.0",
-    "Zenith vector store: self-hosted HNSW ANN index (RAG memory backbone)",
+    "0.2.0",
+    "Zenith vector store: HNSW ANN + snapshot persistence (RAG memory backbone)",
     "Zenith Authors",
     &pluginInit,
     &pluginStart,

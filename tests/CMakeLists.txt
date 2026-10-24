@@ -103,6 +103,18 @@ zenith_set_warnings(test_m12)
 add_test(NAME test_m12 COMMAND test_m12)
 set_tests_properties(test_m12 PROPERTIES TIMEOUT 120)
 
+# M13 第一批（TLS 路由/向量持久化/流式）
+get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
+if (ZENITH_HAS_TLS_PROP)
+    add_executable(test_m13a test_m13a.cpp)
+    target_link_libraries(test_m13a PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+    target_include_directories(test_m13a PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+    target_compile_definitions(test_m13a PRIVATE ZENITH_TLS_OPENSSL=1)
+    zenith_set_warnings(test_m13a)
+    add_test(NAME test_m13a COMMAND test_m13a)
+    set_tests_properties(test_m13a PROPERTIES TIMEOUT 120)
+endif()
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)
