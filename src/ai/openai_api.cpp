@@ -76,6 +76,17 @@ bool parseBody(http::Context& c, JsonValue& out) {
 }
 
 /// 消息内容兼容两种形态：字符串，或 [{type:"text",text:"..."}] 数组
+
+/// 最近一次请求的构成快照（status 用；网关进程内串行更新足够）
+struct RequestSnapshot {
+    std::atomic<int64_t> systemChars{0};
+    std::atomic<int64_t> imageCount{0};
+    std::atomic<int64_t> toolCount{0};
+    std::atomic<int64_t> promptTokens{0};
+    std::atomic<int64_t> completionTokens{0};
+};
+RequestSnapshot g_lastRequest;
+
 bool readContent(const JsonValue& node, std::string& out, std::string& err) {
     if (node.isString()) {
         out = node.asString();
@@ -97,9 +108,17 @@ bool readContent(const JsonValue& node, std::string& out, std::string& err) {
         }
         const JsonValue* text = part.find("text");
         if (text != nullptr && text->isString()) out += text->asString();
+        // 图片/工具部分：当前管线不消费，但记录数量供 status 展示
+        if (part.find("image_url") != nullptr) {
+            g_lastRequest.imageCount.fetch_add(1);
+        }
+        if (part.find("tool_use") != nullptr || part.find("tool_result") != nullptr) {
+            g_lastRequest.toolCount.fetch_add(1);
+        }
     }
     return true;
 }
+
 
 bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std::string& err) {
     const JsonValue& messages = body["messages"];
@@ -112,6 +131,10 @@ bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std
         err = "'messages' must not be empty";
         return false;
     }
+    // 每次请求重置构成统计（status 的 context_breakdown 用）
+    g_lastRequest.imageCount.store(0);
+    g_lastRequest.toolCount.store(0);
+    g_lastRequest.systemChars.store(0);
     if (arr->size() > 512) {
         err = "'messages' exceeds the 512-message limit";
         return false;
@@ -128,6 +151,9 @@ bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std
             return false;
         }
         if (!readContent(m["content"], msg.content, err)) return false;
+        if (msg.role == "system" || msg.role == "developer") {
+            g_lastRequest.systemChars.fetch_add(static_cast<int64_t>(msg.content.size()));
+        }
         if (const JsonValue* name = m.find("name"); name != nullptr && name->isString()) {
             msg.name = name->asString();
         }
@@ -424,6 +450,8 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
                     root["usage"] = usageObject(r.usage);
                     countTokens(metricsOn, r.usage);
             recordEngineStats(metricsOn, r.stats);
+                    g_lastRequest.promptTokens.store(static_cast<int64_t>(r.usage.promptTokens));
+                    g_lastRequest.completionTokens.store(static_cast<int64_t>(r.usage.completionTokens));
                 }
                 writer->write(root.dump());
                 writer->close();
@@ -439,6 +467,8 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
     }
     countTokens(opt.metricsEnabled, r.usage);
     recordEngineStats(opt.metricsEnabled, r.stats);
+    g_lastRequest.promptTokens.store(static_cast<int64_t>(r.usage.promptTokens));
+    g_lastRequest.completionTokens.store(static_cast<int64_t>(r.usage.completionTokens));
     JsonValue root = JsonValue::object();
     root["id"] = id;
     root["object"] = "chat.completion";
@@ -666,6 +696,18 @@ void handleStatus(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
             ? static_cast<double>(st.kvUsedTokens) * 100.0 / static_cast<double>(st.kvCapacityTokens)
             : 0.0;
     root["engine"] = std::move(engine);
+
+    // 最近一次请求的上下文构成（桌面端上下文胶囊的悬停明细）
+    const int64_t sysTok = g_lastRequest.systemChars.load() / 4;
+    const int64_t totalTok = g_lastRequest.promptTokens.load();
+    JsonValue ctx = JsonValue::object();
+    ctx["prompt_tokens"] = totalTok;
+    ctx["system_tokens"] = sysTok;
+    ctx["message_tokens"] = totalTok > sysTok ? totalTok - sysTok : 0;
+    ctx["tool_tokens"] = 0;
+    ctx["images"] = g_lastRequest.imageCount.load();
+    ctx["tools"] = g_lastRequest.toolCount.load();
+    root["context_breakdown"] = std::move(ctx);
 
     auto& reg = metrics::Registry::instance();
     JsonValue counters = JsonValue::object();
