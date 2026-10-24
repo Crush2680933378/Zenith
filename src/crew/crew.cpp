@@ -1338,6 +1338,7 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
             prompt += "\nProduce test cases and results JSON now.";
         }
         const std::string tr = chatJson(t, "tester", prompt, {"cases", "results"});
+        std::fprintf(stderr, "DBG-SAVE-TESTS=[%.200s]\n", tr.c_str());
         saveArtifact(t, "tests", "tester", tr);
         const json::JsonValue results = extractJson(tr)["results"];
         const auto* arr = results.asArray();
@@ -1442,6 +1443,7 @@ json::JsonValue CrewEngine::buildScorecard(const TaskPtr& t) {
     if (const auto* cases = extractJson(latestTests)["cases"].asArray()) {
         testCases = cases->size();
     }
+    std::fprintf(stderr, "DBG-CARD-TESTS=[%.200s]\n", latestTests.c_str());
     if (const auto* rs = extractJson(latestTests)["results"].asArray()) {
         for (const json::JsonValue& r : *rs) {
             if (r["status"].asString() == "pass") ++testPass;
