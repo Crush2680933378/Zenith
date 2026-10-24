@@ -29,13 +29,21 @@
 
 #include "zenith/crew/crew.hpp"
 #include "zenith/http/http_server.hpp"
+#include "zenith/http/security.hpp"
 #include "zenith/http/sse.hpp"
 
 namespace zenith::crew {
 
 inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
-                         const std::string& writeToken = {}) {
+                         const std::string& writeToken = {},
+                         bool enableCors = true) {
     using namespace http;
+    // CORS（ZenithDesk 等跨源前端开发期即开即用；预检路径随路由注册）
+    if (enableCors) {
+        CorsOptions co;
+        co.allowHeaders = "Content-Type, Authorization, X-Request-Id, X-Crew-Token";
+        r.use(corsMiddleware(co));
+    }
     const bool guarded = !writeToken.empty();
     // 按值捕获：路由生存期长于本函数栈帧
     const std::string token = writeToken;
@@ -43,6 +51,19 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         if (!guarded) return true;
         return c.request().header("X-Crew-Token") == token;
     };
+    // 每个业务路径注册 OPTIONS 占位（CORS 中间件在链中先行短路 204）
+    auto preflight = [&r](const std::string& path) {
+        r.options(path, [](Context&) {});
+    };
+    preflight("/crew/tasks");
+    preflight("/crew/roster");
+    preflight("/crew/board");
+    preflight("/crew/meta");
+    preflight("/crew/tasks/:id");
+    preflight("/crew/tasks/:id/approve");
+    preflight("/crew/tasks/:id/cancel");
+    preflight("/crew/tasks/:id/resume");
+    preflight("/crew/tasks/:id/vote");
 
     r.post("/crew/tasks", [svc](Context& c) {
         auto body = c.bodyJson();
@@ -66,6 +87,52 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         c.json(200, v);
     });
 
+    // M15：团队名册——角色↔AI 形象/模型映射（?task= 解析该任务扮演者）
+    r.get("/crew/roster", [svc](Context& c) {
+        c.json(200, svc->roster(c.query("task")));
+    });
+
+    // M15：引擎元信息（特性开关——前端显隐交互元素）
+    r.get("/crew/meta", [svc](Context& c) {
+        c.json(200, svc->metaInfo());
+    });
+
+    // M15：多任务聚合 board（所有运行中/待审批任务的角色拼一张大图）
+    r.get("/crew/board", [svc](Context& c) {
+        const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
+        json::JsonValue arr = json::JsonValue::array();
+        for (const CrewTaskInfo& t : svc->listTasks()) {
+            if (!t.running && t.phase != CrewPhase::AwaitingApproval) continue;
+            auto info = svc->taskInfo(t.id);
+            if (!info) continue;
+            json::JsonValue j = json::JsonValue::object();
+            j["task_id"] = t.id;
+            j["phase"] = phaseName(t.phase);
+            j["running"] = t.running;
+            j["cost_usd"] = t.costUsd;
+            json::JsonValue agents = json::JsonValue::array();
+            for (const AgentStatus& a : info.value().agents) {
+                json::JsonValue aj = a.toJson();
+                const std::string model = info.value().roleModels.count(a.role) > 0
+                                              ? info.value().roleModels.at(a.role)
+                                              : info.value().cfg.model;
+                aj["model"] = model;
+                aj["persona"] = personaFromModel(model);
+                aj["idle_ms"] = (a.state == "working" || a.state == "voting")
+                                    ? int64_t{0}
+                                    : std::max<int64_t>(0, now - a.updatedMs);
+                agents.push_back(std::move(aj));
+            }
+            j["agents"] = std::move(agents);
+            arr.push_back(std::move(j));
+        }
+        json::JsonValue v = json::JsonValue::object();
+        v["tasks"] = std::move(arr);
+        c.json(200, v);
+    });
+
     r.get("/crew/tasks/:id", [svc](Context& c) {
         auto info = svc->taskInfo(c.param("id"));
         if (!info) {
@@ -82,6 +149,9 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             c.status(404).text(404, "404 no such task");
             return;
         }
+        const int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch())
+                                .count();
         json::JsonValue v = json::JsonValue::object();
         v["task_id"] = info.value().id;
         v["phase"] = phaseName(info.value().phase);
@@ -90,8 +160,20 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         v["cost_usd"] = info.value().costUsd;
         v["tokens_in"] = static_cast<int64_t>(info.value().tokensIn);
         v["tokens_out"] = static_cast<int64_t>(info.value().tokensOut);
+        v["config"] = info.value().cfg.toJson();
         json::JsonValue agents = json::JsonValue::array();
-        for (const AgentStatus& a : info.value().agents) agents.push_back(a.toJson());
+        for (const AgentStatus& a : info.value().agents) {
+            json::JsonValue aj = a.toJson();
+            const std::string model = info.value().roleModels.count(a.role) > 0
+                                          ? info.value().roleModels.at(a.role)
+                                          : info.value().cfg.model;
+            aj["model"] = model;
+            aj["persona"] = personaFromModel(model);
+            aj["idle_ms"] = (a.state == "working" || a.state == "voting")
+                                ? int64_t{0}
+                                : std::max<int64_t>(0, now - a.updatedMs);
+            agents.push_back(std::move(aj));
+        }
         v["agents"] = std::move(agents);
         v["artifact_count"] = static_cast<int64_t>(info.value().artifactCount);
         v["vote_count"] = static_cast<int64_t>(info.value().voteCount);
@@ -243,6 +325,114 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         auto res = svc->castHumanVote(c.param("id"), c.bodyJson()["choice"].asString());
         c.status(res ? 200 : 404).text(res ? 200 : 404,
                                        res ? "ok" : "404 no such task");
+    });
+}
+
+// ============================================================================
+//  mountCrewWs —— /crew/ws WebSocket 端点（M15；ZenithDesk 强交互通道）
+//
+//  协议（文本 JSON 帧）：
+//    客户端 → 服务端：
+//      {"type":"watch","task":"crew-1-x"[,"token":"..."]}   订阅任务（可换台）
+//      {"type":"approve","task":...,"comment":"..."}        人工放行
+//      {"type":"cancel","task":...}                         取消
+//      {"type":"resume","task":...}                         断点恢复
+//      {"type":"vote","task":...,"choice":"..."}            人工投票
+//      {"type":"ping"}                                       心跳
+//    服务端 → 客户端：
+//      {"type":"hello","task":...}                          订阅确认（附历史事件）
+//      CrewEvent.toJson() 原样逐帧推送（与 SSE "crew" 事件同构）
+//      {"type":"ack","action":...,"ok":bool,"error":...}    动作回执
+//      {"type":"pong"}
+//  写操作鉴权同 REST：guard 非空时帧内 token 字段必须匹配。
+// ============================================================================
+inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc,
+                        const std::string& writeToken = {}) {
+    struct WatchState {
+        std::string task;
+        uint64_t subId = 0;
+    };
+    srv.enableWebSocket("/crew/ws",
+                        [svc, writeToken](const net::WebSocketSession::Ptr& s) {
+        auto watch = std::make_shared<WatchState>();
+        s->setContext(watch);
+
+        s->setMessageCallback(
+            [svc, s, watch, writeToken](const net::WebSocketSession::Ptr&,
+                                        std::string msg, bool) {
+                auto v = json::JsonValue::parse(msg);
+                if (!v) return;
+                const std::string type = v.value()["type"].asString();
+                const std::string task = v.value()["task"].asString();
+                const bool authed =
+                    writeToken.empty() ||
+                    v.value()["token"].asString() == writeToken;
+
+                auto ack = [&s](const std::string& action, bool ok,
+                                const std::string& err = {}) {
+                    json::JsonValue a = json::JsonValue::object();
+                    a["type"] = "ack";
+                    a["action"] = action;
+                    a["ok"] = ok;
+                    if (!err.empty()) a["error"] = err;
+                    s->sendText(a.dump());
+                };
+
+                if (type == "ping") {
+                    json::JsonValue p = json::JsonValue::object();
+                    p["type"] = "pong";
+                    s->sendText(p.dump());
+                    return;
+                }
+                if (type == "watch") {
+                    if (watch->subId != 0) {
+                        svc->unsubscribe(watch->subId);
+                        watch->subId = 0;
+                    }
+                    watch->task = task;
+                    json::JsonValue h = json::JsonValue::object();
+                    h["type"] = "hello";
+                    h["task"] = task;
+                    s->sendText(h.dump());
+                    // 订阅前先补全量历史（回放），再实时订阅
+                    for (const CrewEvent& e : svc->events(task, 0)) {
+                        s->sendText(e.toJson().dump());
+                    }
+                    watch->subId = svc->subscribe(task, [s](const CrewEvent& e) {
+                        s->sendText(e.toJson().dump()); // runInLoop 投递，跨线程安全
+                    });
+                    return;
+                }
+                if (type == "approve") {
+                    if (!authed) return ack(type, false, "bad token");
+                    auto r = svc->approve(task, v.value()["comment"].asString());
+                    return ack(type, static_cast<bool>(r));
+                }
+                if (type == "cancel") {
+                    if (!authed) return ack(type, false, "bad token");
+                    auto r = svc->cancel(task);
+                    return ack(type, static_cast<bool>(r),
+                               r ? std::string() : r.error().message);
+                }
+                if (type == "resume") {
+                    if (!authed) return ack(type, false, "bad token");
+                    auto r = svc->resume(task);
+                    return ack(type, static_cast<bool>(r),
+                               r ? std::string() : r.error().message);
+                }
+                if (type == "vote") {
+                    if (!authed) return ack(type, false, "bad token");
+                    auto r = svc->castHumanVote(task, v.value()["choice"].asString());
+                    return ack(type, static_cast<bool>(r));
+                }
+            });
+
+        s->setCloseCallback([svc, watch](const net::WebSocketSession::Ptr&) {
+            if (watch->subId != 0) {
+                svc->unsubscribe(watch->subId);
+                watch->subId = 0;
+            }
+        });
     });
 }
 

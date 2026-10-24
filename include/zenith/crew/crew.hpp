@@ -39,6 +39,10 @@ class OtelExporter;
 
 namespace zenith::crew {
 
+/// 模型名 → AI 形象 key（deepseek/kimi/glm/mimo/minimax/llama/qwen/
+/// gemini/anthropic/openai；未识别返回 ""，前端回落默认立绘）
+ZENITH_API std::string personaFromModel(const std::string& model);
+
 enum class CrewPhase : uint8_t {
     Pending = 0,
     Requirements,   // PM 产 PRD
@@ -116,27 +120,6 @@ struct RoleUsage {
     double costUsd = 0.0;
 };
 
-struct CrewTaskInfo {
-    std::string id;
-    std::string brief;
-    CrewPhase phase = CrewPhase::Pending;
-    bool running = false;
-    bool resumable = false;             // M14：中断后可 resume
-    std::string error;
-    std::vector<AgentStatus> agents;
-    size_t eventCount = 0;
-    size_t artifactCount = 0;
-    size_t voteCount = 0;
-    int64_t createdMs = 0;
-    int64_t updatedMs = 0;
-    double costUsd = 0.0;               // M14：任务级成本
-    uint64_t tokensIn = 0;
-    uint64_t tokensOut = 0;
-    std::map<std::string, RoleUsage> roleUsage; // M14：角色级明细
-
-    [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
-};
-
 struct CrewConfig {
     std::string model;                  // 默认模型（空 = 推理服务默认）
     std::map<std::string, std::string> roleModels; // 每角色模型覆盖（M14）
@@ -159,13 +142,38 @@ struct CrewConfig {
     ZENITH_API static CrewConfig fromJson(const json::JsonValue& v);
 };
 
+struct CrewTaskInfo {
+    std::string id;
+    std::string brief;
+    CrewPhase phase = CrewPhase::Pending;
+    bool running = false;
+    bool resumable = false;             // M14：中断后可 resume
+    std::string error;
+    std::vector<AgentStatus> agents;
+    size_t eventCount = 0;
+    size_t artifactCount = 0;
+    size_t voteCount = 0;
+    int64_t createdMs = 0;
+    int64_t updatedMs = 0;
+    double costUsd = 0.0;               // M14：任务级成本
+    uint64_t tokensIn = 0;
+    uint64_t tokensOut = 0;
+    std::map<std::string, RoleUsage> roleUsage; // M14：角色级明细
+    std::map<std::string, std::string> roleModels; // M15：角色→扮演模型（前端立绘）
+    CrewConfig cfg;                     // M15：任务配置（前端决定显示哪些交互）
+
+    [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
+};
+
+
 /// 引擎级选项（宿主/插件注入；setOptions 在 createTask 前调用）
 struct EngineOptions {
     std::string persistDir;             // 任务/记忆落盘目录（空 = 纯内存）
     int maxConcurrentTasks = 4;         // 受管线程池上限
     std::string approvalToken;          // 非空 = 写操作需 X-Crew-Token 匹配
     std::string webhookUrl;             // 终态/待审批回调（POST JSON）
-    std::string rolesJson;              // 角色覆盖 JSON：[{role,prompt,voteWeight}]
+    std::string rolesJson;              // 角色覆盖 JSON：[{role,prompt,voteWeight,display}]
+    std::string personasJson;           // 形象覆盖 JSON：{"pm":"glm","backend":"kimi"}
     bool memoryEnabled = true;          // 组织记忆总开关
     double pricePromptPerM = 0.0;       // 成本估算（$/百万 token；0 = 只记 token）
     double priceCompletionPerM = 0.0;
@@ -209,6 +217,10 @@ public:
     }
     /// M14：任务全量导出 JSON 包（task+artifacts+votes+events；空串=不支持）
     [[nodiscard]] virtual std::string exportBundle(const std::string&) { return {}; }
+    /// M15：团队名册（角色↔形象/模型映射；taskId 可选解析该任务的扮演者）
+    [[nodiscard]] virtual json::JsonValue roster(const std::string& = {}) { return {}; }
+    /// M15：引擎元信息（版本/特性开关/并发上限——前端显隐交互元素）
+    [[nodiscard]] virtual json::JsonValue metaInfo() { return {}; }
 
     /// SSE 实时订阅：回调在编排线程触发（轻量；重活自行投递）
     using EventCallback = std::function<void(const CrewEvent&)>;
@@ -262,6 +274,9 @@ public:
 
     [[nodiscard]] const EngineOptions& options() const noexcept { return opt_; }
 
+    json::JsonValue roster(const std::string& taskId = {}) override;
+    json::JsonValue metaInfo() override;
+
 private:
     struct TaskState {
         std::string id;
@@ -294,6 +309,7 @@ private:
         std::string role;
         std::string prompt;
         int voteWeight = 1;
+        std::string display; // 展示名（前端工位牌）
     };
 
     // ---- 编排 ----
@@ -308,6 +324,8 @@ private:
     void emit(TaskPtr t, CrewPhase phase, const std::string& agent,
               const std::string& type, const std::string& detail,
               const std::string& dataJson = {});
+    void emitHandoff(const TaskPtr& t, const std::string& from,
+                     const std::string& to, const std::string& item);
     [[nodiscard]] std::string chat(TaskPtr t, const std::string& role,
                                    const std::string& userPrompt);
     /// 结构化调用：解析 + 字段校验 + 自修正重试（带错误反馈）；
@@ -342,6 +360,7 @@ private:
 
     EngineOptions opt_;
     std::vector<RoleDef> roles_;
+    std::map<std::string, std::string> personas_; // 角色 → 形象覆盖（roster 用）
     std::shared_ptr<ai::IInferenceService> inference_;
     std::mutex mtx_;                        // tasks_/subs_/queue_ 保护
     std::map<std::string, TaskPtr> tasks_;

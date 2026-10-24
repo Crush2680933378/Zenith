@@ -139,6 +139,14 @@ zenith_set_warnings(test_m13d)
 add_test(NAME test_m13d COMMAND test_m13d)
 set_tests_properties(test_m13d PROPERTIES TIMEOUT 300)
 
+# M15：ZenithDesk 契约（roster/meta/聚合board/新事件/CORS/WS）
+add_executable(test_m13e test_m13e.cpp)
+target_link_libraries(test_m13e PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m13e PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m13e)
+add_test(NAME test_m13e COMMAND test_m13e)
+set_tests_properties(test_m13e PROPERTIES TIMEOUT 180)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

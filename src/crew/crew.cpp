@@ -36,41 +36,42 @@ struct RoleDefSeed {
     const char* role;
     const char* prompt;
     int voteWeight;
+    const char* display;
 };
 const std::vector<RoleDefSeed>& defaultRoles() {
     static const std::vector<RoleDefSeed> kRoles = {
         {"pm", "ROLE: PM. You are the product manager. Given a brief, produce ONLY one JSON "
                "object: {\"prd\":{\"summary\":\"...\",\"stories\":[{\"id\":\"S1\",\"title\":"
                "\"...\",\"given\":\"...\",\"when\":\"...\",\"then\":\"...\"}]}}. Every story "
-               "must have executable Given/When/Then acceptance criteria.", 1},
+               "must have executable Given/When/Then acceptance criteria.", 1, "产品经理"},
         {"architect", "ROLE: ARCHITECT. You are the software architect. Given the PRD, "
                       "produce ONLY one JSON object: {\"architecture\":{\"style\":\"...\","
                       "\"storage\":\"sqlite|postgres|none\",\"components\":[\"...\"],"
                       "\"api\":[{\"method\":\"GET\",\"path\":\"/api/...\",\"desc\":\"...\"}],"
                       "\"notes\":\"...\"}}. Contract-first: api entries are the single "
-                      "source of truth for backend and frontend.", 2},
+                      "source of truth for backend and frontend.", 2, "架构师"},
         {"backend", "ROLE: BACKEND. You are the backend developer. Given the API contract, "
                     "produce ONLY one JSON object: {\"files\":[{\"path\":\"src/main.cpp\","
                     "\"content\":\"// implementation\"}],\"notes\":\"...\"}. Implement every "
-                    "contracted endpoint.", 1},
+                    "contracted endpoint.", 1, "后端工程师"},
         {"frontend", "ROLE: FRONTEND. You are the frontend developer. Given the API "
                      "contract, produce ONLY one JSON object: {\"files\":[{\"path\":"
                      "\"web/index.html\",\"content\":\"<!-- UI -->\"}],\"notes\":\"...\"}. "
-                     "Develop against the contract (mock-friendly), never block on backend.", 1},
+                     "Develop against the contract (mock-friendly), never block on backend.", 1, "前端工程师"},
         {"tester", "ROLE: TESTER. You are the QA engineer. Given the PRD acceptance "
                    "criteria and API contract, produce ONLY one JSON object: {\"cases\":"
                    "[{\"id\":\"T1\",\"story\":\"S1\",\"given\":\"...\",\"when\":\"...\","
                    "\"then\":\"...\"}],\"results\":[{\"case\":\"T1\",\"status\":"
                    "\"pass|fail\",\"detail\":\"...\",\"component\":\"backend|frontend\"}]}. "
                    "Every story needs at least one case. When asked to RETEST after fixes, "
-                   "report all cases pass unless the fix note says otherwise.", 1},
+                   "report all cases pass unless the fix note says otherwise.", 1, "测试工程师"},
         {"devops", "ROLE: DEVOPS. You are the release engineer. Given the architecture, "
                    "produce ONLY one JSON object: {\"files\":[{\"path\":\"Dockerfile\","
                    "\"content\":\"...\"},{\"path\":\".ci/pipeline.yml\",\"content\":\"...\"}],"
-                   "\"deploy\":{\"strategy\":\"...\",\"smoke\":\"...\"}}.", 1},
+                   "\"deploy\":{\"strategy\":\"...\",\"smoke\":\"...\"}}.", 1, "运维工程师"},
         {"delivery", "ROLE: DELIVERY. You are the release manager. Given the PRD and test "
                      "outcomes, produce ONLY one JSON object: {\"changelog\":\"...\","
-                     "\"release_notes\":\"...\",\"version\":\"0.1.0\"}.", 1},
+                     "\"release_notes\":\"...\",\"version\":\"0.1.0\"}.", 1, "交付经理"},
     };
     return kRoles;
 }
@@ -137,6 +138,36 @@ json::JsonValue usageToJson(const RoleUsage& u) {
     j["cost_usd"] = u.costUsd;
     return j;
 }
+
+const std::vector<std::pair<const char*, const char*>>& kPersonaRules() {
+    // 顺序即优先级；子串小写匹配
+    static const std::vector<std::pair<const char*, const char*>> kRules = {
+        {"deepseek", "deepseek"}, {"moonshot", "kimi"},     {"kimi", "kimi"},
+        {"chatglm", "glm"},       {"zhipu", "glm"},          {"glm", "glm"},
+        {"mimo", "mimo"},         {"xiaomi", "mimo"},
+        {"minimax", "minimax"},   {"abab", "minimax"},       {"mini-max", "minimax"},
+        {"llama", "llama"},       {"qwen", "qwen"},          {"qwq", "qwen"},
+        {"gemini", "gemini"},     {"claude", "anthropic"},   {"anthropic", "anthropic"},
+        {"gpt", "openai"},        {"o1", "openai"},          {"o3", "openai"},
+    };
+    return kRules;
+}
+
+} // namespace
+
+std::string personaFromModel(const std::string& model) {
+    std::string low;
+    low.reserve(model.size());
+    for (char c : model) {
+        low.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    for (const auto& [needle, persona] : kPersonaRules()) {
+        if (low.find(needle) != std::string::npos) return persona;
+    }
+    return "";
+}
+
+namespace {
 
 CrewPhase phaseFromName(const std::string& s) {
     for (int i = 0; i <= static_cast<int>(CrewPhase::Cancelled); ++i) {
@@ -231,6 +262,10 @@ json::JsonValue CrewTaskInfo::toJson() const {
     json::JsonValue ru = json::JsonValue::object();
     for (const auto& [role, u] : roleUsage) ru[role] = usageToJson(u);
     v["role_usage"] = std::move(ru);
+    json::JsonValue rm = json::JsonValue::object();
+    for (const auto& [role, m] : roleModels) rm[role] = m;
+    v["role_models"] = std::move(rm);
+    v["config"] = cfg.toJson();
     return v;
 }
 
@@ -349,6 +384,7 @@ void CrewEngine::setOptions(EngineOptions opt) {
                     d.role = r["role"].asString();
                     d.prompt = r["prompt"].asString();
                     d.voteWeight = static_cast<int>(r["voteWeight"].asInt(1));
+                    d.display = r["display"].asString();
                     if (!d.role.empty() && !d.prompt.empty()) {
                         roles_.push_back(std::move(d));
                     }
@@ -361,7 +397,18 @@ void CrewEngine::setOptions(EngineOptions opt) {
                 d.role = s.role;
                 d.prompt = s.prompt;
                 d.voteWeight = s.voteWeight;
+                d.display = s.display;
                 roles_.push_back(std::move(d));
+            }
+        }
+        // 形象覆盖：{"pm":"glm","backend":"kimi"}（roster 输出给前端选立绘）
+        personas_.clear();
+        if (!opt_.personasJson.empty()) {
+            auto pv = json::JsonValue::parse(opt_.personasJson);
+            if (pv && pv.value().isObject()) {
+                for (const auto& [role, persona] : *pv.value().asObject()) {
+                    personas_[role] = persona.asString();
+                }
             }
         }
     }
@@ -407,6 +454,15 @@ void CrewEngine::emit(TaskPtr t, CrewPhase phase, const std::string& agent,
         }
     }
     for (const EventCallback& cb : toNotify) cb(e); // 锁外触发
+}
+
+void CrewEngine::emitHandoff(const TaskPtr& t, const std::string& from,
+                             const std::string& to, const std::string& item) {
+    json::JsonValue d = json::JsonValue::object();
+    d["from"] = from;
+    d["to"] = to;
+    d["item"] = item;
+    emit(t, t->phase, from, "handoff", from + " → " + to + " (" + item + ")", d.dump());
 }
 
 json::JsonValue CrewEngine::extractJson(const std::string& text) {
@@ -957,6 +1013,11 @@ void CrewEngine::runPipeline(TaskPtr t) {
                 if (t->cfg.humanVoter) spec.voters = voterListWithHuman();
                 auto rec = runVote(t->id, spec);
                 if (rec.winner != "revise") break; // approve → 过
+                json::JsonValue dr = json::JsonValue::object();
+                dr["round"] = round;
+                dr["budget"] = t->cfg.prdVoteRounds;
+                emit(t, t->phase, "orchestrator", "debate_round",
+                     "PRD revision round " + std::to_string(round), dr.dump());
                 prd = chatJson(t, "pm",
                                "The crew voted to revise. Improve acceptance criteria. "
                                "Produce the updated PRD JSON now.",
@@ -983,6 +1044,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
             emit(t, t->phase, "orchestrator", "vote",
                  "storage decision: " + rec.winner, rec.toJson().dump());
         }
+        emitHandoff(t, "pm", "architect", "prd");
         const std::string arch =
             (t->resumeMode && !latestArtifact(t, "architecture").empty())
                 ? latestArtifact(t, "architecture")
@@ -996,6 +1058,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
                 : extractJson(arch)["architecture"]["api"].dump();
         saveArtifact(t, "contract", "architect", contract);
         if (checkCancel(t)) return;
+
+        emitHandoff(t, "architect", "backend", "contract");
+        emitHandoff(t, "architect", "frontend", "contract");
 
         // ---- 人工门禁（可选）：设计完成后 ----
         if (t->cfg.requireApproval) {
@@ -1092,6 +1157,11 @@ void CrewEngine::runPipeline(TaskPtr t) {
             saveArtifact(t, "frontend", "frontend", fe);
         }
 
+        if (!storiesHandled) {
+            emitHandoff(t, "backend", "tester", "implementation");
+            emitHandoff(t, "frontend", "tester", "implementation");
+        }
+
         // ---- 测试 + 结构化缺陷环 ----
         phaseTestBugfix(t);
         if (checkCancel(t)) return;
@@ -1099,6 +1169,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
         // ---- 部署 ----
         t->phase = CrewPhase::Deploy;
         emit(t, t->phase, "orchestrator", "phase", "enter deploy");
+        emitHandoff(t, "architect", "devops", "architecture");
         const std::string ops =
             (t->resumeMode && !latestArtifact(t, "devops").empty())
                 ? latestArtifact(t, "devops")
@@ -1110,6 +1181,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
         // ---- 发布 + 质量评分卡 ----
         t->phase = CrewPhase::Release;
         emit(t, t->phase, "orchestrator", "phase", "enter release");
+        emitHandoff(t, "tester", "delivery", "tests");
         const std::string rel =
             (t->resumeMode && !latestArtifact(t, "release").empty())
                 ? latestArtifact(t, "release")
@@ -1195,6 +1267,13 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
         const std::string title = stories->at(si)["title"].asString();
         pool.emplace_back([this, t, sid, title, contract, &errs, si] {
             try {
+                {
+                    json::JsonValue d = json::JsonValue::object();
+                    d["story"] = sid;
+                    d["title"] = title;
+                    emit(t, t->phase, "orchestrator", "story_started",
+                         "story " + sid + " started", d.dump());
+                }
                 const std::string storyArt = "story-" + sid + "-backend";
                 const std::string be =
                     (t->resumeMode && !latestArtifact(t, storyArt).empty())
@@ -1213,6 +1292,13 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
                         "Produce cases and results JSON (all pass if implemented).",
                     {"cases", "results"});
                 saveArtifact(t, testArt, "tester", tr);
+                {
+                    json::JsonValue d = json::JsonValue::object();
+                    d["story"] = sid;
+                    d["status"] = "done";
+                    emit(t, t->phase, "orchestrator", "story_done",
+                         "story " + sid + " done", d.dump());
+                }
             } catch (const CrewCancelled&) {
                 errs[si] = "cancelled";
             } catch (const std::exception& e) {
@@ -1273,16 +1359,41 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
         bool allPass = true;
         std::string failComponent = "backend";
         std::string issues;
+        int passed = 0, failed = 0;
+        json::JsonValue failList = json::JsonValue::array();
         if (arr != nullptr) {
             for (const json::JsonValue& r : *arr) {
                 if (r["status"].asString() == "fail") {
                     allPass = false;
+                    ++failed;
                     if (r["component"].asString() == "frontend") failComponent = "frontend";
                     issues += "- case " + r["case"].asString() + " [" +
                               r["component"].asString() + "]: " +
                               r["detail"].asString() + "\n";
+                    json::JsonValue f = json::JsonValue::object();
+                    f["case"] = r["case"].asString();
+                    f["component"] = r["component"].asString();
+                    f["detail"] = r["detail"].asString();
+                    failList.push_back(std::move(f));
+                } else {
+                    ++passed;
                 }
             }
+        }
+        {
+            json::JsonValue tr = json::JsonValue::object();
+            tr["cycle"] = cycle;
+            tr["passed"] = passed;
+            tr["failed"] = failed;
+            tr["total"] = passed + failed;
+            tr["pass_ratio"] = passed + failed > 0
+                                   ? static_cast<double>(passed) / (passed + failed)
+                                   : 0.0;
+            tr["failures"] = failList;
+            emit(t, t->phase, "tester", "test_result",
+                 "tests: " + std::to_string(passed) + " pass / " +
+                     std::to_string(failed) + " fail",
+                 tr.dump());
         }
         if (allPass) break;
         if (cycle >= t->cfg.maxBugCycles) {
@@ -1292,6 +1403,16 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
         }
         t->phase = CrewPhase::Bugfix;
         t->lastIssues = issues;
+        {
+            json::JsonValue ba = json::JsonValue::object();
+            ba["assignee"] = failComponent;
+            ba["cycle"] = cycle + 1;
+            ba["budget"] = t->cfg.maxBugCycles;
+            ba["issues"] = failList;
+            emit(t, t->phase, "orchestrator", "bug_assigned",
+                 "bugfix: routing to " + failComponent, ba.dump());
+        }
+        emitHandoff(t, "tester", failComponent, "bugs");
         emit(t, t->phase, "orchestrator", "phase", "bugfix: routing to " + failComponent);
         const std::string fix =
             chatJson(t, failComponent,
@@ -1464,6 +1585,14 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
             }
         }
         tally[choice] += weight;
+        // M15：逐票即时事件（会议动画：依次亮牌）
+        json::JsonValue d = json::JsonValue::object();
+        d["question"] = spec.question;
+        d["choice"] = choice;
+        d["reason"] = reason;
+        d["weight"] = weight;
+        d["human"] = voter == "human";
+        emit(t, t->phase, voter, "vote_cast", voter + " → " + choice, d.dump());
     }
 
     std::string winner;
@@ -1518,6 +1647,8 @@ core::Result<CrewTaskInfo> CrewEngine::taskInfo(const std::string& id) {
     info.createdMs = t->createdMs;
     info.updatedMs = t->updatedMs;
     info.roleUsage = t->usage;
+    info.roleModels = t->cfg.roleModels;
+    info.cfg = t->cfg;
     for (const auto& [role, u] : t->usage) {
         info.costUsd += u.costUsd;
         info.tokensIn += u.tokensIn;
@@ -1645,6 +1776,70 @@ std::string CrewEngine::exportBundle(const std::string& id) {
     auto it = tasks_.find(id);
     if (it == tasks_.end()) return {};
     return taskToJson(it->second).dump();
+}
+
+json::JsonValue CrewEngine::roster(const std::string& taskId) {
+    std::vector<RoleDef> roles;
+    std::map<std::string, std::string> personas;
+    std::map<std::string, std::string> taskModels;
+    std::string defaultModel;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        roles = roles_;
+        personas = personas_;
+        if (!taskId.empty()) {
+            auto it = tasks_.find(taskId);
+            if (it != tasks_.end()) {
+                taskModels = it->second->cfg.roleModels;
+                defaultModel = it->second->cfg.model;
+            }
+        }
+    }
+    json::JsonValue arr = json::JsonValue::array();
+    for (const RoleDef& r : roles) {
+        json::JsonValue j = json::JsonValue::object();
+        j["role"] = r.role;
+        j["display"] = r.display.empty() ? r.role : r.display;
+        j["vote_weight"] = r.voteWeight;
+        auto it = taskModels.find(r.role);
+        const std::string model = it != taskModels.end() ? it->second : defaultModel;
+        j["model"] = model;
+        auto p = personas.find(r.role);
+        j["persona"] = p != personas.end() ? p->second : personaFromModel(model);
+        arr.push_back(std::move(j));
+    }
+    json::JsonValue v = json::JsonValue::object();
+    v["roles"] = std::move(arr);
+    v["default_model"] = defaultModel;
+    v["task_id"] = taskId;
+    return v;
+}
+
+json::JsonValue CrewEngine::metaInfo() {
+    json::JsonValue f = json::JsonValue::object();
+    f["persistence"] = !opt_.persistDir.empty();
+    f["resume"] = !opt_.persistDir.empty();
+    f["memory"] = opt_.memoryEnabled;
+    f["otel"] = opt_.otel != nullptr;
+    f["webhook"] = !opt_.webhookUrl.empty();
+    f["human_voter"] = true;   // 能力开关（任务级 cfg 决定是否启用）
+    f["exec_verify"] = true;
+    f["stories"] = true;
+    f["debate"] = true;
+    f["cancel"] = true;
+    f["export"] = true;
+    f["write_guard"] = !opt_.approvalToken.empty();
+    json::JsonValue v = json::JsonValue::object();
+    v["api"] = "v2";
+    v["max_concurrent_tasks"] = opt_.maxConcurrentTasks;
+    v["features"] = std::move(f);
+    json::JsonValue names = json::JsonValue::array();
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        for (const RoleDef& r : roles_) names.push_back(r.role);
+    }
+    v["roles"] = std::move(names);
+    return v;
 }
 
 uint64_t CrewEngine::subscribe(const std::string& taskId, EventCallback cb) {

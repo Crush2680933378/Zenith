@@ -103,6 +103,7 @@ int main() {
     engine->setInference(std::make_shared<MockCrewInference>());
     crew::mountCrewApi(server.router(), engine);
     crew::mountCrewDashboard(server.router());
+    crew::mountCrewWs(server, engine); // /crew/ws：ZenithDesk 强交互通道
 
     if (!server.listen("0.0.0.0", 8093)) return 1;
     ZLOG_INFO("Zenith Crew demo on http://127.0.0.1:8093");
