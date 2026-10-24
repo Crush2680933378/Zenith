@@ -33,6 +33,10 @@
 //    "defaultProvider": "deepseek"                               // 可选兜底
 //  }
 //  apiKey 支持环境变量引用："$ENV:DEEPSEEK_API_KEY"。
+//  M13 第二批可选字段（provider 级）：
+//    "fallbackTo":"backup"                    失败转移目标厂商
+//    "circuit":{"failThreshold":3,"openMs":30000}   熔断（failThreshold=0 关闭）
+//    "pricing":{"promptPerM":0.27,"completionPerM":1.10}  成本记账（$/百万 token）
 // ============================================================================
 #pragma once
 
@@ -66,6 +70,12 @@ struct ProviderConfig {
     int timeoutMs = 120000;
     bool insecure = false;       // 跳过证书校验（自签/测试网关）
     std::string fallbackTo;      // 失败转移目标厂商名（M13 第二批）
+    // ---- 熔断（M13 第二批；failThreshold=0 关闭）----
+    int cbFailThreshold = 3;     // 连续失败 N 次后熔断
+    int cbOpenMs = 30000;        // 熔断冷却（半开试探前）
+    // ---- 成本记账（美元 / 每百万 token；0 = 不计价）----
+    double pricePromptPerM = 0.0;
+    double priceCompletionPerM = 0.0;
 };
 
 struct RouterConfig {
@@ -82,6 +92,7 @@ struct RouterConfig {
 class ZENITH_API ProviderRouter final : public IInferenceService {
 public:
     explicit ProviderRouter(RouterConfig cfg);
+    ~ProviderRouter() override; // rt_（pimpl）在 .cpp 完成析构
 
     // ---- IInferenceService ----
     std::vector<ModelInfo> models() override;
@@ -99,6 +110,19 @@ public:
     /// 上次路由命中的厂商（诊断；thread_local 每请求有效）
     static thread_local std::string lastProviderUsed;
 
+    // ---- 可观测（M13 第二批：failover/熔断/成本）----
+    struct ProviderStat {
+        uint64_t calls = 0;        // 实际打到该厂商的请求数
+        uint64_t failures = 0;
+        uint64_t fallbacks = 0;    // 因该厂商失败而转移走的次数
+        uint64_t tokensIn = 0;
+        uint64_t tokensOut = 0;
+        double costUsd = 0.0;
+        const char* cbState = "closed"; // closed / open / half-open
+    };
+    /// 各厂商运行统计快照（含熔断状态）
+    [[nodiscard]] std::map<std::string, ProviderStat> statsSnapshot() const;
+
     [[nodiscard]] const RouterConfig& config() const noexcept { return cfg_; }
     [[nodiscard]] size_t providerCount() const noexcept { return cfg_.providers.size(); }
 
@@ -112,6 +136,8 @@ private:
 
     RouterConfig cfg_;
     std::map<std::string, size_t> byName_; // 厂商名 → 下标
+    struct Rt;                             // 运行态（熔断/统计，pimpl 隐藏锁与时钟）
+    std::unique_ptr<Rt> rt_;
 };
 
 /// 一次极简阻塞 HTTP（POST/GET，Content-Length/chunked/读到关闭；http:// 明文）。

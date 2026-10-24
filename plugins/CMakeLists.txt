@@ -15,3 +15,5 @@ add_subdirectory(ai_mcp)
 add_subdirectory(ai_agent)
 add_subdirectory(ai_crew)
 add_subdirectory(ai_router)
+add_subdirectory(ai_guard)   # LLM 输入护栏（注入/PII）
+add_subdirectory(ai_speech)  # STT/TTS 接口 + mock

@@ -537,6 +537,11 @@ core::Result<RouterConfig> RouterConfig::fromJson(const json::JsonValue& v) {
         pc.apiKey = p["apiKey"].asString();
         pc.timeoutMs = static_cast<int>(p["timeoutMs"].asInt(120000));
         pc.insecure = p["insecure"].asBool(false);
+        pc.fallbackTo = p["fallbackTo"].asString();
+        pc.cbFailThreshold = static_cast<int>(p["circuit"]["failThreshold"].asInt(3));
+        pc.cbOpenMs = static_cast<int>(p["circuit"]["openMs"].asInt(30000));
+        pc.pricePromptPerM = p["pricing"]["promptPerM"].asDouble(0.0);
+        pc.priceCompletionPerM = p["pricing"]["completionPerM"].asDouble(0.0);
         if (pc.apiKey.compare(0, 5, "$ENV:") == 0) {
             const char* env = std::getenv(pc.apiKey.c_str() + 5);
             pc.apiKey = env != nullptr ? env : "";
@@ -576,6 +581,95 @@ ProviderRouter::ProviderRouter(RouterConfig cfg) : cfg_(std::move(cfg)) {
     for (size_t i = 0; i < cfg_.providers.size(); ++i) {
         byName_[cfg_.providers[i].name] = i;
     }
+    rt_ = std::make_unique<Rt>(cfg_.providers.size());
+}
+
+// ---- 运行态：熔断 + 统计（M13 第二批）----
+struct ProviderRouter::Rt {
+    struct Per {
+        uint64_t calls = 0;
+        uint64_t failures = 0;
+        uint64_t fallbacks = 0;
+        uint64_t tokensIn = 0;
+        uint64_t tokensOut = 0;
+        double costUsd = 0.0;
+        uint64_t consecutiveFails = 0;
+        bool open = false;
+        bool halfOpenProbe = false;      // 冷却后放行的单次试探
+        std::chrono::steady_clock::time_point openUntil{};
+    };
+    std::mutex mtx;
+    std::vector<Per> per;
+
+    explicit Rt(size_t n) : per(n) {}
+
+    /// 熔断闸门：false = 拒绝（open 且未到冷却）。半开只放一次试探。
+    bool gate(size_t idx, const ProviderConfig& p,
+              std::chrono::steady_clock::time_point now) {
+        std::lock_guard<std::mutex> lk(mtx);
+        Per& s = per[idx];
+        if (!s.open) return true;
+        if (now < s.openUntil) return false;
+        if (s.halfOpenProbe) return false; // 已有试探在飞
+        s.halfOpenProbe = true;            // 放行一次
+        return true;
+    }
+    void onSuccess(size_t idx, const ProviderConfig& p, int tokensIn, int tokensOut) {
+        std::lock_guard<std::mutex> lk(mtx);
+        Per& s = per[idx];
+        ++s.calls;
+        s.consecutiveFails = 0;
+        s.open = false;
+        s.halfOpenProbe = false;
+        s.tokensIn += static_cast<uint64_t>(tokensIn > 0 ? tokensIn : 0);
+        s.tokensOut += static_cast<uint64_t>(tokensOut > 0 ? tokensOut : 0);
+        if (p.pricePromptPerM > 0 || p.priceCompletionPerM > 0) {
+            s.costUsd += static_cast<double>(tokensIn > 0 ? tokensIn : 0) / 1e6 *
+                             p.pricePromptPerM +
+                         static_cast<double>(tokensOut > 0 ? tokensOut : 0) / 1e6 *
+                             p.priceCompletionPerM;
+        }
+    }
+    void onFailure(size_t idx, const ProviderConfig& p,
+                   std::chrono::steady_clock::time_point now) {
+        std::lock_guard<std::mutex> lk(mtx);
+        Per& s = per[idx];
+        ++s.calls;
+        ++s.failures;
+        ++s.consecutiveFails;
+        s.halfOpenProbe = false;
+        if (p.cbFailThreshold > 0 && s.consecutiveFails >=
+                                         static_cast<uint64_t>(p.cbFailThreshold)) {
+            s.open = true;
+            s.openUntil = now + std::chrono::milliseconds(p.cbOpenMs);
+        }
+    }
+    void onFallback(size_t idx) {
+        std::lock_guard<std::mutex> lk(mtx);
+        ++per[idx].fallbacks;
+    }
+};
+
+ProviderRouter::~ProviderRouter() = default;
+
+std::map<std::string, ProviderRouter::ProviderStat> ProviderRouter::statsSnapshot() const {
+    std::lock_guard<std::mutex> lk(rt_->mtx);
+    std::map<std::string, ProviderStat> out;
+    for (size_t i = 0; i < cfg_.providers.size() && i < rt_->per.size(); ++i) {
+        const Rt::Per& s = rt_->per[i];
+        ProviderStat st;
+        st.calls = s.calls;
+        st.failures = s.failures;
+        st.fallbacks = s.fallbacks;
+        st.tokensIn = s.tokensIn;
+        st.tokensOut = s.tokensOut;
+        st.costUsd = s.costUsd;
+        st.cbState = s.open
+                         ? (std::chrono::steady_clock::now() < s.openUntil ? "open" : "half-open")
+                         : "closed";
+        out[cfg_.providers[i].name] = st;
+    }
+    return out;
 }
 
 const ProviderConfig* ProviderRouter::route(const std::string& model) const {
@@ -635,12 +729,43 @@ ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onT
                   " (add to a provider models[] or routes{} or set defaultProvider)";
         return r;
     }
-    lastProviderUsed = p->name;
+
+    // failover 链：主 → fallbackTo → fallbackTo…（环路由防御：只走一遍去重链）
     ChatResult r;
-    switch (p->api) {
-        case ProviderApi::OpenAiChat: r = chatOpenAi(*p, req, onToken, onReasoning); break;
-        case ProviderApi::Anthropic: r = chatAnthropic(*p, req, onToken, onReasoning); break;
-        case ProviderApi::Gemini: r = chatGemini(*p, req, onToken, onReasoning); break;
+    std::vector<size_t> visited;
+    size_t idx = byName_.at(p->name);
+    for (int hop = 0; hop < 8; ++hop) {
+        const ProviderConfig& cur = cfg_.providers[idx];
+        bool seen = false;
+        for (size_t v : visited) seen = seen || v == idx;
+        if (seen) break;
+        visited.push_back(idx);
+
+        const auto now = std::chrono::steady_clock::now();
+        if (!rt_->gate(idx, cur, now)) {
+            r.ok = false;
+            r.error = "[" + cur.name + "] circuit breaker open (retry after " +
+                      std::to_string(cur.cbOpenMs) + "ms)";
+        } else {
+            switch (cur.api) {
+                case ProviderApi::OpenAiChat: r = chatOpenAi(cur, req, onToken, onReasoning); break;
+                case ProviderApi::Anthropic: r = chatAnthropic(cur, req, onToken, onReasoning); break;
+                case ProviderApi::Gemini: r = chatGemini(cur, req, onToken, onReasoning); break;
+            }
+            if (r.ok) {
+                rt_->onSuccess(idx, cur, r.usage.promptTokens, r.usage.completionTokens);
+                lastProviderUsed = cur.name;
+                r.model = model;
+                return r;
+            }
+            rt_->onFailure(idx, cur, now);
+        }
+        // 失败/被熔断 → 走 fallbackTo
+        if (cur.fallbackTo.empty()) break;
+        auto it = byName_.find(cur.fallbackTo);
+        if (it == byName_.end()) break;
+        rt_->onFallback(idx);
+        idx = it->second;
     }
     r.model = model;
     return r;

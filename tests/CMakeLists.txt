@@ -115,6 +115,14 @@ if (ZENITH_HAS_TLS_PROP)
     set_tests_properties(test_m13a PROPERTIES TIMEOUT 120)
 endif()
 
+# M13 第二批（failover/熔断/成本 + ai_guard + 语音 mock）
+add_executable(test_m13b test_m13b.cpp)
+target_link_libraries(test_m13b PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m13b PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m13b)
+add_test(NAME test_m13b COMMAND test_m13b)
+set_tests_properties(test_m13b PROPERTIES TIMEOUT 120)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

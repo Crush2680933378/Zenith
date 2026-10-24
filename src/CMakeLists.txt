@@ -83,6 +83,8 @@ set(ZENITH_SOURCES
     agent/agent.cpp
     crew/crew.cpp
     ai/provider_router.cpp
+    ai/guard_service.cpp
+    ai/speech_mock.cpp
     mcp/mcp_client.cpp
     mcp/mcp_server.cpp
     io/serial_port.cpp
