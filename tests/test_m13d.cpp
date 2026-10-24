@@ -274,6 +274,8 @@ ZTEST(CrewM14, QualityScorecard) {
     }
     ZEXPECT_FALSE(cardText.empty());
     auto card = json::JsonValue::parse(cardText);
+    std::fprintf(stderr, "DBG-CARD=[%s]
+", cardText.c_str());
     ZEXPECT_TRUE(static_cast<bool>(card));
     ZEXPECT_TRUE(card.value()["test_cases"].asInt(0) >= 1);
     ZEXPECT_TRUE(card.value()["score"].asInt(0) >= 90);
@@ -474,7 +476,13 @@ ZTEST(CrewM14, ExecVerifyRunsCommands) {
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
     std::string detail;
+    for (const crew::CrewEvent& e : eng.events(id)) {
+        if (e.type == "exec") std::fprintf(stderr, "DBG-EXEC=[%s]
+", e.detail.c_str());
+    }
     ZEXPECT_TRUE(hasEvent(eng, id, "exec", &detail));
+    std::fprintf(stderr, "DBG-FIRST-EXEC=[%s]
+", detail.c_str());
     ZEXPECT_TRUE(detail.find("crew-ok-9d21") != std::string::npos);
     ZEXPECT_TRUE(detail.find("pass") != std::string::npos);
 }
