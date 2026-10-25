@@ -1421,6 +1421,8 @@ void CrewEngine::runPipeline(TaskPtr t) {
                                            {"files"});
                 } catch (const CrewCancelled&) {
                     beErr = "cancelled";
+                } catch (const CrewInterrupted&) { // 析构中断：子线程必须接住
+                    beErr = "interrupted";
                 } catch (const std::exception& e) {
                     beErr = e.what();
                 }
@@ -1437,6 +1439,8 @@ void CrewEngine::runPipeline(TaskPtr t) {
                                            {"files"});
                 } catch (const CrewCancelled&) {
                     feErr = "cancelled";
+                } catch (const CrewInterrupted&) {
+                    feErr = "interrupted";
                 } catch (const std::exception& e) {
                     feErr = e.what();
                 }
@@ -1445,6 +1449,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
             tf.join();
             if (!beErr.empty() || !feErr.empty()) {
                 if (beErr == "cancelled" || feErr == "cancelled") throw CrewCancelled{};
+                if (beErr == "interrupted" || feErr == "interrupted") {
+                    throw CrewInterrupted{};
+                }
                 throw std::runtime_error("implement failed — backend: " + beErr +
                                          " frontend: " + feErr);
             }
@@ -1625,6 +1632,8 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
                 }
             } catch (const CrewCancelled&) {
                 errs[si] = "cancelled";
+            } catch (const CrewInterrupted&) {
+                errs[si] = "interrupted";
             } catch (const std::exception& e) {
                 errs[si] = e.what();
             }
@@ -1633,6 +1642,7 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
     for (std::thread& th : pool) th.join();
     for (const std::string& e : errs) {
         if (e == "cancelled") throw CrewCancelled{};
+        if (e == "interrupted") throw CrewInterrupted{};
         if (!e.empty()) throw std::runtime_error("story loop: " + e);
     }
     return true;
