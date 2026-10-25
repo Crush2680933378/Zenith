@@ -14,6 +14,7 @@
 //    crew.memory.enabled     组织记忆开关（默认 true）
 //    crew.cost.promptPerM    成本估算 $/百万 prompt token
 //    crew.cost.completionPerM 成本估算 $/百万 completion token
+//    crew.max.prompt.chars    提示词字符上限（默认 24000；-1 关闭截断）
 // ============================================================================
 #include <cstdlib>
 #include <new>
@@ -60,6 +61,8 @@ zenith_status pluginInit(const zenith_host_api* host) {
         const std::string pc = confString(host, "crew.cost.completionPerM");
         if (!pp.empty()) opt.pricePromptPerM = std::atof(pp.c_str());
         if (!pc.empty()) opt.priceCompletionPerM = std::atof(pc.c_str());
+        const std::string mp = confString(host, "crew.max.prompt.chars");
+        if (!mp.empty()) opt.maxPromptChars = std::atoi(mp.c_str());
     }
 
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_crew", 0,

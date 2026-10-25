@@ -14,6 +14,7 @@
 //    POST /crew/tasks/:id/approve    人工门禁放行 {?comment}（M14：评论入事件流）
 //    POST /crew/tasks/:id/cancel     取消运行中任务（M14）
 //    POST /crew/tasks/:id/resume     断点恢复（M14）
+//    POST /crew/tasks/:id/followup   增量迭代 {brief, config?}（M16：继承父任务产物）
 //    POST /crew/tasks/:id/vote       人工投票 {choice}（M14 humanVoter）
 //
 //  写操作鉴权（M14）：mountCrewApi(r, svc, token) 非空时，
@@ -63,6 +64,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
     preflight("/crew/tasks/:id/approve");
     preflight("/crew/tasks/:id/cancel");
     preflight("/crew/tasks/:id/resume");
+    preflight("/crew/tasks/:id/followup");
     preflight("/crew/tasks/:id/vote");
 
     r.post("/crew/tasks", [svc](Context& c) {
@@ -311,6 +313,35 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         auto res = svc->resume(c.param("id"));
         c.status(res ? 200 : 409).text(res ? 200 : 409,
                                        res ? "resumed" : "409 " + res.error().message);
+    });
+
+    // M16：增量迭代——基于父任务既有产物开新任务
+    r.post("/crew/tasks/:id/followup", [svc, allowed](Context& c) {
+        if (!allowed(c)) {
+            c.status(401).text(401, "401 bad crew token");
+            return;
+        }
+        if (c.request().body.empty()) {
+            c.status(400).text(400, "400 brief required");
+            return;
+        }
+        auto body = c.bodyJson();
+        CrewConfig cfg = CrewConfig::fromJson(body["config"]);
+        try {
+            const std::string id =
+                svc->createFollowupTask(c.param("id"), body["brief"].asString(), cfg);
+            if (id.empty()) {
+                c.status(404).text(404, "404 no such parent task");
+                return;
+            }
+            json::JsonValue v = json::JsonValue::object();
+            v["task_id"] = id;
+            v["parent_task_id"] = c.param("id");
+            v["status_url"] = "/crew/tasks/" + id;
+            c.json(201, v);
+        } catch (const std::exception& e) {
+            c.status(404).text(404, std::string("404 ") + e.what());
+        }
     });
 
     r.post("/crew/tasks/:id/vote", [svc, allowed](Context& c) {

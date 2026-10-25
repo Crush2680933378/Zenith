@@ -147,6 +147,14 @@ zenith_set_warnings(test_m13e)
 add_test(NAME test_m13e COMMAND test_m13e)
 set_tests_properties(test_m13e PROPERTIES TIMEOUT 180)
 
+# M16 P0：截断/预算熔断/cancel webhook/followup
+add_executable(test_m13f test_m13f.cpp)
+target_link_libraries(test_m13f PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m13f PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m13f)
+add_test(NAME test_m13f COMMAND test_m13f)
+set_tests_properties(test_m13f PROPERTIES TIMEOUT 180)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

@@ -137,6 +137,9 @@ struct CrewConfig {
     int prdVoteRounds = 1;              // PRD 评审轮数（>1 = revise 后再投票）
     bool humanVoter = false;            // 人工作为额外投票人（等待 HTTP 投票）
     int humanVoteTimeoutSec = 600;
+    // ---- P0（M16）：真实模型护栏 ----
+    double costBudgetUsd = 0.0;         // 任务成本预算（$；0=不限。每放行一次追加一倍）
+    int maxPromptChars = 0;             // 提示词字符上限（0=用引擎默认 24000；<0=不限制）
 
     [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
     ZENITH_API static CrewConfig fromJson(const json::JsonValue& v);
@@ -145,6 +148,7 @@ struct CrewConfig {
 struct CrewTaskInfo {
     std::string id;
     std::string brief;
+    std::string parentTaskId;           // M16：followup 来源任务（空=全新任务）
     CrewPhase phase = CrewPhase::Pending;
     bool running = false;
     bool resumable = false;             // M14：中断后可 resume
@@ -177,6 +181,7 @@ struct EngineOptions {
     bool memoryEnabled = true;          // 组织记忆总开关
     double pricePromptPerM = 0.0;       // 成本估算（$/百万 token；0 = 只记 token）
     double priceCompletionPerM = 0.0;
+    int maxPromptChars = 24000;         // 提示词默认字符上限（任务级可覆盖；<0 关闭）
     std::shared_ptr<obs::OtelExporter> otel; // 全链路 span 导出
 };
 
@@ -217,6 +222,12 @@ public:
     }
     /// M14：任务全量导出 JSON 包（task+artifacts+votes+events；空串=不支持）
     [[nodiscard]] virtual std::string exportBundle(const std::string&) { return {}; }
+    /// M16：增量迭代——基于父任务既有产物开新任务（空串=不支持/父不存在）
+    [[nodiscard]] virtual std::string createFollowupTask(const std::string& /*parent*/,
+                                                         const std::string& /*brief*/,
+                                                         const CrewConfig& /*cfg*/) {
+        return "";
+    }
     /// M15：团队名册（角色↔形象/模型映射；taskId 可选解析该任务的扮演者）
     [[nodiscard]] virtual json::JsonValue roster(const std::string& = {}) { return {}; }
     /// M15：引擎元信息（版本/特性开关/并发上限——前端显隐交互元素）
@@ -245,6 +256,8 @@ public:
     using ICrewService::createTask;
     std::string createTask(const std::string& brief, const CrewConfig& cfg) override;
     std::string createTask(const std::string& brief) { return createTask(brief, CrewConfig{}); }
+    std::string createFollowupTask(const std::string& parent, const std::string& brief,
+                                   const CrewConfig& cfg) override;
     core::Result<CrewTaskInfo> taskInfo(const std::string& id) override;
     std::vector<CrewTaskInfo> listTasks() override;
     std::vector<CrewEvent> events(const std::string& id, uint64_t sinceSeq) override;
@@ -286,6 +299,9 @@ private:
         bool running = false;
         bool resumable = false;
         bool resumeMode = false;   // resume 跳过已有产物的 chat
+        std::string parentTaskId;  // M16：followup 来源
+        bool followupMode = false; // 各角色提示词携带既有产物做增量更新
+        int budgetApprovals = 0;   // M16：预算放行次数（每次放行限额 ×(n+1)）
         std::string error;
         std::vector<CrewEvent> events;
         std::vector<Artifact> artifacts;
@@ -297,6 +313,7 @@ private:
         std::string approvalComment;
         std::atomic<bool> cancelRequested{false};
         std::atomic<bool> interrupted{false}; // 引擎关停：可恢复中断（区别于用户取消）
+        std::atomic<bool> budgetPaused{false}; // M16：成本超限 → phase 边界转人工
         std::atomic<bool> humanBallotSet{false};
         std::string humanBallot;
         std::map<std::string, RoleUsage> usage;
@@ -319,6 +336,9 @@ private:
     [[nodiscard]] json::JsonValue buildScorecard(const TaskPtr& t);
     [[nodiscard]] std::vector<std::string> voterListWithHuman();
     [[nodiscard]] bool checkCancel(const TaskPtr& t); // true = 已取消（置终态）
+    void waitApproval(const TaskPtr& t, const std::string& reason); // 通用人工门禁等待
+    [[nodiscard]] std::string followupPrefix(const TaskPtr& t, const std::string& type,
+                                             const char* label); // 增量提示词前缀
 
     // ---- 基础设施 ----
     void emit(TaskPtr t, CrewPhase phase, const std::string& agent,

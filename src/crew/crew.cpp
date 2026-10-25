@@ -244,6 +244,7 @@ json::JsonValue CrewTaskInfo::toJson() const {
     json::JsonValue v = json::JsonValue::object();
     v["id"] = id;
     v["brief"] = brief;
+    if (!parentTaskId.empty()) v["parent_task_id"] = parentTaskId;
     v["phase"] = phaseName(phase);
     v["running"] = running;
     v["resumable"] = resumable;
@@ -288,6 +289,8 @@ json::JsonValue CrewConfig::toJson() const {
     v["prd_vote_rounds"] = prdVoteRounds;
     v["human_voter"] = humanVoter;
     v["human_vote_timeout_sec"] = humanVoteTimeoutSec;
+    v["cost_budget_usd"] = costBudgetUsd;
+    v["max_prompt_chars"] = maxPromptChars;
     return v;
 }
 
@@ -320,6 +323,9 @@ CrewConfig CrewConfig::fromJson(const json::JsonValue& v) {
     c.humanVoter = v["human_voter"].asBool(v["humanVoter"].asBool(false));
     c.humanVoteTimeoutSec = static_cast<int>(
         v["human_vote_timeout_sec"].asInt(v["humanVoteTimeoutSec"].asInt(600)));
+    c.costBudgetUsd = v["cost_budget_usd"].asDouble(v["costBudgetUsd"].asDouble(0.0));
+    c.maxPromptChars = static_cast<int>(
+        v["max_prompt_chars"].asInt(v["maxPromptChars"].asInt(0)));
     return c;
 }
 
@@ -570,7 +576,28 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
     req.messages.push_back(std::move(sys));
     ai::ChatMessage user;
     user.role = "user";
-    user.content = userPrompt;
+    // M16：上下文预算——超长提示词保留首尾+截断标记（防真实模型上下文爆炸）
+    int charBudget = 0;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        charBudget = t->cfg.maxPromptChars != 0 ? t->cfg.maxPromptChars
+                                                : opt_.maxPromptChars;
+    }
+    if (charBudget > 0 && userPrompt.size() > static_cast<size_t>(charBudget)) {
+        const size_t budget = static_cast<size_t>(charBudget);
+        const size_t head = budget * 6 / 10;
+        const size_t tail = budget * 3 / 10;
+        user.content = userPrompt.substr(0, head);
+        user.content += "\n...[zenith: truncated ";
+        user.content += std::to_string(userPrompt.size() - budget);
+        user.content += " chars]...\n";
+        user.content += userPrompt.substr(userPrompt.size() - tail);
+        emit(t, t->phase, role, "truncate",
+             "prompt truncated: " + std::to_string(userPrompt.size()) + " → " +
+                 std::to_string(user.content.size()) + " chars");
+    } else {
+        user.content = userPrompt;
+    }
     req.messages.push_back(std::move(user));
 
     // token 流入事件流（节流：攒 24 字符一发；mock 不回调则零事件）
@@ -608,6 +635,23 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
         emit(t, t->phase, role, "token", "tail", d.dump());
     }
     recordUsage(t, role, r);
+    // M16：成本预算——超限置位（phase 边界转人工；每次放行限额 ×(n+1)）
+    if (t->cfg.costBudgetUsd > 0 && !t->budgetPaused.load()) {
+        double total = 0;
+        int approvals = 0;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            approvals = t->budgetApprovals;
+            for (const auto& [r2, u2] : t->usage) total += u2.costUsd;
+        }
+        const double limit = t->cfg.costBudgetUsd * (1 + approvals);
+        if (total >= limit) {
+            t->budgetPaused.store(true);
+            emit(t, t->phase, "orchestrator", "gate",
+                 "cost budget $" + std::to_string(limit) + " reached (spent $" +
+                     std::to_string(total) + "); pausing at next phase boundary");
+        }
+    }
     if (haveSpan) {
         otel->endSpan(span, {{"crew.task", t->id},
                              {"crew.role", role},
@@ -933,8 +977,57 @@ void CrewEngine::fireWebhook(const TaskPtr& t, const char* event) {
 // ---------------------------------------------------------------------------
 // 编排
 // ---------------------------------------------------------------------------
+void CrewEngine::waitApproval(const TaskPtr& t, const std::string& reason) {
+    t->phase = CrewPhase::AwaitingApproval;
+    emit(t, t->phase, "orchestrator", "approval", "paused: " + reason);
+    persistTask(t);
+    fireWebhook(t, "awaiting_approval");
+    const int timeoutMs = t->cfg.approvalTimeoutSec * 1000;
+    for (int i = 0; i < timeoutMs / 100 + 1; ++i) {
+        if (t->interrupted.load()) throw CrewInterrupted{};
+        if (t->cancelRequested.load()) throw CrewCancelled{};
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            if (t->approved) break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    std::string comment;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        t->approved = false;
+        comment = std::move(t->approvalComment);
+        t->approvalComment.clear();
+    }
+    if (!comment.empty()) {
+        json::JsonValue d = json::JsonValue::object();
+        d["comment"] = comment;
+        emit(t, t->phase, "human", "approval", "approved: " + comment, d.dump());
+    }
+    emit(t, t->phase, "orchestrator", "approval", "approved; resuming");
+}
+
 bool CrewEngine::checkCancel(const TaskPtr& t) {
     if (t->interrupted.load()) throw CrewInterrupted{};
+    // M16：预算闸门（phase 边界）——超限转人工，每次放行限额 ×(n+1)
+    if (t->budgetPaused.exchange(false)) {
+        std::string reason;
+        {
+            std::lock_guard<std::mutex> lk(mtx_); // 只在锁内取数据，锁外等待
+            const double limit = t->cfg.costBudgetUsd * (1 + t->budgetApprovals);
+            reason = "cost budget $" + std::to_string(limit) +
+                     " reached; approve to double the budget";
+        }
+        waitApproval(t, reason);
+        int approvals = 0;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            approvals = ++t->budgetApprovals;
+        }
+        emit(t, t->phase, "orchestrator", "gate",
+             "budget extended to $" +
+                 std::to_string(t->cfg.costBudgetUsd * (1 + approvals)));
+    }
     if (!t->cancelRequested.load()) return false;
     t->phase = CrewPhase::Cancelled;
     t->error = "cancelled by user";
@@ -973,6 +1066,71 @@ std::string CrewEngine::createTask(const std::string& brief, const CrewConfig& c
     return t->id;
 }
 
+std::string CrewEngine::followupPrefix(const TaskPtr& t, const std::string& type,
+                                       const char* label) {
+    if (!t->followupMode) return {};
+    const std::string existing = latestArtifact(t, type);
+    if (existing.empty()) return {};
+    return std::string("Existing ") + label + ":" "\n" + existing + "\n" "\n" +
+           "Incremental change requested. Produce the UPDATED full JSON "
+           "(complete replacement, not a diff)." "\n" + "\n";
+}
+
+std::string CrewEngine::createFollowupTask(const std::string& parent,
+                                           const std::string& brief,
+                                           const CrewConfig& cfg) {
+    TaskPtr pt;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        auto it = tasks_.find(parent);
+        if (it == tasks_.end()) {
+            throw std::runtime_error("no such parent task: " + parent);
+        }
+        pt = it->second;
+    }
+    // 继承父任务每类产物的最新版（作为 v1 快照；各角色在此基础上增量重生成）
+    std::vector<std::pair<std::string, std::string>> inherited;
+    for (const Artifact& a : pt->artifacts) {
+        bool latest = true;
+        for (const Artifact& b : pt->artifacts) {
+            if (b.type == a.type && b.version > a.version) latest = false;
+        }
+        if (latest) inherited.emplace_back(a.type, a.content);
+    }
+    // 自建任务（不走 createTask：它立即入队，继承产物会晚于首轮提示词生成）
+    TaskPtr t = std::make_shared<TaskState>();
+    t->brief = brief;
+    t->cfg = cfg;
+    t->createdMs = nowMs();
+    t->updatedMs = t->createdMs;
+    t->parentTaskId = parent;
+    t->followupMode = true;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (inference_ == nullptr) {
+            throw std::runtime_error("no inference service configured");
+        }
+        t->id = "crew-" + std::to_string(taskSeq_.fetch_add(1) + 1) + "-" +
+                std::to_string(static_cast<uint32_t>(nowMs() % 100000));
+        for (const RoleDef& r : roles_) {
+            AgentStatus st;
+            st.role = r.role;
+            st.state = "idle";
+            st.updatedMs = t->createdMs;
+            t->agents[r.role] = st;
+        }
+        tasks_[t->id] = t;
+    }
+    t->running = true;
+    emit(t, CrewPhase::Pending, "orchestrator", "phase",
+         "task created (followup of " + parent + "): " + brief.substr(0, 60));
+    for (const auto& [type, content] : inherited) {
+        saveArtifact(t, type, "inherited", content);
+    }
+    enqueue(t); // 继承产物就位后才开跑
+    return t->id;
+}
+
 void CrewEngine::runPipeline(TaskPtr t) {
     try {
         // ---- 需求（resume：已有 prd 直接复用；组织记忆注入）----
@@ -998,7 +1156,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
         }
         std::string prd = (t->resumeMode && !latestArtifact(t, "prd").empty())
                               ? latestArtifact(t, "prd")
-                              : chatJson(t, "pm", pmPrompt, {"prd"});
+                              : chatJson(t, "pm",
+                                         followupPrefix(t, "prd", "PRD") + pmPrompt,
+                                         {"prd"});
         saveArtifact(t, "prd", "pm", prd);
 
         // ---- PRD 评审（可多轮辩论；prdVoteRounds=修订预算，默认 1 与 M11 一致）----
@@ -1049,7 +1209,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
             (t->resumeMode && !latestArtifact(t, "architecture").empty())
                 ? latestArtifact(t, "architecture")
                 : chatJson(t, "architect",
-                           "PRD:\n" + prd + "\nProduce the architecture JSON now.",
+                           "PRD:" "\n" + prd + "\n" +
+                               followupPrefix(t, "architecture", "architecture") +
+                               "Produce the architecture JSON now.",
                            {"architecture"});
         saveArtifact(t, "architecture", "architect", arch);
         const std::string contract =
@@ -1064,34 +1226,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
 
         // ---- 人工门禁（可选）：设计完成后 ----
         if (t->cfg.requireApproval) {
-            t->phase = CrewPhase::AwaitingApproval;
-            emit(t, t->phase, "orchestrator", "approval",
-                 "design complete; awaiting human approval");
-            persistTask(t);
-            fireWebhook(t, "awaiting_approval");
-            const int timeoutMs = t->cfg.approvalTimeoutSec * 1000;
-            for (int i = 0; i < timeoutMs / 100 + 1; ++i) {
-                if (t->interrupted.load()) throw CrewInterrupted{};
-                if (t->cancelRequested.load()) throw CrewCancelled{};
-                {
-                    std::lock_guard<std::mutex> lk(mtx_);
-                    if (t->approved) break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            }
-            std::string comment;
-            {
-                std::lock_guard<std::mutex> lk(mtx_);
-                t->approved = false;
-                comment = std::move(t->approvalComment);
-                t->approvalComment.clear();
-            }
-            if (!comment.empty()) {
-                json::JsonValue d = json::JsonValue::object();
-                d["comment"] = comment;
-                emit(t, t->phase, "human", "approval", "approved: " + comment, d.dump());
-            }
-            emit(t, t->phase, "orchestrator", "approval", "approved; resuming");
+            waitApproval(t, "design complete; human approval required");
         }
 
         // ---- 实现（story 子环并行 / 后端 ∥ 前端真并行 / 串行）----
@@ -1106,8 +1241,10 @@ void CrewEngine::runPipeline(TaskPtr t) {
                     beOut = (t->resumeMode && !latestArtifact(t, "backend").empty())
                                 ? latestArtifact(t, "backend")
                                 : chatJson(t, "backend",
-                                           "API contract:\n" + contract +
-                                               "\nProduce backend files JSON.",
+                                           "API contract:" "\n" + contract + "\n" +
+                                               followupPrefix(t, "backend",
+                                                              "backend implementation") +
+                                               "Produce backend files JSON.",
                                            {"files"});
                 } catch (const CrewCancelled&) {
                     beErr = "cancelled";
@@ -1120,8 +1257,10 @@ void CrewEngine::runPipeline(TaskPtr t) {
                     feOut = (t->resumeMode && !latestArtifact(t, "frontend").empty())
                                 ? latestArtifact(t, "frontend")
                                 : chatJson(t, "frontend",
-                                           "API contract:\n" + contract +
-                                               "\nProduce frontend files JSON.",
+                                           "API contract:" "\n" + contract + "\n" +
+                                               followupPrefix(t, "frontend",
+                                                              "frontend implementation") +
+                                               "Produce frontend files JSON.",
                                            {"files"});
                 } catch (const CrewCancelled&) {
                     feErr = "cancelled";
@@ -1174,7 +1313,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
             (t->resumeMode && !latestArtifact(t, "devops").empty())
                 ? latestArtifact(t, "devops")
                 : chatJson(t, "devops",
-                           "Architecture:\n" + arch + "\nProduce CI/CD files JSON.",
+                           "Architecture:" "\n" + arch + "\n" +
+                               followupPrefix(t, "devops", "CI/CD files") +
+                               "Produce CI/CD files JSON.",
                            {"files"});
         saveArtifact(t, "devops", "devops", ops);
 
@@ -1186,9 +1327,15 @@ void CrewEngine::runPipeline(TaskPtr t) {
             (t->resumeMode && !latestArtifact(t, "release").empty())
                 ? latestArtifact(t, "release")
                 : chatJson(t, "delivery",
-                           "PRD:\n" + prd + "\nTests:\n" +
+                           "PRD:" "\n" + prd + "\n" + "Tests:" "\n" +
                                std::to_string(t->artifacts.size()) +
-                               " artifacts produced. Produce release JSON.",
+                               " artifacts produced." +
+                               (t->followupMode
+                                    ? std::string("\nThis is an incremental release: "
+                                                  "APPEND a new version entry to the "
+                                                  "existing changelog.")
+                                    : std::string()) +
+                               " Produce release JSON.",
                            {"changelog"});
         saveArtifact(t, "release", "delivery", rel);
         saveArtifact(t, "scorecard", "orchestrator", buildScorecard(t).dump());
@@ -1242,7 +1389,11 @@ void CrewEngine::runPipeline(TaskPtr t) {
         emit(t, t->phase, "orchestrator",
              t->phase == CrewPhase::Failed ? "error" : "cancelled", t->error);
         persistTask(t);
-        if (t->phase == CrewPhase::Failed) fireWebhook(t, "failed");
+        if (t->phase == CrewPhase::Failed) {
+            fireWebhook(t, "failed");
+        } else {
+            fireWebhook(t, "cancelled"); // checkCancel 早退路径已发过一次也无妨（幂等事件）
+        }
     } else if (t->interrupted.load()) {
         emit(t, t->phase, "orchestrator", "gate", "interrupted; persist for resume");
         persistTask(t);
@@ -1644,6 +1795,7 @@ core::Result<CrewTaskInfo> CrewEngine::taskInfo(const std::string& id) {
     CrewTaskInfo info;
     info.id = t->id;
     info.brief = t->brief;
+    info.parentTaskId = t->parentTaskId;
     info.phase = t->phase;
     info.running = t->running;
     info.resumable = t->resumable;

@@ -16,6 +16,7 @@
 | 名册 | `GET /crew/roster[?task=ID]` | 角色↔AI 形象/模型映射（选立绘的依据） |
 | 元信息 | `GET /crew/meta` | 特性开关（前端显隐交互元素） |
 | 任务列表 | `GET /crew/tasks` | 大厅视图 |
+| 增量迭代 | `POST /crew/tasks/:id/followup` `{"brief":...,"config"?}` | 基于父任务产物开新版本任务（M16） |
 
 **写操作鉴权**：若 `/crew/meta` 的 `features.write_guard=true`，REST 需带
 `X-Crew-Token` 头，WS 帧需带 `"token"` 字段。
@@ -99,6 +100,7 @@ dataJson 解析后的对象；省略表示无）。
 | `approval` | 人工门禁（等待/放行；带评论时 agent=human） | `{comment}` |
 | `human_vote_required` | 等待人工投票 | `{question,options}` |
 | `retry` | 推理失败重试 / JSON 自修正重试 | — |
+| `truncate` | 提示词超预算被截断（M16） | —（detail 含 原长→截后长） |
 | `cancelled` | 用户取消 | — |
 | `error` | 任务失败 | — |
 | `webhook` | 回调送达/失败 | `{target,delivered}` |
@@ -245,3 +247,8 @@ dataJson 解析后的对象；省略表示无）。
 - **立绘映射**：`roster.persona` → deepseek/kimi/glm/mimo/minimax 立绘；
   `""` 用通用员工立绘；`human` 用老板立绘。
 - **写操作**：WS 帧（approve/cancel/vote/resume）自带 ack，适合做按钮反馈。
+- **成本预算（M16）**：`config.cost_budget_usd` 超限时任务在 phase 边界转
+  `awaiting_approval`（gate 事件含限额）；每次放行限额翻倍——前端应把这类
+  approval 与设计审批区分展示（detail 带 "cost budget"）。
+- **followup（M16）**：子任务 `board`/`taskInfo` 带 `parent_task_id`；继承产物
+  的 agent 为 `"inherited"`（v1），前端可画「传承」特效。
