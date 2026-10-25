@@ -82,10 +82,24 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
     });
 
     r.get("/crew/tasks", [svc](Context& c) {
+        auto all = svc->listTasks();
+        // 分页（M17）：?limit=N&offset=M（缺省全量；倒序返回最新在前）
+        size_t offset = 0, limit = all.size();
+        if (!c.query("offset").empty()) {
+            offset = static_cast<size_t>(std::strtoull(c.query("offset").c_str(), nullptr, 10));
+        }
+        if (!c.query("limit").empty()) {
+            limit = static_cast<size_t>(std::strtoull(c.query("limit").c_str(), nullptr, 10));
+        }
+        std::reverse(all.begin(), all.end());
+        if (offset >= all.size()) all.clear();
+        else all.erase(all.begin(), all.begin() + static_cast<long>(offset));
+        if (all.size() > limit) all.resize(limit);
         json::JsonValue arr = json::JsonValue::array();
-        for (const CrewTaskInfo& t : svc->listTasks()) arr.push_back(t.toJson());
+        for (const CrewTaskInfo& t : all) arr.push_back(t.toJson());
         json::JsonValue v = json::JsonValue::object();
         v["tasks"] = std::move(arr);
+        v["total"] = static_cast<int64_t>(arr.size());
         c.json(200, v);
     });
 
@@ -198,8 +212,10 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         c.json(200, v);
     });
 
-    // SSE 实时流：订阅 → 推送 → 任务终态后再推尾部并关流
-    r.get("/crew/tasks/:id/events/stream", [svc](Context& c) {
+    // SSE 实时流：订阅 → 泵线程转发 → 终态收尾。
+    // 转发循环跑在独立泵线程（有界 3 分钟），不占用 IO 线程——
+    // 多个观看者同时挂流不再拖垮服务器（M17）。
+    r.get("/crew/tasks/:id/events/stream", [svc](http::Context& c) {
         const std::string id = c.param("id");
         auto sse = SseStream::start(c.connection());
         if (sse == nullptr) return;
@@ -212,7 +228,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         }
 
         auto done = std::make_shared<std::atomic<bool>>(false);
-        // 订阅回调在编排线程触发：经共享队列 + 本地轮询发送，避免跨线程直写连接
+        // 订阅回调在编排线程触发：经共享队列 + 泵线程轮询发送（连接写线程安全）
         auto queue = std::make_shared<std::vector<std::pair<uint64_t, std::string>>>();
         auto qmtx = std::make_shared<std::mutex>();
         const uint64_t subId = svc->subscribe(
@@ -226,26 +242,39 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
                     done->store(true);
                 }
             });
-        auto drain = [&]() {
+        // 定时器驱动转发（M17）：tick 挂在连接所属 loop 上——loop 停即消亡，
+        // 无独立线程、无悬垂（旧实现的 200ms sleep 会占死 IO 线程）。
+        // tick 只做队列交换 + 投递发送（微秒级），不阻塞 loop。
+        struct SseTick {
+            uint64_t timerId = 0;
+            std::atomic<bool> ended{false};
+        };
+        auto tick = std::make_shared<SseTick>();
+        net::EventLoop* loop = c.connection()->loop();
+        auto drain = std::make_shared<std::function<void()>>();
+        *drain = [svc, sse, subId, last, queue, qmtx, done, tick, loop,
+                  drain]() mutable {
+            if (tick->ended.load()) return;
             std::vector<std::pair<uint64_t, std::string>> batch;
             {
                 std::lock_guard<std::mutex> lk(*qmtx);
                 batch.swap(*queue);
             }
-            for (auto& [seq, json] : batch) sse->send(json, "crew", std::to_string(seq));
-        };
-        drain();
-        for (int i = 0; i < 900; ++i) { // 最长挂 3 分钟
-            if (sse->closed()) break;
-            drain();
-            if (done->load()) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            for (auto& [seq, json] : batch) {
+                sse->send(json, "crew", std::to_string(seq));
+            }
+            if (sse->closed() || done->load()) { // 收尾：终态补发 + 关流
+                tick->ended.store(true);
+                svc->unsubscribe(subId);
+                if (!sse->closed()) sse->send("{\"phase\":\"stream_end\"}", "end");
+                sse->close();
+                return;
+            }
             sse->comment("keep-alive");
-        }
-        drain();
-        svc->unsubscribe(subId);
-        sse->send("{\"phase\":\"stream_end\"}", "end");
-        sse->close();
+            tick->timerId = loop->scheduleAfter(
+                std::chrono::milliseconds(200), [drain]() { (*drain)(); });
+        };
+        loop->runInLoop([drain]() { (*drain)(); }); // 首拍在 loop 线程启动
     });
 
     r.get("/crew/tasks/:id/artifacts", [svc](Context& c) {
@@ -383,6 +412,9 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
         std::string task;
         uint64_t subId = 0;
     };
+    struct Beat { // 心跳定时器句柄（watch 时替换为 context 身份）
+        uint64_t timerId = 0;
+    };
     srv.enableWebSocket("/crew/ws",
                         [svc, writeToken](const net::WebSocketSession::Ptr& s) {
         auto watch = std::make_shared<WatchState>();
@@ -430,8 +462,31 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                         s->sendText(e.toJson().dump());
                     }
                     watch->subId = svc->subscribe(task, [s](const CrewEvent& e) {
+                        // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
+                        // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
+                        if (s->connection() != nullptr &&
+                            s->connection()->pendingOutputBytes() > 1024 * 1024) {
+                            s->close(1008, "slow consumer");
+                            return;
+                        }
                         s->sendText(e.toJson().dump()); // runInLoop 投递，跨线程安全
                     });
+                    // 服务端心跳（M17）：30s 自续 ping，死连接及时清理。
+                    // 自持 shared_ptr<function> 模式——scheduleAfter 只存值拷贝
+                    // （栈引用会在消息回调返回后悬垂）。
+                    auto beat = std::make_shared<Beat>();
+                    s->setContext(beat); // 会话身份挂 context（架构红线）
+                    net::EventLoop* loop = s->connection()->loop();
+                    std::weak_ptr<net::WebSocketSession> weak = s;
+                    auto tick = std::make_shared<std::function<void()>>();
+                    *tick = [weak, loop, beat, tick]() {
+                        if (auto sp = weak.lock()) {
+                            sp->ping(); // 关闭由 close 回调 cancel 定时器收尾
+                            beat->timerId = loop->scheduleAfter(
+                                std::chrono::milliseconds(30000), [tick]() { (*tick)(); });
+                        }
+                    };
+                    (*tick)();
                     return;
                 }
                 if (type == "approve") {
@@ -458,10 +513,18 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                 }
             });
 
-        s->setCloseCallback([svc, watch](const net::WebSocketSession::Ptr&) {
-            if (watch->subId != 0) {
-                svc->unsubscribe(watch->subId);
-                watch->subId = 0;
+        s->setCloseCallback([svc, s](const net::WebSocketSession::Ptr& sess) {
+            // 关闭在连接所属 loop 线程：cancel 定时器线程安全
+            if (auto beat = sess->context<Beat>(); beat != nullptr && beat->timerId != 0) {
+                if (sess->connection() != nullptr) {
+                    sess->connection()->loop()->cancel(beat->timerId);
+                }
+            }
+            if (auto watch = sess->context<WatchState>(); watch != nullptr) {
+                if (watch->subId != 0) {
+                    svc->unsubscribe(watch->subId);
+                    watch->subId = 0;
+                }
             }
         });
     });

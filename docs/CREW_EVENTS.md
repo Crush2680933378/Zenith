@@ -15,7 +15,7 @@
 | 聚合板 | `GET /crew/board` | 所有运行中/待审批任务的角色大图（多项目同屏） |
 | 名册 | `GET /crew/roster[?task=ID]` | 角色↔AI 形象/模型映射（选立绘的依据） |
 | 元信息 | `GET /crew/meta` | 特性开关（前端显隐交互元素） |
-| 任务列表 | `GET /crew/tasks` | 大厅视图 |
+| 任务列表 | `GET /crew/tasks?limit=N&offset=M` | 大厅视图（M17 起支持分页，倒序最新在前） |
 | 增量迭代 | `POST /crew/tasks/:id/followup` `{"brief":...,"config"?}` | 基于父任务产物开新版本任务（M16） |
 
 **写操作鉴权**：若 `/crew/meta` 的 `features.write_guard=true`，REST 需带
@@ -101,6 +101,8 @@ dataJson 解析后的对象；省略表示无）。
 | `human_vote_required` | 等待人工投票 | `{question,options}` |
 | `retry` | 推理失败重试 / JSON 自修正重试 | — |
 | `truncate` | 提示词超预算被截断（M16） | —（detail 含 原长→截后长） |
+| `guard` | 护栏动作（M17）：brief 发现项 / 产物 PII 掩码 | `{findings?,score?}` |
+| `exec`（REJECTED） | execVerify 命令被白名单/元字符闸门拒绝（M17） | —（detail 含拒绝原因） |
 | `cancelled` | 用户取消 | — |
 | `error` | 任务失败 | — |
 | `webhook` | 回调送达/失败 | `{target,delivered}` |

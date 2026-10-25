@@ -69,14 +69,8 @@ size_t OtelExporter::pending() const {
     return queue_.size();
 }
 
-size_t OtelExporter::flushLocked() {
-    if (queue_.empty() || cfg_.endpoint.empty()) return 0;
-    std::vector<OtelSpan> batch;
-    batch.reserve(std::min(queue_.size(), cfg_.maxBatch));
-    for (size_t i = 0; i < cfg_.maxBatch && !queue_.empty(); ++i) {
-        batch.push_back(std::move(queue_.back()));
-        queue_.pop_back();
-    }
+size_t OtelExporter::sendBatch(const std::vector<OtelSpan>& batch) {
+    if (batch.empty() || cfg_.endpoint.empty()) return 0;
 
     // OTLP JSON（resourceSpans → scopeSpans → spans）
     using json::JsonValue;
@@ -133,25 +127,32 @@ size_t OtelExporter::flushLocked() {
         exported_.fetch_add(batch.size());
         return batch.size();
     }
-    // 失败回队（保序无所谓，顺序只影响展示）
-    for (OtelSpan& s : batch) queue_.push_back(std::move(s));
     failed_.fetch_add(1);
     return 0;
 }
 
 size_t OtelExporter::flushNow() {
-    std::lock_guard<std::mutex> lk(mtx_);
-    return flushLocked();
+    std::vector<OtelSpan> batch;
+    { // 锁内只做出队（HTTP 上传移出锁外——慢 collector 不再卡收队线程）
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (queue_.empty()) return 0;
+        const size_t n = std::min(queue_.size(), cfg_.maxBatch);
+        batch.assign(queue_.end() - static_cast<long>(n), queue_.end());
+        queue_.erase(queue_.end() - static_cast<long>(n), queue_.end());
+    }
+    const size_t sent = sendBatch(batch);
+    if (sent == 0) { // 失败回队（保序无所谓，顺序只影响展示）
+        std::lock_guard<std::mutex> lk(mtx_);
+        queue_.insert(queue_.end(), batch.begin(), batch.end());
+    }
+    return sent;
 }
 
 void OtelExporter::run() {
     while (running_.load()) {
         std::this_thread::sleep_for(
             std::chrono::milliseconds(cfg_.flushIntervalMs > 0 ? cfg_.flushIntervalMs : 1000));
-        std::lock_guard<std::mutex> lk(mtx_);
-        while (!queue_.empty()) {
-            if (flushLocked() == 0) break; // 失败即退（下轮再试）
-        }
+        flushNow(); // 锁外上传；失败回队下轮再试
     }
 }
 
@@ -159,10 +160,7 @@ void OtelExporter::stop() {
     if (running_.exchange(false)) {
         if (thread_.joinable()) thread_.join();
     }
-    std::lock_guard<std::mutex> lk(mtx_);
-    while (!queue_.empty()) {
-        if (flushLocked() == 0) break; // 端点不可达则丢弃余量
-    }
+    flushNow(); // 端点不可达则回队后丢弃（进程退出）
 }
 
 } // namespace zenith::obs

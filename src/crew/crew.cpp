@@ -14,6 +14,7 @@
 #include <sstream>
 #include <thread>
 
+#include "zenith/ai/guard_service.hpp"
 #include "zenith/ai/provider_router.hpp" // simpleHttpRequest（webhook）
 #include "zenith/http/otel.hpp"
 
@@ -109,6 +110,30 @@ double cosine(const std::vector<double>& a, const std::vector<double>& b) {
     double s = 0;
     for (size_t i = 0; i < a.size() && i < b.size(); ++i) s += a[i] * b[i];
     return s;
+}
+
+/// execVerify 命令闸门：首 token 精确匹配白名单 + 全串禁 shell 元字符。
+/// 返回空串=允许；非空=拒绝原因（LLM 生成的命令不可信——注入防线）
+std::string execRejectReason(const std::string& cmd,
+                             const std::vector<std::string>& allowlist) {
+    const size_t sp = cmd.find_first_of(" 	");
+    const std::string exe = cmd.substr(0, sp);
+    bool allowed = false;
+    for (const std::string& a : allowlist) {
+        if (exe == a) {
+            allowed = true;
+            break;
+        }
+    }
+    if (!allowed) return "executable not in allowlist: " + exe;
+    // shell/cmd 元字符与控制字符全禁（含引号/反斜杠/反引号/换行）
+    static const char kMeta[] = {'&', '|', ';', '>', '<', '`', '$', '(', ')',
+                                 '{', '}', '[', ']', '!', '"', '\'',
+                                 '\\', '\r', '\n', '\0'};
+    if (cmd.find_first_of(kMeta, 0, sizeof(kMeta) - 1) != std::string::npos) {
+        return "shell metacharacters rejected";
+    }
+    return {};
 }
 
 /// 真执行验证（execVerify）：跑命令取输出；exit!=0 视为失败
@@ -374,6 +399,7 @@ CrewEngine::~CrewEngine() {
     for (std::thread& w : workers_) {
         if (w.joinable()) w.join();
     }
+    flushDirtyTasks(); // 去抖窗口内未落盘的任务补写终拍
 }
 
 void CrewEngine::setOptions(EngineOptions opt) {
@@ -425,8 +451,37 @@ void CrewEngine::setOptions(EngineOptions opt) {
 }
 
 void CrewEngine::setInference(std::shared_ptr<ai::IInferenceService> inf) {
-    std::lock_guard<std::mutex> lk(mtx_);
-    inference_ = std::move(inf);
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        inference_ = std::move(inf);
+    }
+    startScheduleIfConfigured(); // 推理就位即可开定时（M17）
+}
+
+void CrewEngine::startScheduleIfConfigured() {
+    std::string expr, brief, cfgJson;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (opt_.scheduleCron.empty() || inference_ == nullptr || cron_ != nullptr) {
+            return;
+        }
+        expr = opt_.scheduleCron;
+        brief = opt_.scheduleBrief;
+        cfgJson = opt_.scheduleConfigJson;
+    }
+    cron_ = std::make_unique<concurrency::CronScheduler>();
+    const uint64_t jobId = cron_->add(expr, [this, brief, cfgJson](int64_t) {
+        CrewConfig cfg;
+        if (!cfgJson.empty()) {
+            auto v = json::JsonValue::parse(cfgJson);
+            if (v) cfg = CrewConfig::fromJson(v.value());
+        }
+        try {
+            createTask(brief, cfg); // 无推理/护栏阻断等异常吞掉，下轮再试
+        } catch (const std::exception&) {
+        }
+    });
+    if (jobId == 0) cron_.reset(); // cron 表达式非法 → 放弃定时
 }
 
 // ---------------------------------------------------------------------------
@@ -503,8 +558,19 @@ void CrewEngine::saveArtifact(TaskPtr t, const std::string& type, const std::str
     a.taskId = t->id;
     a.type = type;
     a.agent = agent;
-    a.content = content;
     a.tsMs = nowMs();
+    if (opt_.guard != nullptr) { // PII 掩码（不改判风险分——产物内容层面的兜底）
+        const std::string masked = opt_.guard->redact(content);
+        if (masked != content) {
+            a.content = masked;
+            emit(t, t->phase, "orchestrator", "guard",
+                 "artifact " + type + " redacted (PII masked)");
+        } else {
+            a.content = content;
+        }
+    } else {
+        a.content = content;
+    }
     {
         std::lock_guard<std::mutex> lk(mtx_);
         int ver = 0;
@@ -741,12 +807,28 @@ void CrewEngine::workerLoop() {
 // ---------------------------------------------------------------------------
 // 组织记忆
 // ---------------------------------------------------------------------------
+std::vector<double> CrewEngine::memoryVec(const std::string& text) {
+    // 语义优先：推理服务 embeddings（可用时）；失败/不可用回退词哈希袋
+    std::shared_ptr<ai::IInferenceService> inf;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        inf = inference_;
+    }
+    if (inf != nullptr) {
+        auto r = inf->embeddings(opt_.memoryEmbedModel, text.substr(0, 512));
+        if (r.ok && r.vector.size() >= 4) {
+            return std::vector<double>(r.vector.begin(), r.vector.end());
+        }
+    }
+    return hashVec(text);
+}
+
 void CrewEngine::memoryRemember(const std::string& brief, const std::string& summary) {
     if (!opt_.memoryEnabled) return;
     MemoryEntry e;
     e.brief = brief.substr(0, 200);
     e.summary = summary.substr(0, 600);
-    e.vec = hashVec(brief);
+    e.vec = memoryVec(brief);
     std::lock_guard<std::mutex> lk(mtx_);
     memory_.push_back(std::move(e));
     if (memory_.size() > 256) memory_.erase(memory_.begin());
@@ -755,12 +837,13 @@ void CrewEngine::memoryRemember(const std::string& brief, const std::string& sum
 
 std::vector<CrewEngine::MemoryEntry> CrewEngine::memoryRecall(const std::string& brief,
                                                               size_t k) {
-    const std::vector<double> q = hashVec(brief);
+    const std::vector<double> q = memoryVec(brief);
     std::lock_guard<std::mutex> lk(mtx_);
     std::vector<std::pair<double, size_t>> scored;
     for (size_t i = 0; i < memory_.size(); ++i) {
+        if (memory_[i].vec.size() != q.size()) continue; // 混合后端维度不一致 → 跳过
         const double s = cosine(q, memory_[i].vec);
-        if (s > 0.15) scored.emplace_back(s, i);
+        if (s > 0.5) scored.emplace_back(s, i); // 语义向量阈值高于词哈希
     }
     std::sort(scored.begin(), scored.end(),
               [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -823,6 +906,9 @@ json::JsonValue CrewEngine::taskToJson(const TaskPtr& t) {
     v["phase"] = phaseName(t->phase);
     v["running"] = t->running;
     v["interrupted"] = t->interrupted.load();
+    v["parent_task_id"] = t->parentTaskId;
+    v["followup_mode"] = t->followupMode;
+    v["budget_approvals"] = t->budgetApprovals;
     v["error"] = t->error;
     v["created_ms"] = t->createdMs;
     v["updated_ms"] = t->updatedMs;
@@ -841,16 +927,78 @@ json::JsonValue CrewEngine::taskToJson(const TaskPtr& t) {
     return v;
 }
 
-void CrewEngine::persistTask(const TaskPtr& t) {
+void CrewEngine::persistTask(const TaskPtr& t, bool immediate) {
     if (opt_.persistDir.empty()) return;
+    constexpr int64_t kDebounceMs = 1500;
+    const int64_t now = nowMs();
+    if (!immediate) { // 去抖：风暴期合并写（O(N²) 写放大 → 频率有界）
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (now - t->lastPersistMs < kDebounceMs) {
+            t->persistDirty = true;
+            return;
+        }
+    }
+    std::string json;
+    { // 锁内取快照（并行实现线程可能同时在追加 artifacts——无锁读会崩）
+        std::lock_guard<std::mutex> lk(mtx_);
+        t->lastPersistMs = now;
+        t->persistDirty = false;
+        json = taskToJson(t).dump();
+    }
     const std::string path = opt_.persistDir + "/" + t->id + ".json";
     const std::string tmp = path + ".tmp";
     std::ofstream f(tmp, std::ios::binary);
     if (!f) return;
-    f << taskToJson(t).dump();
+    f << json;
     f.close();
     std::remove(path.c_str());
     std::rename(tmp.c_str(), path.c_str());
+}
+
+void CrewEngine::flushDirtyTasks() {
+    if (opt_.persistDir.empty()) return;
+    std::vector<TaskPtr> dirty;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        for (auto& [id, t] : tasks_) {
+            if (t->persistDirty) dirty.push_back(t);
+        }
+    }
+    for (const TaskPtr& t : dirty) persistTask(t, true);
+}
+
+void CrewEngine::sweepExpiredTasks() {
+    if (opt_.taskTtlSec <= 0 && opt_.maxRetainedTasks <= 0) return;
+    const int64_t now = nowMs();
+    std::vector<std::string> drop;
+    std::vector<std::pair<int64_t, std::string>> terminal; // updatedMs 升序
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        for (auto& [id, t] : tasks_) {
+            const bool terminalState = !t->running &&
+                                       (t->phase == CrewPhase::Done ||
+                                        t->phase == CrewPhase::Failed ||
+                                        t->phase == CrewPhase::Cancelled);
+            if (!terminalState) continue;
+            if (opt_.taskTtlSec > 0 &&
+                now - t->updatedMs > static_cast<int64_t>(opt_.taskTtlSec) * 1000) {
+                drop.push_back(id);
+            } else {
+                terminal.emplace_back(t->updatedMs, id);
+            }
+        }
+        if (opt_.maxRetainedTasks > 0 &&
+            terminal.size() > static_cast<size_t>(opt_.maxRetainedTasks)) {
+            std::sort(terminal.begin(), terminal.end());
+            const size_t extra =
+                terminal.size() - static_cast<size_t>(opt_.maxRetainedTasks);
+            for (size_t i = 0; i < extra; ++i) drop.push_back(terminal[i].second);
+        }
+        for (const std::string& id : drop) tasks_.erase(id);
+    }
+    for (const std::string& id : drop) { // 同步删持久化文件
+        std::remove((opt_.persistDir + "/" + id + ".json").c_str());
+    }
 }
 
 void CrewEngine::loadPersisted() {
@@ -943,6 +1091,9 @@ void CrewEngine::loadPersisted() {
                               t->phase == CrewPhase::Cancelled;
         t->running = false;
         t->interrupted.store(false);
+        t->parentTaskId = j["parent_task_id"].asString();
+        t->followupMode = j["followup_mode"].asBool(false);
+        t->budgetApprovals = static_cast<int>(j["budget_approvals"].asInt(0));
         t->resumable = (wasRunning || wasInterrupted) && !terminal;
         if (t->resumable) t->error = "interrupted by restart";
         std::lock_guard<std::mutex> lk(mtx_);
@@ -980,7 +1131,7 @@ void CrewEngine::fireWebhook(const TaskPtr& t, const char* event) {
 void CrewEngine::waitApproval(const TaskPtr& t, const std::string& reason) {
     t->phase = CrewPhase::AwaitingApproval;
     emit(t, t->phase, "orchestrator", "approval", "paused: " + reason);
-    persistTask(t);
+    persistTask(t, true);
     fireWebhook(t, "awaiting_approval");
     const int timeoutMs = t->cfg.approvalTimeoutSec * 1000;
     for (int i = 0; i < timeoutMs / 100 + 1; ++i) {
@@ -1032,12 +1183,21 @@ bool CrewEngine::checkCancel(const TaskPtr& t) {
     t->phase = CrewPhase::Cancelled;
     t->error = "cancelled by user";
     emit(t, t->phase, "orchestrator", "cancelled", "task cancelled");
-    persistTask(t);
+    persistTask(t, true);
     fireWebhook(t, "cancelled");
     return true;
 }
 
 std::string CrewEngine::createTask(const std::string& brief, const CrewConfig& cfg) {
+    sweepExpiredTasks(); // 惰性淘汰（频率=开任务频率，零定时器）
+    if (opt_.guard != nullptr) { // 输入护栏：注入短语阻断（PII 由 redact 兜底）
+        ai::GuardResult g = opt_.guard->inspect(brief);
+        if (g.blocked) {
+            std::string why;
+            for (const ai::GuardFinding& f : g.findings) why += f.type + " ";
+            throw std::runtime_error("brief blocked by guard: " + why);
+        }
+    }
     TaskPtr t = std::make_shared<TaskState>();
     t->brief = brief;
     t->cfg = cfg;
@@ -1062,6 +1222,19 @@ std::string CrewEngine::createTask(const std::string& brief, const CrewConfig& c
     t->running = true;
     emit(t, CrewPhase::Pending, "orchestrator", "phase",
          "task created: " + brief.substr(0, 60));
+    if (opt_.guard != nullptr) { // 非阻断发现项（如轻度 PII）→ 观测事件
+        ai::GuardResult g = opt_.guard->inspect(brief);
+        if (!g.findings.empty()) {
+            json::JsonValue fs = json::JsonValue::array();
+            for (const ai::GuardFinding& f : g.findings) fs.push_back(f.type);
+            json::JsonValue d = json::JsonValue::object();
+            d["findings"] = std::move(fs);
+            d["score"] = g.score;
+            emit(t, CrewPhase::Pending, "orchestrator", "guard",
+                 "brief guard findings (score " + std::to_string(g.score) + ")",
+                 d.dump());
+        }
+    }
     enqueue(t);
     return t->id;
 }
@@ -1367,7 +1540,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
             t->resumable = false;
         }
         emit(t, t->phase, "orchestrator", "phase", "task done");
-        persistTask(t);
+        persistTask(t, true);
         fireWebhook(t, "done");
     } catch (const CrewCancelled&) {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -1388,7 +1561,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
     if (t->phase == CrewPhase::Failed || t->phase == CrewPhase::Cancelled) {
         emit(t, t->phase, "orchestrator",
              t->phase == CrewPhase::Failed ? "error" : "cancelled", t->error);
-        persistTask(t);
+        persistTask(t, true);
         if (t->phase == CrewPhase::Failed) {
             fireWebhook(t, "failed");
         } else {
@@ -1396,7 +1569,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
         }
     } else if (t->interrupted.load()) {
         emit(t, t->phase, "orchestrator", "gate", "interrupted; persist for resume");
-        persistTask(t);
+        persistTask(t, true);
     }
 }
 
@@ -1502,6 +1675,12 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
             if (cmds != nullptr && !cmds->empty()) {
                 for (const json::JsonValue& c : *cmds) {
                     const std::string cmd = c.asString();
+                    const std::string reject = execRejectReason(cmd, opt_.execAllowlist);
+                    if (!reject.empty()) {
+                        emit(t, t->phase, "orchestrator", "exec",
+                             cmd + " → REJECTED (" + reject + ")");
+                        continue;
+                    }
                     std::string out;
                     const bool ok = runCommand(cmd, out);
                     emit(t, t->phase, "orchestrator", "exec",
@@ -1728,8 +1907,10 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
                 reason = v["reason"].asString();
             }
         }
-        if (std::find(spec.options.begin(), spec.options.end(), choice) ==
-            spec.options.end()) {
+        const bool abstain = spec.allowAbstain && choice == "abstain";
+        if (!abstain &&
+            std::find(spec.options.begin(), spec.options.end(), choice) ==
+                spec.options.end()) {
             choice = spec.options.front(); // 非法票 → 默认首项（记录原始 reason）
             reason = "[invalid vote coerced] " + reason;
         }
@@ -1742,7 +1923,7 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
                 if (rd.role == voter) weight = rd.voteWeight;
             }
         }
-        tally[choice] += weight;
+        if (!abstain) tally[choice] += weight; // 弃权不计票
         // M15：逐票即时事件（会议动画：依次亮牌）
         json::JsonValue d = json::JsonValue::object();
         d["question"] = spec.question;
@@ -1753,17 +1934,34 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
         emit(t, t->phase, voter, "vote_cast", voter + " → " + choice, d.dump());
     }
 
+    // 破平：按 options 声明顺序取最大票（确定性，不依赖 map 字典序）
     std::string winner;
     int best = -1;
-    for (const auto& [opt, n] : tally) {
-        if (static_cast<int>(n) > best) {
-            best = static_cast<int>(n);
+    for (const std::string& opt : spec.options) {
+        const auto it = tally.find(opt);
+        if (it != tally.end() && static_cast<int>(it->second) > best) {
+            best = static_cast<int>(it->second);
             winner = opt;
         }
     }
     rec.winner = winner;
+    // 法定人数：有效票（非弃权）不足 → 结果空 + gate 说明（调用方决定重试）
+    int validVotes = 0;
     for (const auto& [agent, choice] : rec.votes) {
-        if (agent == "architect" && choice == winner && !reasons["architect"].empty()) {
+        if (choice != "abstain") ++validVotes;
+    }
+    if (spec.quorum > 0 && validVotes < spec.quorum) {
+        rec.winner = "";
+        rec.reason = "quorum not met (" + std::to_string(validVotes) + "/" +
+                     std::to_string(spec.quorum) + ")";
+        json::JsonValue qd = json::JsonValue::object();
+        qd["valid_votes"] = validVotes;
+        qd["quorum"] = spec.quorum;
+        emit(t, t->phase, "orchestrator", "gate", "vote quorum not met", qd.dump());
+    }
+    for (const auto& [agent, choice] : rec.votes) {
+        if (agent == "architect" && choice == rec.winner &&
+            !reasons["architect"].empty()) {
             rec.reason = reasons["architect"];
             break;
         }

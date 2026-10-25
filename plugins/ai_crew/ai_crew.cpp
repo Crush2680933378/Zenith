@@ -14,14 +14,22 @@
 //    crew.memory.enabled     组织记忆开关（默认 true）
 //    crew.cost.promptPerM    成本估算 $/百万 prompt token
 //    crew.cost.completionPerM 成本估算 $/百万 completion token
-//    crew.max.prompt.chars    提示词字符上限（默认 24000；-1 关闭截断）
+//    crew.max.prompt.chars    提示词默认字符上限（默认 24000；-1 关闭）
+//    crew.exec.allowlist      execVerify 可执行名白名单（逗号分隔；默认仅 echo）
+//    crew.task.ttl.sec        终态任务保留秒数（0=不淘汰）
+//    crew.task.max.retained   最大保留终态任务数（0=不限）
+//    crew.memory.embed.model  组织记忆 embeddings 模型（空=服务默认/哈希回退）
+//    crew.guard.enabled=true  启用输入护栏（配置复用 ai.guard.config）
+//    crew.schedule.cron/brief/config  定时开任务（5 字段 cron）
 // ============================================================================
 #include <cstdlib>
 #include <new>
 
 #include "zenith/abi/zenith_abi.h"
 
+#include "zenith/ai/guard_service.hpp"
 #include "zenith/crew/crew.hpp"
+#include "zenith/json/json.hpp"
 #include "zenith/plugin/service_registry.hpp"
 
 namespace {
@@ -56,6 +64,31 @@ zenith_status pluginInit(const zenith_host_api* host) {
         confString(host, "crew.max.concurrent").empty()) {
         opt.maxConcurrentTasks = 4; // atoi("")==0 兜底
     }
+    opt.taskTtlSec = std::max(0, std::atoi(confString(host, "crew.task.ttl.sec").c_str()));
+    opt.maxRetainedTasks =
+        std::max(0, std::atoi(confString(host, "crew.task.max.retained").c_str()));
+    opt.memoryEmbedModel = confString(host, "crew.memory.embed.model");
+    opt.scheduleCron = confString(host, "crew.schedule.cron");
+    opt.scheduleBrief = confString(host, "crew.schedule.brief");
+    opt.scheduleConfigJson = confString(host, "crew.schedule.config");
+    if (confString(host, "crew.guard.enabled") == "true") {
+        // 复用 ai_guard 插件同款配置键构造护栏（注入阻断 + PII 掩码）
+        zenith::ai::GuardInspector::Config gc;
+        const std::string gj = confString(host, "ai.guard.config");
+        if (!gj.empty()) {
+            auto v = zenith::json::JsonValue::parse(gj);
+            if (v && v.value().isObject()) {
+                gc.blockScore = static_cast<int>(v.value()["blockScore"].asInt(60));
+                if (const auto* ex = v.value()["extraPhrases"].asArray()) {
+                    for (const auto& e : *ex) gc.extraPhrases.push_back(e.asString());
+                }
+                if (const auto* al = v.value()["allowlist"].asArray()) {
+                    for (const auto& a : *al) gc.allowlist.push_back(a.asString());
+                }
+            }
+        }
+        opt.guard = std::make_shared<zenith::ai::GuardInspector>(std::move(gc));
+    }
     {
         const std::string pp = confString(host, "crew.cost.promptPerM");
         const std::string pc = confString(host, "crew.cost.completionPerM");
@@ -63,6 +96,19 @@ zenith_status pluginInit(const zenith_host_api* host) {
         if (!pc.empty()) opt.priceCompletionPerM = std::atof(pc.c_str());
         const std::string mp = confString(host, "crew.max.prompt.chars");
         if (!mp.empty()) opt.maxPromptChars = std::atoi(mp.c_str());
+        const std::string al = confString(host, "crew.exec.allowlist");
+        if (!al.empty()) {
+            opt.execAllowlist.clear();
+            std::string cur;
+            for (char ch : al + ",") {
+                if (ch == ',') {
+                    if (!cur.empty()) opt.execAllowlist.push_back(cur);
+                    cur.clear();
+                } else {
+                    cur.push_back(ch);
+                }
+            }
+        }
     }
 
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_crew", 0,

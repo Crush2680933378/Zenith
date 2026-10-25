@@ -201,12 +201,16 @@ async function detailView(id){
     if(!(ja.artifacts||[]).length) ad.innerHTML='<span class="muted">暂无</span>';
   }
 
-  const quietTypes={'token':1,'webhook':1};
+  const quietTypes={'token':1,'webhook':1,'truncate':1,'guard':1};
   function appendEvent(e){
     const box=$('#events');if(!box)return;
     if(quietTypes[e.type]&&box.children.length>60)return; // token 流限流
+    let pre='';
+    if(e.type==='approval'&&e.detail.indexOf('cost budget')>=0) pre='[预算] ';
+    if(e.type==='guard') pre='[护栏] ';
+    if(e.type==='truncate') pre='[截断] ';
     const line='<div class="ev '+esc(e.type)+'"><span class="t">#'+e.seq+'</span> '+
-     '<span class="ph">['+esc(e.phase)+']</span> <span class="who">'+esc(e.agent)+
+     '<span class="ph">['+esc(e.phase)+']</span> '+pre+'<span class="who">'+esc(e.agent)+
      '</span> '+esc(e.detail)+'</div>';
     box.insertAdjacentHTML('beforeend',line);
     box.scrollTop=box.scrollHeight;

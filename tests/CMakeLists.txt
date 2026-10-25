@@ -155,6 +155,14 @@ zenith_set_warnings(test_m13f)
 add_test(NAME test_m13f COMMAND test_m13f)
 set_tests_properties(test_m13f PROPERTIES TIMEOUT 180)
 
+# M17 优化全包（SSE 线程化/exec 白名单/去抖/淘汰/语义记忆/guard/定时/投票/分页）
+add_executable(test_m13g test_m13g.cpp)
+target_link_libraries(test_m13g PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m13g PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m13g)
+add_test(NAME test_m13g COMMAND test_m13g)
+set_tests_properties(test_m13g PROPERTIES TIMEOUT 300)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

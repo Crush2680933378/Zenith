@@ -67,7 +67,7 @@ public:
 
 private:
     void run();
-    size_t flushLocked();
+    size_t sendBatch(const std::vector<OtelSpan>& batch); // 锁外上传
 
     OtelConfig cfg_;
     mutable std::mutex mtx_;

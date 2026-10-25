@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "zenith/ai/inference_service.hpp"
+#include "zenith/concurrency/cron.hpp"
 #include "zenith/core/export.hpp"
 #include "zenith/core/result.hpp"
 #include "zenith/json/json.hpp"
@@ -36,6 +37,10 @@
 namespace zenith::obs {
 class OtelExporter;
 } // namespace zenith::obs
+
+namespace zenith::ai {
+class GuardInspector; // 前置声明（选项持引用，定义见 ai/guard_service.hpp）
+} // namespace zenith::ai
 
 namespace zenith::crew {
 
@@ -182,6 +187,16 @@ struct EngineOptions {
     double pricePromptPerM = 0.0;       // 成本估算（$/百万 token；0 = 只记 token）
     double priceCompletionPerM = 0.0;
     int maxPromptChars = 24000;         // 提示词默认字符上限（任务级可覆盖；<0 关闭）
+    std::vector<std::string> execAllowlist = {"echo"}; // execVerify 允许的可执行名
+    // ---- M17：耐久/智能/运营 ----
+    int taskTtlSec = 0;                 // 终态任务保留秒数（0=不淘汰；惰性清扫）
+    int maxRetainedTasks = 0;           // 最大保留终态任务数（0=不限；超出淘汰最旧）
+    std::string memoryEmbedModel;       // 组织记忆 embeddings 模型（空=服务默认；
+                                        // 不可用时回退词哈希向量）
+    std::shared_ptr<ai::GuardInspector> guard; // 输入护栏（注入阻断/PII 掩码）
+    std::string scheduleCron;           // 定时开任务（5 字段 cron；空=不定时）
+    std::string scheduleBrief;          // 定时任务 brief
+    std::string scheduleConfigJson;     // 定时任务 CrewConfig JSON
     std::shared_ptr<obs::OtelExporter> otel; // 全链路 span 导出
 };
 
@@ -278,6 +293,8 @@ public:
         std::string question;
         std::vector<std::string> options;
         std::vector<std::string> voters; // 角色名/“human”；空 = 全员
+        bool allowAbstain = false; // “abstain” 合法票：记录但不计入 tally（M17）
+        int quorum = 0;            // 最少有效票数；不足 → winner 空 + gate 事件
     };
     [[nodiscard]] VoteRecord runVote(const std::string& taskId, const VoteSpec& spec);
 
@@ -302,6 +319,8 @@ private:
         std::string parentTaskId;  // M16：followup 来源
         bool followupMode = false; // 各角色提示词携带既有产物做增量更新
         int budgetApprovals = 0;   // M16：预算放行次数（每次放行限额 ×(n+1)）
+        int64_t lastPersistMs = 0; // M17：持久化去抖
+        bool persistDirty = false; // M17：去抖窗口内被跳过的写（终拍/析构补写）
         std::string error;
         std::vector<CrewEvent> events;
         std::vector<Artifact> artifacts;
@@ -363,8 +382,11 @@ private:
     // 受管线程池
     void enqueue(const TaskPtr& t);
     void workerLoop();
-    // 持久化
-    void persistTask(const TaskPtr& t);
+    // 持久化（M17：去抖——非立即写合并风暴；immediate=true 绕过去抖）
+    void persistTask(const TaskPtr& t, bool immediate = false);
+    void flushDirtyTasks();                    // 析构/终拍前补写
+    void sweepExpiredTasks();                  // 惰性淘汰（createTask 时）
+    std::vector<double> memoryVec(const std::string& text); // 语义向量（回退哈希）
     void loadPersisted();
     json::JsonValue taskToJson(const TaskPtr& t);
     // 组织记忆（hash 向量 + 余弦暴力检索）
@@ -380,6 +402,8 @@ private:
 
     EngineOptions opt_;
     std::vector<RoleDef> roles_;
+    std::unique_ptr<concurrency::CronScheduler> cron_; // M17：定时开任务
+    void startScheduleIfConfigured();
     std::map<std::string, std::string> personas_; // 角色 → 形象覆盖（roster 用）
     std::shared_ptr<ai::IInferenceService> inference_;
     std::mutex mtx_;                        // tasks_/subs_/queue_ 保护
