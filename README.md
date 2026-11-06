@@ -175,12 +175,13 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 
 | 平台 | 构建 | 测试 | 说明 |
 |---|---|---|---|
-| Windows · MinGW-w64 | ✅ | ✅ 43/43 | WSAPoll 后端；**MSVC 尚未验证** |
+| Windows · MinGW-w64 | ✅ | ✅ 43/43 | WSAPoll 后端；**发布包用它的产物** |
+| Windows · MSVC | ✅ | — | 构建通过（`ZENITH_TLS=none`）；测试尚未接入 |
 | Linux · GCC / Clang+Coro | ✅ | ✅ 43/43 | epoll 后端；Clang 任务额外跑协程层 |
 | macOS · Apple Clang | ✅ | ⚠️ 41/43 | kqueue 后端；2 套 AI 编排用例跟踪中（[#3](https://github.com/Crush2680933378/Zenith/issues/3)） |
 
-> **Windows 编译器范围**：CI 只覆盖 MinGW-w64（产物 `libzenith.dll.a`）。MSVC 用户暂时
-> 无法直接链接（缺 `.lib` 导入库）——确有需要请开 Issue，我们再补 MSVC 构建矩阵。
+> **Windows 说明**：发布包由 MinGW-w64 构建（`libzenith.dll.a`）。MSVC 目前只验证到
+> 「能编过」——导入库、测试、OpenSSL 均未接入；需要 MSVC 产出 `.lib` 请开 Issue。
 
 ## 文档导航
 

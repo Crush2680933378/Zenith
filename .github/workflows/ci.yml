@@ -247,11 +247,10 @@ jobs:
           grep -q "Hello, Zenith!" /tmp/hello.txt
           docker rm -f zenith-ci
 
-  # MSVC：README 写明了「Windows 目前只覆盖 MinGW」，这条 job 用来探路。
-  # 先非阻塞（失败可见但不卡合并），把编译错误逐个清完再转阻塞。
+  # MSVC：验证「Windows 也能用 MSVC 编过」。目前不带 TLS（无 OpenSSL 依赖），
+  # 也不跑测试——完整支持（含 TLS + 测试）留给后续。
   windows-msvc:
     runs-on: windows-latest
-    continue-on-error: true
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
