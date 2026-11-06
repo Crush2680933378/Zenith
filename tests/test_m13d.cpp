@@ -34,9 +34,9 @@ public:
     std::atomic<int> implInFlight{0}, implMaxInFlight{0};
     std::atomic<int> chatSleepMs{0};
     // 行为开关
-    int pmBadJsonTimes = 0;         // PM 前 N 次回非法 JSON
-    bool voteAlwaysRevise = false;  // PRD 评审全员 revise（辩论测试）
-    bool streamDeltas = false;      // 回调 onToken
+    std::atomic<int> pmBadJsonTimes{0};         // PM 前 N 次回非法 JSON
+    std::atomic<bool> voteAlwaysRevise{false};  // PRD 评审全员 revise（辩论测试）
+    std::atomic<bool> streamDeltas{false};      // 回调 onToken
     int64_t usageIn = 0, usageOut = 0;
     std::string deliveryMarker = "ROLE: DELIVERY";
     std::vector<std::pair<std::string, std::string>> extraTesterCommands;  // exec 验证

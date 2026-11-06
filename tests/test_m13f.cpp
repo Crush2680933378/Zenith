@@ -24,7 +24,7 @@ public:
     std::vector<std::string> testerPrompts;
     std::vector<std::string> pmPrompts;
     int64_t usageIn = 0, usageOut = 0;
-    bool countUsage = false;
+    std::atomic<bool> countUsage{false};
 
     ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {

@@ -23,7 +23,7 @@ class Rec final : public ai::IInferenceService {
 public:
     std::vector<ai::ModelInfo> models() override { return {}; }
     std::atomic<int> chatSleepMs{0};
-    bool alwaysRevise = false;
+    std::atomic<bool> alwaysRevise{false};
     ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {
         const std::string& sys = req.messages.front().content;
