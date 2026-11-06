@@ -300,7 +300,9 @@ struct WebSocketClient::Pending {
     http::HttpResponseParser parser;
     OpenCallback onOpen;
     FailCallback onFail;
-    TcpConnection::Ptr conn;
+    // 弱引用：conn 的消息回调捕获了本结构（conn → closure → Pending），
+    // 这里再强持有 conn 就成环，连接关闭后整组对象释放不掉。
+    std::weak_ptr<TcpConnection> conn;
     net::EventLoop* loop = nullptr;
     uint64_t timerId = 0;
     bool done = false;
@@ -392,7 +394,7 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
             st->timerId = loop->scheduleAfter(std::chrono::milliseconds(timeoutMs), [st] {
                 if (st->done) return;
                 st->done = true;
-                if (st->conn) st->conn->forceClose();
+                if (auto c = st->conn.lock()) c->forceClose();
                 if (st->onFail) st->onFail("websocket upgrade timeout");
             });
             conn->setMessageCallback([st, expectedAccept](const TcpConnection::Ptr&,
@@ -401,7 +403,7 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
                 if (out.failed()) {
                     if (!st->done) {
                         st->done = true;
-                        if (st->conn) st->conn->forceClose();
+                        if (auto c = st->conn.lock()) c->forceClose();
                         if (st->onFail) st->onFail("bad upgrade response");
                     }
                     return;
@@ -414,7 +416,7 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
                 if (!upgraded) {
                     if (!st->done) {
                         st->done = true;
-                        if (st->conn) st->conn->forceClose();
+                        if (auto c = st->conn.lock()) c->forceClose();
                         if (st->onFail) {
                             st->onFail("upgrade rejected (status=" + std::to_string(resp.status) +
                                        ")");
@@ -430,7 +432,12 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
                 const std::string leftover = st->parser.releaseLeftover();
                 net::EventLoop* wsLoop = st->loop;
                 wsLoop->queueInLoop([st, leftover]() mutable {
-                    auto session = WebSocketSession::takeover(st->conn, /*clientSide=*/true);
+                    auto c = st->conn.lock();
+                    if (!c) {  // 连接在排队期间已断开
+                        if (st->onFail) st->onFail("connection closed before upgrade");
+                        return;
+                    }
+                    auto session = WebSocketSession::takeover(std::move(c), /*clientSide=*/true);
                     session->processPending(leftover);
                     if (st->onOpen) st->onOpen(session);
                 });
