@@ -224,9 +224,7 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
         }
 
         uint64_t start = 0, end = size == 0 ? 0 : size - 1;
-        bool partial = false;
         if (!range.empty() && size > 0 && parseRange(range, size, start, end)) {
-            partial = true;
             c.status(206);
             c.setHeader("Content-Range",
                         "bytes " + std::to_string(start) + "-" + std::to_string(end) + "/" +

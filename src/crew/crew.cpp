@@ -1659,9 +1659,9 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
         emit(t, t->phase, "orchestrator", "phase",
              cycle == 0 ? "enter test"
                         : "retest after fix (cycle " + std::to_string(cycle) + ")");
-        std::string prompt = "PRD:\n" + prd + "\nAPI contract:\n" + contract;
+        std::string testPrompt = "PRD:\n" + prd + "\nAPI contract:\n" + contract;
         if (cycle > 0) {
-            prompt += t->cfg.strictRetest
+            testPrompt += t->cfg.strictRetest
                           ? "\nPreviously failing issues:\n" + t->lastIssues +
                                 "\nThe responsible developer submitted a fix. RETEST "
                                 "now: verify each previously failing case against the "
@@ -1669,9 +1669,9 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
                           : "\nPrevious bugs were fixed by backend/frontend. RETEST "
                             "now: mark all previously failing cases as pass.";
         } else {
-            prompt += "\nProduce test cases and results JSON now.";
+            testPrompt += "\nProduce test cases and results JSON now.";
         }
-        const std::string tr = chatJson(t, "tester", prompt, {"cases", "results"});
+        const std::string tr = chatJson(t, "tester", testPrompt, {"cases", "results"});
         saveArtifact(t, "tests", "tester", tr);
         const json::JsonValue results = extractJson(tr)["results"];
         const auto* arr = results.asArray();
@@ -2136,6 +2136,64 @@ core::Result<void> CrewEngine::castHumanVote(const std::string& id,
     it->second->humanBallot = choice;
     it->second->humanBallotSet.store(true);
     return core::Result<void>::Ok();
+}
+
+std::string CrewEngine::exportMarkdown(const std::string& id) {
+    TaskPtr t;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        auto it = tasks_.find(id);
+        if (it == tasks_.end()) return {};
+        t = it->second;
+    }
+    std::string md;
+    md += "# Zenith Crew 交付报告\n\n";
+    md += "- **任务**: " + t->id + "\n";
+    md += "- **需求**: " + t->brief + "\n";
+    md += "- **状态**: " + std::string(phaseName(t->phase));
+    if (!t->error.empty()) md += "（" + t->error + "）";
+    md += "\n";
+    if (!t->parentTaskId.empty()) md += "- **迭代自**: " + t->parentTaskId + "\n";
+    double cost = 0;
+    uint64_t tokIn = 0, tokOut = 0;
+    for (const auto& [role, u] : t->usage) {
+        cost += u.costUsd;
+        tokIn += u.tokensIn;
+        tokOut += u.tokensOut;
+    }
+    if (cost > 0 || tokIn > 0) {
+        md += "- **成本**: $" + std::to_string(cost) + "（in " +
+              std::to_string(tokIn) + " / out " + std::to_string(tokOut) + " tok）\n";
+    }
+    md += "\n## 决策记录\n\n";
+    if (t->votes.empty()) md += "_无_\n";
+    for (const VoteRecord& v : t->votes) {
+        md += "### " + v.question + "\n\n";
+        for (const auto& [agent, choice] : v.votes) {
+            md += "- " + agent + " → **" + choice + "**\n";
+        }
+        md += "\n结论: **" + (v.winner.empty() ? "(无)" : v.winner) + "** — " + v.reason +
+              "\n\n";
+    }
+    md += "## 事件时间线\n\n| 阶段 | 角色 | 事件 | 说明 |\n|---|---|---|---|\n";
+    for (const CrewEvent& e : t->events) {
+        if (e.type == "token") continue; // token 流不入报告
+        std::string det = e.detail;
+        det.erase(std::remove(det.begin(), det.end(), '|'), det.end()); // 表格转义
+        md += std::string("| ") + phaseName(e.phase) + " | " + e.agent + " | " + e.type +
+              " | " + det + " |\n";
+    }
+    md += "\n## 产物清单\n\n| 产物 | 版本 | 作者 |\n|---|---|---|\n";
+    for (const Artifact& a : t->artifacts) {
+        md += "| " + a.type + " | v" + std::to_string(a.version) + " | " + a.agent + " |\n";
+    }
+    // 评分卡（如有）
+    for (size_t i = t->artifacts.size(); i-- > 0;) {
+        if (t->artifacts[i].type != "scorecard") continue;
+        md += "\n## 质量评分卡\n\n```json\n" + t->artifacts[i].content + "\n```\n";
+        break;
+    }
+    return md;
 }
 
 std::string CrewEngine::exportBundle(const std::string& id) {

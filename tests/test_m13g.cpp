@@ -37,6 +37,7 @@ public:
     std::vector<std::string> commands; // tester 输出的 exec 命令
     bool embeddingsOk = false;
     bool piiInDetail = false; // tester detail 塞邮箱（redact 用例）
+    int chatSleepMs = 0;      // 慢速（并发池观测用）
     // 语义分组：voting/poll/survey/questionnaire 同向；game/match 另一向
     std::set<std::string> clusterA = {"voting", "poll", "survey", "questionnaire"};
 
@@ -61,6 +62,9 @@ public:
         {
             std::lock_guard<std::mutex> lk(m);
             if (role == "pm") pmPrompts.push_back(user);
+        }
+        if (chatSleepMs > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(chatSleepMs));
         }
         ai::ChatResult r;
         r.ok = true;
@@ -482,6 +486,97 @@ ZTEST(CrewM17, HttpTaskPagination) {
     loop.stop();
     t.join();
     io.stop();
+}
+
+/* ---------------- P1：Markdown 交付报告 ---------------- */
+
+ZTEST(CrewM18, MarkdownReportContent) {
+    crew::CrewEngine eng;
+    eng.setInference(std::make_shared<Rec>());
+    const std::string id = eng.createTask("report content check");
+    waitTerminal(eng, id);
+    const std::string md = eng.exportMarkdown(id);
+    ZEXPECT_FALSE(md.empty());
+    ZEXPECT_TRUE(md.find("# Zenith Crew") != std::string::npos);
+    ZEXPECT_TRUE(md.find("## 决策记录") != std::string::npos);
+    ZEXPECT_TRUE(md.find("## 事件时间线") != std::string::npos);
+    ZEXPECT_TRUE(md.find("## 产物清单") != std::string::npos);
+    ZEXPECT_TRUE(md.find("## 质量评分卡") != std::string::npos);
+    ZEXPECT_TRUE(md.find("storage") != std::string::npos); // 投票议题在内
+    // HTTP 端点
+    net::EventLoop loop;
+    net::EventLoopThreadPool io{1};
+    io.start();
+    http::HttpServer srv(&loop, &io);
+    auto svc = std::make_shared<crew::CrewEngine>();
+    svc->setInference(std::make_shared<Rec>());
+    const std::string id2 = svc->createTask("http report");
+    for (int i = 0; i < 400; ++i) {
+        auto st = svc->taskInfo(id2);
+        if (st && !st.value().running) break;
+        std::this_thread::sleep_for(50ms);
+    }
+    crew::mountCrewApi(srv.router(), svc);
+    (void)srv.listen("127.0.0.1", 0);
+    std::thread t([&] { loop.loop(); });
+    std::this_thread::sleep_for(200ms);
+    ai::SimpleHttpCall call;
+    call.method = "GET";
+    call.url = "http://127.0.0.1:" + std::to_string(srv.port()) +
+               "/crew/tasks/" + id2 + "/report.md";
+    auto res = ai::simpleHttpRequest(call);
+    ZEXPECT_TRUE(res.ok);
+    ZEXPECT_TRUE(res.body.find("text/markdown") != std::string::npos ||
+                 res.body.find("# Zenith Crew") != std::string::npos);
+    loop.stop();
+    t.join();
+    io.stop();
+}
+
+/* ---------------- P1：并发池上限 ---------------- */
+
+ZTEST(CrewM18, ConcurrencyCapRespected) {
+    crew::EngineOptions opt;
+    opt.maxConcurrentTasks = 2; // 池上限 2
+    crew::CrewEngine eng(opt);
+    RecPtr rec = std::make_shared<Rec>();
+    rec->chatSleepMs = 60; // 慢速推理：保证观测窗口内有 agent 处于 working
+    eng.setInference(rec);
+    std::vector<std::string> ids;
+    for (int i = 0; i < 4; ++i) {
+        ids.push_back(eng.createTask("cap " + std::to_string(i)));
+    }
+    // 真实执行并发 = agents 中存在 working/voting 的任务数
+    // （running 标志入队即置位，区分不了排队与执行）
+    int maxExecuting = 0;
+    for (int i = 0; i < 300; ++i) {
+        int executing = 0;
+        bool anyBusy = false;
+        for (const std::string& id : ids) {
+            auto st = eng.taskInfo(id);
+            if (!st) continue;
+            bool busy = false;
+            for (const auto& a : st.value().agents) {
+                if (a.state == "working" || a.state == "voting") {
+                    busy = true;
+                    break;
+                }
+            }
+            // 投过票但后续不再说话的角色会停留在 voting 状态——
+            // 已完成任务的残留状态不算执行中（running=false 排除）
+            if (busy && st.value().running) ++executing;
+            if (st.value().running) anyBusy = true;
+        }
+        maxExecuting = std::max(maxExecuting, executing);
+        if (!anyBusy) break;
+        std::this_thread::sleep_for(15ms);
+    }
+    ZEXPECT_TRUE(maxExecuting <= 2); // 池上限生效：最多 2 条流水线同时在跑
+    for (const std::string& id : ids) waitTerminal(eng, id);
+    for (const std::string& id : ids) { // 4 个全部完成（排队不丢）
+        auto st = eng.taskInfo(id);
+        ZEXPECT_EQ(crew::phaseName(st.value().phase), std::string("done"));
+    }
 }
 
 ZTEST_MAIN

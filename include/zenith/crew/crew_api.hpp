@@ -297,6 +297,17 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         c.json(200, out);
     });
 
+    // M18：人读 Markdown 交付报告（决策时间线/投票理由/评分卡）
+    r.get("/crew/tasks/:id/report.md", [svc](Context& c) {
+        const std::string md = svc->exportMarkdown(c.param("id"));
+        if (md.empty()) {
+            c.status(404).text(404, "404 no such task");
+            return;
+        }
+        c.response().headers.set("Content-Type", "text/markdown; charset=utf-8");
+        c.response().body = md;
+    });
+
     // 全量导出（M14）：task + artifacts + votes + events 单包
     r.get("/crew/tasks/:id/export", [svc](Context& c) {
         const std::string bundle = svc->exportBundle(c.param("id"));

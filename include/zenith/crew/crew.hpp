@@ -237,6 +237,8 @@ public:
     }
     /// M14：任务全量导出 JSON 包（task+artifacts+votes+events；空串=不支持）
     [[nodiscard]] virtual std::string exportBundle(const std::string&) { return {}; }
+    /// M18：人读 Markdown 交付报告（决策时间线/投票理由/评分卡；空串=不支持）
+    [[nodiscard]] virtual std::string exportMarkdown(const std::string&) { return {}; }
     /// M16：增量迭代——基于父任务既有产物开新任务（空串=不支持/父不存在）
     [[nodiscard]] virtual std::string createFollowupTask(const std::string& /*parent*/,
                                                          const std::string& /*brief*/,
@@ -273,6 +275,7 @@ public:
     std::string createTask(const std::string& brief) { return createTask(brief, CrewConfig{}); }
     std::string createFollowupTask(const std::string& parent, const std::string& brief,
                                    const CrewConfig& cfg) override;
+    std::string exportMarkdown(const std::string& id) override;
     core::Result<CrewTaskInfo> taskInfo(const std::string& id) override;
     std::vector<CrewTaskInfo> listTasks() override;
     std::vector<CrewEvent> events(const std::string& id, uint64_t sinceSeq) override;
