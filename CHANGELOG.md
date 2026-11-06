@@ -15,7 +15,8 @@
   （静态库 + 动态库两种消费都跑一遍）。这条链路只测本仓库永远发现不了。
 - **发版闭环**：release workflow 打包前先 `ctest`；发布后校验「非 draft + 双平台资产齐全 +
   资产大小正常」，并用 `gh release edit --draft=false` 兜底（v0.2.1 曾整晚是 draft）。
-- **覆盖率门限**：`coverage` 现在会按仓库变量 `COVERAGE_MIN`（默认 20%）卡门限。
+- **覆盖率门限**：`coverage` 现在会按仓库变量 `COVERAGE_MIN` 卡门限（默认 80%，
+  实测 85.8%——排除 thirdparty/tests/plugins/examples 后的行覆盖）。
 - **性能趋势**：perf-gate 额外输出 `bench-report.json` 并作为 artifact 留存。
 - **`Flaky (nightly)`**：核心套件 `ctest --repeat until-fail:3`，专抓偶发失败。
 - **工程规范**：新增 `.clang-format`、`.editorconfig`、`CONTRIBUTING.md`、`SECURITY.md`、

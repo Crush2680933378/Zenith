@@ -67,7 +67,7 @@ CI 现在有这些任务，每一层拦一类问题：
 | `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ✅ |
 | `consumer-smoke` | 装 SDK → 用 `find_package(Zenith CONFIG)` 编独立下游项目 | ✅ |
 | `perf-gate` | 大文件峰值 RSS + 吞吐下限（与硬件无关的不变量） | ✅ |
-| `coverage` | llvm-cov 行覆盖 + 门限（阈值走仓库变量 `COVERAGE_MIN`，默认 20%） | ✅ |
+| `coverage` | llvm-cov 行覆盖 + 门限（实测 85.8%，门限 80%；阈值走仓库变量 `COVERAGE_MIN`） | ✅ |
 | `fuzz-smoke` | HTTP 请求/响应、WS 帧、JSON、WAV 五个解析入口 × 45s | ✅ |
 | `Fuzz (nightly)` | 同五个目标 × 600s，崩溃样本作为 artifact 上传 | 夜间 |
 | `Flaky (nightly)` | 核心套件重复 3 轮，专抓偶发失败 | 夜间 |

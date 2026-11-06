@@ -117,8 +117,9 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: 覆盖率门限
         env:
-          # 阈值放仓库变量里，随覆盖率提升上调，不用改 workflow
-          MIN_PCT: ${{ vars.COVERAGE_MIN || '20' }}
+          # 阈值放仓库变量里，随覆盖率提升上调，不用改 workflow。
+          # 当前实测 85.8%（排除 thirdparty/tests/plugins/examples），留 ~6 个点余量。
+          MIN_PCT: ${{ vars.COVERAGE_MIN || '80' }}
         run: |
           python3 - <<'EOF'
           import json, os, sys
