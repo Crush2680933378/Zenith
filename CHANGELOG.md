@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.2.1 (2026-11-06)
+
+工程化补强与小版本修复：加 sanitizer 防线（并立刻抓到两个真问题）、发版自动化、
+零拷贝写路径的性能回归修复。
+
+### 新增
+- **sanitizer 防线**：CMake 开关 `ZENITH_SANITIZE=address|thread|undefined`（可组合，
+  Windows 下自动忽略并告警）；CI 新增 `linux-sanitize` job——ASan+UBSan（含 LSan）
+  跑全量，TSan 跑并发套件。
+- **自动发版**：`.github/workflows/release.yml`——推 `v*` tag 触发，Windows(MSYS2)
+  与 Linux(GCC) 各构建 Release，`cmake --install` 打包（含插件/文档）并上传到同名
+  GitHub Release。发版不再依赖手工压缩。
+- **基准工具**：`benchmarks/bench_server.cpp`（4MB/64MB 静态文件 + JSON 端点），
+  配合 `tools/zenith_bench` 做前后对比；README 新增「M7.3 零拷贝实测」。
+
+### 修复
+- **HTTP 客户端失败/超时路径泄漏**（LSan 发现）：`AsyncState` 与 `TcpConnection`
+  互相强引用，成功复用会断链、失败路径只 `forceClose` 不断链——每次超时泄漏一份
+  响应解析器与连接。非复用分支现在同样释放 `st->conn`。
+- **文件零拷贝写路径的缓冲膨胀**（基准发现）：文件分块被追加进发送缓冲后只涨不排，
+  4MB 文件吞吐比旧路径还低 20%、RSS 涨到 168MB。改为分块直写 + 独立的
+  `postFileBuf_`（文件在途期间的后续响应排队到文件之后），字节顺序不交错。
+  实测 64MB：60 MB/s / 265MB → **1.05 GB/s / 9.9MB**。
+
+### 测试
+- `test_m7` 增至 9 例：新增 `PipelinedResponseQueuesBehindFileBody`——同一连接
+  连发两条请求、第二条在大文件发送期间处理，断言响应不交错、正文零污染。
+
 ## Unreleased
 
 ### 新增

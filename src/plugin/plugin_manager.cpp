@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 
+#include "zenith/concurrency/thread_pool.hpp"
 #include "zenith/core/string.hpp"
 #include "zenith/log/logger.hpp"
 
@@ -171,6 +172,13 @@ void PluginManager::doUnload(PluginInfo& p) {
     // 2) 再回调 shutdown / 卸载动态库
     if (p.desc.shutdown != nullptr && p.state >= PluginState::Initialized) {
         p.desc.shutdown();
+    }
+    // 3) 卸载动态库前先等宿主线程池把该插件的在途任务跑完：
+    //    host->post_task 投递的函数指针指向**插件自己的代码段**，
+    //    dlclose 之后只要还有一个任务在排队/执行，就会跳进已释放内存
+    //    （ASan：SEGV in hostPostTask；普通构建下是随机崩）。
+    if (pool_ != nullptr && !pool_->waitIdle(3000)) {
+        ZLOG_WARN("plugin unload: thread pool not idle after 3s, unloading anyway: ", p.name);
     }
     if (p.lib != nullptr) p.lib->unload();
     p.state = PluginState::Unloaded;

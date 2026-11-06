@@ -93,10 +93,15 @@ inline int runAll() {
             ::ztest::reportFail(__FILE__, __LINE__, "expected false: " #expr_);       \
     } while (0)
 
+// 断言宏用**值语义**绑定实参（auto 而非 auto&&）。
+// 原因：ZEXPECT_EQ(obj.fn()["k"].field, x) 里 obj.fn() 是临时对象，
+// auto&& 会绑到临时对象内部的成员上，绑定语句结束后临时对象即销毁，
+// 比较时读的是已释放内存（ASan 报 heap-use-after-free；macOS 上直接段错误）。
+// 值语义会先拷贝出结果，临时对象可以安全销毁。
 #define ZEXPECT_EQ(a_, b_)                                                            \
     do {                                                                              \
-        auto&& za_ = (a_);                                                            \
-        auto&& zb_ = (b_);                                                            \
+        const auto za_ = (a_);                                                        \
+        const auto zb_ = (b_);                                                        \
         if (!(za_ == zb_))                                                            \
             ::ztest::reportFail(__FILE__, __LINE__,                                   \
                                 "expected " #a_ " == " #b_ "; got " +                 \
@@ -106,8 +111,8 @@ inline int runAll() {
 
 #define ZEXPECT_NE(a_, b_)                                                            \
     do {                                                                              \
-        auto&& za_ = (a_);                                                            \
-        auto&& zb_ = (b_);                                                            \
+        const auto za_ = (a_);                                                        \
+        const auto zb_ = (b_);                                                        \
         if (!(za_ != zb_))                                                            \
             ::ztest::reportFail(__FILE__, __LINE__,                                   \
                                 "expected " #a_ " != " #b_ "; both " +                \

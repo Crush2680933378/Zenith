@@ -33,6 +33,11 @@ public:
     /// 幂等。唤醒所有工作线程，排空队列后 join。
     void shutdown();
 
+    /// 等待队列排空且正在执行的任务全部结束。超时返回 false。
+    /// 用途：卸载插件前必须等它 post 进来的任务跑完——那些函数指针指向
+    /// 插件自己的代码段，dlclose 之后执行即跳进已释放内存。
+    bool waitIdle(int timeoutMs);
+
     [[nodiscard]] size_t threadCount() const noexcept { return workers_.size(); }
     [[nodiscard]] size_t pendingTasks() const;
 
@@ -44,6 +49,7 @@ private:
     mutable std::mutex       mtx_;
     std::condition_variable  cv_;
     bool                     stopped_ = false;
+    size_t                   active_ = 0; // 正在执行的任务数（waitIdle 用）
 };
 
 } // namespace zenith::concurrency

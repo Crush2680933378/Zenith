@@ -419,21 +419,23 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
 // ============================================================================
 inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc,
                         const std::string& writeToken = {}) {
-    struct WatchState {
+    // 会话状态：watch 订阅 + 心跳定时器共用**一个** context 槽。
+    // 教训：WebSocketSession::context 是单槽 shared_ptr<void>——早先这里先塞
+    // WatchState、watch 时又覆盖成 Beat，关闭回调再按两种类型各取一次，
+    // 等于把 Beat 当 WatchState 读（ASan：heap-use-after-free / 类型混淆）。
+    struct SessionState {
         std::string task;
-        uint64_t subId = 0;
-    };
-    struct Beat { // 心跳定时器句柄（watch 时替换为 context 身份）
-        uint64_t timerId = 0;
+        uint64_t subId = 0;  // 事件订阅 id（0=未订阅）
+        uint64_t timerId = 0; // 心跳定时器句柄
     };
     srv.enableWebSocket("/crew/ws",
                         [svc, writeToken](const net::WebSocketSession::Ptr& s) {
-        auto watch = std::make_shared<WatchState>();
-        s->setContext(watch);
+        auto st = std::make_shared<SessionState>();
+        s->setContext(st);
 
         s->setMessageCallback(
-            [svc, s, watch, writeToken](const net::WebSocketSession::Ptr&,
-                                        std::string msg, bool) {
+            [svc, s, st, writeToken](const net::WebSocketSession::Ptr&,
+                                     std::string msg, bool) {
                 auto v = json::JsonValue::parse(msg);
                 if (!v) return;
                 const std::string type = v.value()["type"].asString();
@@ -459,11 +461,11 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                     return;
                 }
                 if (type == "watch") {
-                    if (watch->subId != 0) {
-                        svc->unsubscribe(watch->subId);
-                        watch->subId = 0;
+                    if (st->subId != 0) {
+                        svc->unsubscribe(st->subId);
+                        st->subId = 0;
                     }
-                    watch->task = task;
+                    st->task = task;
                     json::JsonValue h = json::JsonValue::object();
                     h["type"] = "hello";
                     h["task"] = task;
@@ -472,7 +474,7 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                     for (const CrewEvent& e : svc->events(task, 0)) {
                         s->sendText(e.toJson().dump());
                     }
-                    watch->subId = svc->subscribe(task, [s](const CrewEvent& e) {
+                    st->subId = svc->subscribe(task, [s](const CrewEvent& e) {
                         // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
                         // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
                         if (s->connection() != nullptr &&
@@ -485,15 +487,18 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                     // 服务端心跳（M17）：30s 自续 ping，死连接及时清理。
                     // 自持 shared_ptr<function> 模式——scheduleAfter 只存值拷贝
                     // （栈引用会在消息回调返回后悬垂）。
-                    auto beat = std::make_shared<Beat>();
-                    s->setContext(beat); // 会话身份挂 context（架构红线）
                     net::EventLoop* loop = s->connection()->loop();
+                    // 重复 watch 会重复起定时器：先撤掉上一轮
+                    if (st->timerId != 0) {
+                        loop->cancel(st->timerId);
+                        st->timerId = 0;
+                    }
                     std::weak_ptr<net::WebSocketSession> weak = s;
                     auto tick = std::make_shared<std::function<void()>>();
-                    *tick = [weak, loop, beat, tick]() {
+                    *tick = [weak, loop, st, tick]() {
                         if (auto sp = weak.lock()) {
                             sp->ping(); // 关闭由 close 回调 cancel 定时器收尾
-                            beat->timerId = loop->scheduleAfter(
+                            st->timerId = loop->scheduleAfter(
                                 std::chrono::milliseconds(30000), [tick]() { (*tick)(); });
                         }
                     };
@@ -525,17 +530,19 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
             });
 
         s->setCloseCallback([svc, s](const net::WebSocketSession::Ptr& sess) {
-            // 关闭在连接所属 loop 线程：cancel 定时器线程安全
-            if (auto beat = sess->context<Beat>(); beat != nullptr && beat->timerId != 0) {
+            // 关闭在连接所属 loop 线程：cancel 定时器线程安全。
+            // 单槽 context 只按 SessionState 取一次（此前按两种类型各取一次，类型混淆）。
+            auto st = sess->context<SessionState>();
+            if (st == nullptr) return;
+            if (st->timerId != 0) {
                 if (sess->connection() != nullptr) {
-                    sess->connection()->loop()->cancel(beat->timerId);
+                    sess->connection()->loop()->cancel(st->timerId);
                 }
+                st->timerId = 0;
             }
-            if (auto watch = sess->context<WatchState>(); watch != nullptr) {
-                if (watch->subId != 0) {
-                    svc->unsubscribe(watch->subId);
-                    watch->subId = 0;
-                }
+            if (st->subId != 0) {
+                svc->unsubscribe(st->subId);
+                st->subId = 0;
             }
         });
     });

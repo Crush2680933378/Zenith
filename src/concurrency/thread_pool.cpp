@@ -1,5 +1,7 @@
 #include "zenith/concurrency/thread_pool.hpp"
 
+#include <chrono>
+
 namespace zenith::concurrency {
 
 ThreadPool::ThreadPool(size_t numThreads) {
@@ -43,6 +45,18 @@ size_t ThreadPool::pendingTasks() const {
     return tasks_.size();
 }
 
+bool ThreadPool::waitIdle(int timeoutMs) {
+    std::unique_lock<std::mutex> lk(mtx_);
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    while (!tasks_.empty() || active_ != 0) {
+        if (cv_.wait_until(lk, deadline) == std::cv_status::timeout) {
+            break;
+        }
+    }
+    return tasks_.empty() && active_ == 0;
+}
+
 void ThreadPool::workerLoop() {
     for (;;) {
         Task task;
@@ -52,8 +66,14 @@ void ThreadPool::workerLoop() {
             if (tasks_.empty()) return; // stopped_ 且队列已排空 → 退出
             task = std::move(tasks_.front());
             tasks_.pop_front();
+            ++active_;
         }
         task(); // 在锁外执行，异常由任务自身负责
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            --active_;
+            if (tasks_.empty() && active_ == 0) cv_.notify_all(); // 唤醒 waitIdle
+        }
     }
 }
 
