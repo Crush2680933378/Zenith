@@ -6,9 +6,10 @@
 //    - HPACK（RFC 7541）：静态表 + 索引/字面量/Dynamic Table Size Update
 //
 //  当前边界（有意为之，写在注释里避免误用）：
-//    - HPACK **不做 Huffman 解码**：收到 H=1 的字符串返回压缩错误
-//      （自家客户端默认不启用；接浏览器/curl 前必须补 Huffman 表）
-//    - 动态表只实现插入/查找/清空，不做驱逐（表大小默认 4096，够跑通）
+//    - HPACK 解码**支持 Huffman**（表由 RFC 7541 附录 B 生成，见
+//      src/http/hpack_huffman.inc 与 tools/gen_hpack_huffman.py）；
+//      编码端仍输出非 Huffman（合法，且省 CPU）
+//    - 动态表实现插入/查找/驱逐；SETTINGS 里的 HEADER_TABLE_SIZE 暂不生效
 // ============================================================================
 #pragma once
 
@@ -143,9 +144,9 @@ struct H2Response {
 ///
 /// 这一层的职责边界：
 ///   - 处理客户端 preface、SETTINGS 交换/ACK、PING ACK、GOAWAY
-///   - HEADERS(+CONTINUATION) → HPACK 解码 → 调 handler → 回 HEADERS + DATA
-///   - **不做流控**（不会发 WINDOW_UPDATE，响应体需 < 64KB 默认窗口）
-///   - **不支持 Huffman**（除非对端也是本库客户端）
+///   - HEADERS(+CONTINUATION) → HPACK 解码（含 Huffman）→ 调 handler → 回 HEADERS + DATA
+///   - 流控：连接级 + 流级发送窗口，收到 DATA 回补；多流并发按 streamId 隔离
+///   - 暂不支持：h2 上的流式响应（SSE/chunked）、PUSH_PROMISE、PRIORITY 语义
 class ZENITH_API H2ServerConnection {
 public:
     using Handler = std::function<void(const H2Request&, H2Response&)>;

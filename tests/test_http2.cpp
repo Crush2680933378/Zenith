@@ -161,11 +161,37 @@ ZTEST(H2Hpack, DynamicTableReuseShrinksSecondBlock) {
     ZEXPECT_EQ(second.size(), size_t{1});
 }
 
-ZTEST(H2Hpack, RejectsHuffmanAndGarbage) {
+ZTEST(H2Hpack, DecodesRfcHuffmanExample) {
+    // RFC 7541 C.4.1：整个头块用 Huffman 编码
+    const std::string block = hexToBytes(
+        "828684"  // :method GET / :scheme http / :path /
+        "418c"    // :authority（索引名 1）+ Huffman 值（12 字节）
+        "f1e3c2e5f23a6ba0ab90f4ff");
     http::h2::HpackDecoder dec;
     std::vector<std::pair<std::string, std::string>> out;
     std::string err;
-    // 0x40（literal, incremental） + 名字"H"=huffman, len=1, 0xff + 值长度 1
+    ZEXPECT_TRUE(dec.decode(block, out, &err));
+    ZEXPECT_EQ(out.size(), size_t{4});
+    ZEXPECT_EQ(out[3].first, std::string(":authority"));
+    ZEXPECT_EQ(out[3].second, std::string("www.example.com"));  // Huffman 解出来的
+
+    // C.4.2 里的 "no-cache"（a8eb10649cbf）。
+    // 注意：C.4.2 的 `be` 引用的是上一条头块插入的动态表项（:authority www.example.com），
+    // 所以必须用**同一个 decoder**（新实例没有那条动态表项）。
+    const std::string block2 = hexToBytes(
+        "828684be5886"
+        "a8eb10649cbf");
+    std::vector<std::pair<std::string, std::string>> out2;
+    ZEXPECT_TRUE(dec.decode(block2, out2, &err));
+    ZEXPECT_EQ(out2.back().first, std::string("cache-control"));
+    ZEXPECT_EQ(out2.back().second, std::string("no-cache"));
+}
+
+ZTEST(H2Hpack, RejectsInvalidHuffmanAndGarbage) {
+    http::h2::HpackDecoder dec;
+    std::vector<std::pair<std::string, std::string>> out;
+    std::string err;
+    // 名字是 H=1 的 1 字节 0xff：补位不合法，必须拒绝而不是静默给乱码
     const std::string huff = std::string("\x40\x81\xff\x01x", 4);
     ZEXPECT_FALSE(dec.decode(huff, out, &err));
     ZEXPECT_TRUE(err.find("huffman") != std::string::npos);

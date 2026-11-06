@@ -4,6 +4,7 @@
 #include "zenith/http/http2.hpp"
 
 #include <cstring>
+#include <unordered_map>
 
 namespace zenith::http::h2 {
 namespace {
@@ -58,6 +59,56 @@ void encodeString(std::string& out, std::string_view s) {
     out.append(s.data(), s.size());
 }
 
+struct HuffCode {
+    uint32_t code;
+    uint8_t bits;
+};
+#include "hpack_huffman.inc"  // constexpr HuffCode kHuffTable[257]（由 RFC 附录 B 生成）
+
+/// RFC 7541 §5.2：按位走 Huffman 树（用一次性建立的哈希表查符号）
+bool huffmanDecode(std::string_view in, std::string& out, std::string* err) {
+    static const auto* index = [] {
+        auto* m = new std::unordered_map<uint64_t, int>();
+        for (int s = 0; s < 257; ++s) {
+            (*m)[(static_cast<uint64_t>(kHuffTable[s].code) << 6) | kHuffTable[s].bits] = s;
+        }
+        return m;
+    }();
+
+    uint32_t code = 0;
+    int bits = 0;
+    for (char ch : in) {
+        const uint8_t byte = static_cast<uint8_t>(ch);
+        for (int i = 7; i >= 0; --i) {
+            code = (code << 1) | ((byte >> i) & 1u);
+            ++bits;
+            if (bits > 30) {
+                if (err) *err = "huffman: code too long";
+                return false;
+            }
+            const auto it = index->find((static_cast<uint64_t>(code) << 6) | bits);
+            if (it == index->end()) continue;
+            if (it->second == 256) {  // EOS 不允许出现在字符串里
+                if (err) *err = "huffman: EOS symbol";
+                return false;
+            }
+            out.push_back(static_cast<char>(it->second));
+            code = 0;
+            bits = 0;
+        }
+    }
+    // 末尾补位：必须 <8 位且全 1
+    if (bits > 7) {
+        if (err) *err = "huffman: bad padding length";
+        return false;
+    }
+    if (bits > 0 && code != (1u << bits) - 1u) {
+        if (err) *err = "huffman: bad padding bits";
+        return false;
+    }
+    return true;
+}
+
 bool decodeString(std::string_view in, size_t& pos, std::string& out, std::string* err) {
     if (pos >= in.size()) {
         if (err) *err = "string: out of bounds";
@@ -69,17 +120,14 @@ bool decodeString(std::string_view in, size_t& pos, std::string& out, std::strin
         if (err) *err = "string: bad length";
         return false;
     }
-    if (huffman) {
-        // 还没实现 Huffman 表：宁可明确拒绝，也不要静默解出乱码
-        if (err) *err = "huffman-coded string not supported yet";
-        return false;
-    }
     if (pos + len > in.size()) {
         if (err) *err = "string: truncated";
         return false;
     }
-    out.assign(in.data() + pos, static_cast<size_t>(len));
+    const std::string_view body(in.data() + pos, static_cast<size_t>(len));
     pos += static_cast<size_t>(len);
+    if (huffman) return huffmanDecode(body, out, err);
+    out.assign(body.data(), body.size());
     return true;
 }
 
