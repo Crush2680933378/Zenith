@@ -31,8 +31,24 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 | **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
 | **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
-| **CI** | ✅ 四平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro / **macOS-Clang**，43 套测试全绿 |
+| **CI** | ✅ 四平台构建 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro / **macOS-Clang**；Windows+Linux 43 套测试全绿，macOS 41 套阻塞全绿（另 2 套见下方「平台支持」） |
 | **插件** | 16 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·ai_inference·ai_llama·ai_ninfer·ai_ninfer_native·db_vector·ai_mcp·ai_agent·ai_router·ai_crew·**ai_guard**·**ai_speech** |
+
+### 平台支持
+
+| 平台 | 构建 | 测试 | 说明 |
+|---|---|---|---|
+| Windows (MinGW) | ✅ | ✅ 43/43 | WSAPoll 后端 |
+| Linux (GCC / Clang+Coro) | ✅ | ✅ 43/43 | epoll 后端；Clang 任务额外跑协程层 |
+| macOS (Apple Clang) | ✅ | ⚠️ 41/43 | kqueue 后端；全量构建阻塞验证 |
+
+macOS 两个已知运行期问题（CI 里单列非阻塞步骤，失败可见但不阻塞合并）：
+
+- `test_m13b`（ProviderRouter 熔断用例）——`CircuitBreakerOpensAndFailsFast` 段错误
+- `test_m13d`（ai_crew 强化套件）——部分用例失败
+
+两者都只在 macOS 首次开启运行期测试时暴露，与平台相关的线程/网络行为有关（Linux/Windows 全绿）。
+修好后把 CI 里的 `-E "test_m13b|test_m13d"` 去掉、删除非阻塞步骤即可。
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
 
@@ -488,7 +504,8 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   大响应缓冲归还）、M8.7 W3C Trace Context（服务端提取 + HttpClient 自动注入，两跳
   传播有端到端测试）、M8.8 whisper.cpp STT（音频前处理管线 + 编译期可选真后端）；
   修复 macOS CI（OpenSSL 3 的 X509 const 签名）、补齐 macOS 平台构建验证
-- **M19 ✅ 发布 v0.2.0（2026-11-06）**：M9–M18 十一个里程碑累积发布，43 套测试四平台全绿
+- **M19 ✅ 发布 v0.2.0（2026-11-06）**：M9–M18 十一个里程碑累积发布；Windows/Linux 43 套测试
+  全绿，macOS 构建 + 41 套核心测试阻塞验证（2 套 AI 编排套件已知问题跟踪中，见「平台支持」）
 - **M8 🚧 生态扩展（5/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
   （`ai_inference` 网关 / `ai_llama` 进程内 llama.cpp / `ai_ninfer` 子进程 /
   `ai_ninfer_native` 自研 C ABI 进程内），实测 prefill 3.65k · decode 729 tok/s；
