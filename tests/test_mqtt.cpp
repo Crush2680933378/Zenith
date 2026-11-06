@@ -5,17 +5,17 @@
 #include <vector>
 
 #if defined(_WIN32)
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <sys/select.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #include "ztest.hpp"
@@ -77,7 +77,8 @@ public:
     }
     /// 读一个完整包；超时返回 Pending
     mqtt::DecodeResult readPacket(int timeoutMs) {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
         for (;;) {
             auto r = mqtt::decode(buf_);
             if (r.status == mqtt::DecodeResult::Status::Ok) {
@@ -231,8 +232,7 @@ ZTEST(Mqtt, RejectsBadPackets) {
     p.topic = "t";
     p.qos = 2;
     p.packetId = 1;
-    ZEXPECT_TRUE(mqtt::decode(mqtt::encodePublish(p)).status ==
-                 mqtt::DecodeResult::Status::Error);
+    ZEXPECT_TRUE(mqtt::decode(mqtt::encodePublish(p)).status == mqtt::DecodeResult::Status::Error);
 }
 
 ZTEST(Mqtt, TopicMatching) {

@@ -74,7 +74,7 @@ private:
     net::EventLoop* loop_;
     net::TcpServer server_;
     mutable std::mutex mtx_;
-    std::map<const net::TcpConnection*, SessionPtr> sessions_;  // 连接 → 会话
+    std::map<const net::TcpConnection*, SessionPtr> sessions_;   // 连接 → 会话
     std::map<std::string, net::TcpConnection::Ptr> byClientId_;  // clientId → 连接
     std::map<std::string, PublishPacket> retained_;              // topic → 保留消息
     std::map<const net::TcpConnection*, std::string> inbound_;   // 每连接的解码缓冲

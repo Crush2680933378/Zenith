@@ -31,9 +31,7 @@ struct Reader {
         pos += n;
         return true;
     }
-    std::string_view rest() const {
-        return b.substr(pos);
-    }
+    std::string_view rest() const { return b.substr(pos); }
 };
 
 void putU16(std::string& out, uint16_t v) {
@@ -99,8 +97,8 @@ DecodeResult decode(std::string_view buf, size_t maxPacketSize) {
             uint8_t level = 0;
             if (!rd.str(proto) || !rd.u8(level)) return err("connect: truncated");
             if (proto != "MQTT") return err("connect: bad protocol name");
-            if (level != 4) return err("connect: unsupported protocol level " +
-                                       std::to_string(level));
+            if (level != 4)
+                return err("connect: unsupported protocol level " + std::to_string(level));
             uint8_t cflags = 0;
             if (!rd.u8(cflags) || !rd.u16(p.connect.keepAlive)) return err("connect: truncated");
             if ((cflags & 0x01) != 0) return err("connect: reserved flag set");
@@ -234,7 +232,8 @@ std::string encodePuback(uint16_t packetId) {
 std::string encodeSuback(uint16_t packetId, const std::vector<uint8_t>& codes) {
     std::string body;
     putU16(body, packetId);
-    for (uint8_t c : codes) body.push_back(static_cast<char>(c));
+    for (uint8_t c : codes)
+        body.push_back(static_cast<char>(c));
     std::string out;
     out.push_back(static_cast<char>(static_cast<uint8_t>(PacketType::Suback) << 4));
     putRemainingLength(out, body.size());
@@ -277,7 +276,7 @@ bool validTopicFilter(std::string_view filter) {
             if (c == '+') {
                 if (level.size() != 1) return false;  // "a+" 非法
             } else if (c == '#') {
-                if (level != "#") return false;              // "a#" 非法
+                if (level != "#") return false;                   // "a#" 非法
                 if (end != std::string_view::npos) return false;  // '#' 必须是最后一层
             }
         }

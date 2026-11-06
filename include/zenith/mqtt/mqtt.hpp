@@ -85,7 +85,7 @@ struct Packet {
     PublishPacket publish;
     SubscribePacket subscribe;
     UnsubscribePacket unsubscribe;
-    uint16_t packetId = 0;       // PUBACK/UNSUBACK/SUBACK
+    uint16_t packetId = 0;        // PUBACK/UNSUBACK/SUBACK
     bool sessionPresent = false;  // CONNACK
     uint8_t returnCode = 0;       // CONNACK
     std::vector<uint8_t> codes;   // SUBACK 每项的授予 QoS（0x80 = 失败）

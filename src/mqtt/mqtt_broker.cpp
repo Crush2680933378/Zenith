@@ -20,24 +20,29 @@ std::string randomClientId() {
 
 Broker::Broker(net::EventLoop* loop, net::EventLoopThreadPool* ioPool)
     : loop_(loop), server_(loop, ioPool) {
-    server_.setMessageCallback([this](const net::TcpConnection::Ptr& c, core::Buffer& buf) {
-        onMessage(c, buf);
-    });
+    server_.setMessageCallback(
+        [this](const net::TcpConnection::Ptr& c, core::Buffer& buf) { onMessage(c, buf); });
     server_.addConnectionDecorator([this](const net::TcpConnection::Ptr& conn) {
         conn->setCloseCallback([this](const net::TcpConnection::Ptr& c) { onClose(c); });
     });
 }
 
-Broker::~Broker() { stop(); }
+Broker::~Broker() {
+    stop();
+}
 
 uint16_t Broker::listen(const std::string& host, uint16_t port) {
     auto r = server_.listen(host, port);
     return r ? server_.port() : 0;
 }
 
-void Broker::stop() { server_.stop(); }
+void Broker::stop() {
+    server_.stop();
+}
 
-uint16_t Broker::port() const { return server_.port(); }
+uint16_t Broker::port() const {
+    return server_.port();
+}
 
 size_t Broker::clientCount() const {
     std::lock_guard<std::mutex> lk(mtx_);
@@ -96,8 +101,10 @@ void Broker::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
         }
     }
 
-    for (auto& [c, data] : pending.sends) c->send(data);
-    for (auto& c : pending.closes) c->forceClose();
+    for (auto& [c, data] : pending.sends)
+        c->send(data);
+    for (auto& c : pending.closes)
+        c->forceClose();
 }
 
 void Broker::handleConnect(const net::TcpConnection::Ptr& conn, const SessionPtr& s,
@@ -118,8 +125,8 @@ void Broker::handleConnect(const net::TcpConnection::Ptr& conn, const SessionPtr
     out.sends.emplace_back(conn, encodeConnack(false, ConnectReturn::Accepted));
 }
 
-void Broker::handlePacket(const net::TcpConnection::Ptr& conn, const SessionPtr& s,
-                          const Packet& p, Pending& out) {
+void Broker::handlePacket(const net::TcpConnection::Ptr& conn, const SessionPtr& s, const Packet& p,
+                          Pending& out) {
     switch (p.type) {
         case PacketType::Publish:
             handlePublish(conn, s, p.publish, out);
@@ -217,10 +224,9 @@ void Broker::handleSubscribe(const net::TcpConnection::Ptr& conn, const SessionP
 void Broker::handleUnsubscribe(const net::TcpConnection::Ptr& conn, const SessionPtr& s,
                                const UnsubscribePacket& unsub, Pending& out) {
     for (const auto& f : unsub.filters) {
-        s->subscriptions.erase(
-            std::remove_if(s->subscriptions.begin(), s->subscriptions.end(),
-                           [&f](const auto& e) { return e.first == f; }),
-            s->subscriptions.end());
+        s->subscriptions.erase(std::remove_if(s->subscriptions.begin(), s->subscriptions.end(),
+                                              [&f](const auto& e) { return e.first == f; }),
+                               s->subscriptions.end());
     }
     out.sends.emplace_back(conn, encodeUnsuback(unsub.packetId));
 }
