@@ -9,7 +9,7 @@
 #include "zenith/http/http_parser.hpp"
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
-    if (size == 0 || size > 64 * 1024) return 0; // 限制单次输入，避免 fuzz 变慢
+    if (size == 0 || size > 64 * 1024) return 0;  // 限制单次输入，避免 fuzz 变慢
     const std::string input(reinterpret_cast<const char*>(data), size);
 
     // 1) 一次性喂入

@@ -27,8 +27,8 @@ namespace fs = std::filesystem;
 int main(int argc, char** argv) {
     const int port = argc > 1 ? std::atoi(argv[1]) : 8099;
     const int seconds = argc > 2 ? std::atoi(argv[2]) : 30;
-    const size_t kSize = argc > 3 ? static_cast<size_t>(std::atoi(argv[3])) * 1024u * 1024u
-                                  : 4u * 1024u * 1024u;
+    const size_t kSize =
+        argc > 3 ? static_cast<size_t>(std::atoi(argv[3])) * 1024u * 1024u : 4u * 1024u * 1024u;
     // 第 4 个参数：数据目录（绝对路径最稳；默认 ./benchwww）
     const std::string root = argc > 4 ? argv[4] : "benchwww";
 
@@ -43,7 +43,8 @@ int main(int argc, char** argv) {
         // 性能门禁测到的就成了「生成时的内存」而不是「服务时的内存」。
         constexpr size_t kChunk = 1024 * 1024;
         std::string chunk(kChunk, '\0');
-        for (size_t i = 0; i < kChunk; ++i) chunk[i] = static_cast<char>((i * 31u + 7u) & 0xFFu);
+        for (size_t i = 0; i < kChunk; ++i)
+            chunk[i] = static_cast<char>((i * 31u + 7u) & 0xFFu);
         if (std::string(name) == "text.txt") chunk.assign(kChunk, 'T');
         size_t written = 0;
         while (written < kSize) {

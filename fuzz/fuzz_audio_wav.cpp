@@ -24,7 +24,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     if (pcm.ok) {
         if (pcm.samples.empty()) __builtin_trap();
         for (float s : pcm.samples) {
-            if (!(s >= -1.0001f && s <= 1.0001f)) __builtin_trap(); // 归一化越界
+            if (!(s >= -1.0001f && s <= 1.0001f)) __builtin_trap();  // 归一化越界
         }
     }
     // 裸 PCM 路径同样过一遍（格式判定不同）

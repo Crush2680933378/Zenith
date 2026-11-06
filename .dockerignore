@@ -12,7 +12,6 @@ prof/
 *.log
 *.tmp
 
-# 文档与示例不是镜像必需，但保留 examples（镜像要跑 http_server 示例）
+# 文档不是镜像必需（benchmarks/ 必须保留：CMake 会 add_subdirectory 它）
 docs/
-benchmarks/
 fuzz/corpus/
