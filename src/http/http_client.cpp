@@ -246,20 +246,20 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
             // HTTPS：先装 TLS 滤层（客户端角色 + SNI），请求明文会在握手后自动发出
             if (req.tls) {
 #if !defined(ZENITH_TLS_OPENSSL)
-                finishState(st, core::Result<HttpResponse>::Err(
-                                    core::Error(94, "TLS backend not compiled (-DZENITH_TLS=none)")));
+                finishState(st, core::Result<HttpResponse>::Err(core::Error(
+                                    94, "TLS backend not compiled (-DZENITH_TLS=none)")));
                 conn->forceClose();
                 return;
 #else
-                auto ctx = tlsContextFor(req);
-                SSL* ssl = ctx != nullptr ? ctx->newClientSession(req.host) : nullptr;
-                if (ssl == nullptr) {
-                    finishState(
-                        st, core::Result<HttpResponse>::Err(core::Error(94, "tls setup failed")));
-                    conn->forceClose();
-                    return;
-                }
-                conn->startTls(std::make_unique<tls::TlsFilter>(false, ssl));
+            auto ctx = tlsContextFor(req);
+            SSL* ssl = ctx != nullptr ? ctx->newClientSession(req.host) : nullptr;
+            if (ssl == nullptr) {
+                finishState(st,
+                            core::Result<HttpResponse>::Err(core::Error(94, "tls setup failed")));
+                conn->forceClose();
+                return;
+            }
+            conn->startTls(std::make_unique<tls::TlsFilter>(false, ssl));
 #endif
             }
             issueOn(conn, req, st);

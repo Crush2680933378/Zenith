@@ -44,17 +44,27 @@ OpenSslContext& OpenSslContext::operator=(OpenSslContext&& other) noexcept {
     return *this;
 }
 
-SSL* OpenSslContext::newServerSession() const { return nullptr; }
+SSL* OpenSslContext::newServerSession() const {
+    return nullptr;
+}
 
-SSL* OpenSslContext::newClientSession(const std::string&) const { return nullptr; }
+SSL* OpenSslContext::newClientSession(const std::string&) const {
+    return nullptr;
+}
 
-TlsFilter::TlsFilter(bool /*serverSide*/, SSL* /*ssl*/) { fail(kNoTlsMsg); }
+TlsFilter::TlsFilter(bool /*serverSide*/, SSL* /*ssl*/) {
+    fail(kNoTlsMsg);
+}
 
 TlsFilter::~TlsFilter() = default;
 
-void TlsFilter::feedCipher(const char*, size_t, std::string&, std::string&) { fail(kNoTlsMsg); }
+void TlsFilter::feedCipher(const char*, size_t, std::string&, std::string&) {
+    fail(kNoTlsMsg);
+}
 
-void TlsFilter::encrypt(const char*, size_t, std::string&) { fail(kNoTlsMsg); }
+void TlsFilter::encrypt(const char*, size_t, std::string&) {
+    fail(kNoTlsMsg);
+}
 
 void TlsFilter::shutdown(std::string&) {}
 
