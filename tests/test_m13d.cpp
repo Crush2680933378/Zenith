@@ -32,7 +32,7 @@ public:
     std::map<std::string, std::vector<std::string>> models_;  // role → req.model
     std::atomic<int> chatCount{0};
     std::atomic<int> implInFlight{0}, implMaxInFlight{0};
-    int chatSleepMs = 0;
+    std::atomic<int> chatSleepMs{0};
     // 行为开关
     int pmBadJsonTimes = 0;         // PM 前 N 次回非法 JSON
     bool voteAlwaysRevise = false;  // PRD 评审全员 revise（辩论测试）

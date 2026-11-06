@@ -18,7 +18,7 @@ namespace {
 class Rec final : public ai::IInferenceService {
 public:
     std::vector<ai::ModelInfo> models() override { return {}; }
-    int chatSleepMs = 0;
+    std::atomic<int> chatSleepMs{0};
     std::atomic<int> inFlight{0};
     std::mutex m;
     std::vector<std::string> testerPrompts;

@@ -35,9 +35,9 @@ public:
     std::mutex m;
     std::vector<std::string> pmPrompts;
     std::vector<std::string> commands;  // tester 输出的 exec 命令
-    bool embeddingsOk = false;
-    bool piiInDetail = false;  // tester detail 塞邮箱（redact 用例）
-    int chatSleepMs = 0;       // 慢速（并发池观测用）
+    std::atomic<bool> embeddingsOk{false};
+    std::atomic<bool> piiInDetail{false};  // tester detail 塞邮箱（redact 用例）
+    std::atomic<int> chatSleepMs{0};       // 慢速（并发池观测用）
     // 语义分组：voting/poll/survey/questionnaire 同向；game/match 另一向
     std::set<std::string> clusterA = {"voting", "poll", "survey", "questionnaire"};
 
