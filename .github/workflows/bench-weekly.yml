@@ -1,0 +1,56 @@
+name: Bench (weekly)
+
+# 每周跑一次 perf-gate，把结果追加进 benchmarks/history.jsonl 并重绘 TREND.md。
+# 为什么要提交进仓库：历史随版本走、可追溯（记录里带 commit sha），
+# 不依赖任何看板服务或外部存储。
+on:
+  schedule:
+    - cron: "0 20 * * 0" # 周日 20:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev
+      - name: Build (Release)
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF \
+                -DZENITH_BUILD_TESTS=OFF -DZENITH_BUILD_EXAMPLES=OFF \
+                -DZENITH_BUILD_PLUGINS=OFF
+          cmake --build build --target zenith_bench_server zenith_bench
+      - name: 测量（门禁失败也继续记录）
+        continue-on-error: true
+        run: |
+          python3 tools/bench_gate.py \
+            --server build/bin/zenith_bench_server \
+            --bench  build/bin/zenith_bench \
+            --out    bench-report.json
+      - name: 追加历史并重绘趋势
+        if: always()
+        run: |
+          if [ ! -f bench-report.json ]; then
+            echo "::warning::没有产生 bench-report.json，跳过记录"
+            exit 0
+          fi
+          python3 tools/bench_trend.py --report bench-report.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- benchmarks/history.jsonl benchmarks/TREND.md; then
+            echo "无变化"
+            exit 0
+          fi
+          git add benchmarks/history.jsonl benchmarks/TREND.md
+          git commit -m "chore(bench): 每周性能记录 [skip ci]"
+          git push

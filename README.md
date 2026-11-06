@@ -196,6 +196,7 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | 语音（STT/TTS） | [docs/SPEECH.md](docs/SPEECH.md) |
 | 依赖准入原则 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) |
 | 性能基准方法论 | [benchmarks/BENCHMARK_FAIR.md](benchmarks/BENCHMARK_FAIR.md) |
+| 性能趋势（每周自动记录） | [benchmarks/TREND.md](benchmarks/TREND.md) |
 | 路线图 | [PLAN_M7](docs/PLAN_M7.md) · [PLAN_M8](docs/PLAN_M8.md) |
 | 变更记录 | [CHANGELOG.md](CHANGELOG.md) |
 
