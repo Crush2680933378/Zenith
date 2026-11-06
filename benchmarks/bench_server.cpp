@@ -28,10 +28,12 @@ int main(int argc, char** argv) {
     const int seconds = argc > 2 ? std::atoi(argv[2]) : 30;
     const size_t kSize = argc > 3 ? static_cast<size_t>(std::atoi(argv[3])) * 1024u * 1024u
                                   : 4u * 1024u * 1024u;
-    const std::string root = "benchwww";
+    // 第 4 个参数：数据目录（绝对路径最稳；默认 ./benchwww）
+    const std::string root = argc > 4 ? argv[4] : "benchwww";
 
     std::error_code ec;
     fs::create_directories(root, ec);
+    if (ec) std::printf("  data dir create failed: %s\n", ec.message().c_str());
     for (const char* name : {"big.bin", "text.txt"}) {
         const fs::path p = fs::path(root) / name;
         if (fs::exists(p, ec) && fs::file_size(p, ec) == kSize) continue;
@@ -40,6 +42,7 @@ int main(int argc, char** argv) {
         for (size_t i = 0; i < kSize; ++i) chunk[i] = static_cast<char>((i * 31u + 7u) & 0xFFu);
         if (std::string(name) == "text.txt") chunk.assign(kSize, 'T');
         out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+        if (!out.good()) std::printf("  data write failed: %s\n", p.string().c_str());
     }
 
     zenith::net::EventLoop loop;

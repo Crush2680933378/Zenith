@@ -20,6 +20,8 @@ option(ZENITH_BUILD_PLUGINS       "Build sample plugins"                        
 option(ZENITH_ENABLE_COROUTINES   "Enable optional C++20 coroutine layer (zenith_coro)" OFF)
 option(ZENITH_ENABLE_ORM          "Integrate thirdparty/uORM (git submodule)"   ON)
 option(ZENITH_BUILD_BENCH        "Build zenith-bench load test tool"            ON)
+option(ZENITH_BUILD_FUZZERS      "Build libFuzzer targets（需要 Clang + libFuzzer）"   OFF)
+option(ZENITH_COVERAGE           "启用覆盖率插桩（Clang 的 -fprofile-instr-generate / GCC 的 --coverage）" OFF)
 
 set(ZENITH_TLS "none" CACHE STRING
     "TLS backend behind ITLSTransport: openssl | mbedtls | wolfssl | none (impl lands in M2/M3)")
@@ -37,6 +39,23 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# ---------------------------------------------------------------------------
+# 覆盖率插桩（CI 用）：Clang 走 profile-instr（llvm-profdata/llvm-cov），GCC 走 gcov
+# ---------------------------------------------------------------------------
+if (ZENITH_COVERAGE)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(STATUS "Zenith coverage: llvm profile-instr-generate")
+        add_compile_options(-fprofile-instr-generate -fcoverage-mapping -g -O1)
+        add_link_options(-fprofile-instr-generate)
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(STATUS "Zenith coverage: gcov (--coverage)")
+        add_compile_options(--coverage -g -O0)
+        add_link_options(--coverage)
+    else()
+        message(WARNING "ZENITH_COVERAGE 被忽略：不支持的编译器 ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # sanitizer（CI 用；本地也可开）
@@ -125,6 +144,16 @@ endif()
 
 if (ZENITH_BUILD_TESTS)
     add_subdirectory(tests)
+endif()
+
+# libFuzzer 目标（Clang 专用；CI 的 fuzz job 用 -DZENITH_BUILD_FUZZERS=ON 打开）
+if (ZENITH_BUILD_FUZZERS)
+    add_subdirectory(fuzz)
+endif()
+
+# 基准服务端（性能门禁用；zenith_bench 在 tests/ 下）
+if (ZENITH_BUILD_BENCH)
+    add_subdirectory(benchmarks)
 endif()
 
 # ---------------------------------------------------------------------------

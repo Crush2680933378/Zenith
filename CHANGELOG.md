@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### 工程质量
+- **性能门禁**（CI `perf-gate`）：`tools/bench_gate.py` 校验两条与硬件无关的不变量——
+  64MB 静态文件的峰值 RSS（Linux `VmHWM`）必须 <64MB、吞吐不低于下限。不做绝对数字
+  对比（runner 硬件差异比要抓的回归还大），只拦「零拷贝退化成整块缓冲」这类形状。
+- **Release 模式测试**（CI `linux-release`）：此前五个 job 全是 Debug，Release 下
+  NDEBUG/优化暴露的问题无人覆盖。
+- **覆盖率**（CI `coverage`）：新增 `-DZENITH_COVERAGE=ON`（Clang profile-instr），
+  llvm-cov 汇总写 step summary 并上传 artifact。
+- **fuzz**（CI `fuzz-smoke` + `.github/workflows/fuzz-nightly.yml`）：新增
+  `-DZENITH_BUILD_FUZZERS=ON` 与 5 个 libFuzzer 目标——HTTP 请求/响应解析器、
+  WebSocket 帧解码、JSON 解析器、WAV 解码；白天冒烟 45s/目标，夜间 600s/目标并上传崩溃样本。
+- `benchmarks/` 纳入构建（`zenith_bench_server` 目标），带种子语料 `fuzz/corpus/`。
+
+### 修复
+- **连接关闭后不断开回调**：`TcpConnection` 的 onMessage_/onClose_ 闭包常捕获
+  WebSocketSession / HttpClient::AsyncState，而对方又持有连接 → 关闭后互相吊着，
+  进程退出时仍不释放（LSan 报的 TcpConnection 缓冲泄漏）。关闭时投递任务在本轮事件
+  之后清空全部回调（同步清会析构正在执行的闭包，M3 5d 规则）。
+
 ## v0.2.1 (2026-11-06)
 
 工程化补强与小版本修复：加 sanitizer 防线（并立刻抓到两个真问题）、发版自动化、
@@ -40,7 +61,7 @@
 - `test_m7` 增至 9 例：新增 `PipelinedResponseQueuesBehindFileBody`——同一连接
   连发两条请求、第二条在大文件发送期间处理，断言响应不交错、正文零污染。
 
-## Unreleased
+## 历史未归档（v0.2.0 之前的累积条目）
 
 ### 新增
 - **插件热重载（M8.2）**：`PluginManager::unload(name)` / `reload(path)` 支持单插件

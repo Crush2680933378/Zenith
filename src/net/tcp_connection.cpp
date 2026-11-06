@@ -434,6 +434,20 @@ void TcpConnection::handleClose(const std::string& reason) {
     }
     if (onClose_) onClose_(shared_from_this());
     if (hostClose_) hostClose_(shared_from_this());
+    // 断开所有回调：它们常捕获上层对象（WebSocketSession、HttpClient 的
+    // AsyncState），而对方又持有本连接 → 关闭后整组对象互相吊着，
+    // 进程退出时仍不释放（LSan 报的 TcpConnection 缓冲泄漏即此类）。
+    //
+    // 必须投递到本轮事件之后再清：当前调用栈往往就在 onMessage_ 的闭包里，
+    // 同步置空会析构正在执行的函数对象（UAF，M3 5d 规则）。
+    auto self = shared_from_this();
+    loop_->queueInLoop([self] {
+        self->onConnect_ = nullptr;
+        self->onMessage_ = nullptr;
+        self->onClose_ = nullptr;
+        self->onError_ = nullptr;
+        self->hostClose_ = nullptr;
+    });
     sock_.close(); // 触发 Socket 析构路径统一关闭
 }
 

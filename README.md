@@ -50,23 +50,33 @@ macOS 两个已知运行期问题（CI 里单列非阻塞步骤，失败可见�
 两者都只在 macOS 首次开启运行期测试时暴露，与平台相关的线程/网络行为有关（Linux/Windows 全绿）。
 修好后把 CI 里的 `-E "test_m13b|test_m13d"` 去掉、删除非阻塞步骤即可。
 
-### sanitizer 现状
+### 质量防线
 
-CI 的 `linux-sanitize` 任务分三层：
+CI 现在有这些任务，每一层拦一类问题：
 
-| 步骤 | 阻塞 | 覆盖 | 当前状态 |
-|---|---|---|---|
-| ASan + UBSan | ✅ | 全量 41 套 | ✅ **零错误**（越界/UAF/UB 全部清零） |
-| TSan | ✅ | 并发相关 5 套 | ✅ 通过 |
-| LeakSanitizer | ❌ 仅报告 | 4 套 | ⚠️ 进程退出时仍有对象存活 |
+| 任务 | 拦什么 | 阻塞 |
+|---|---|---|
+| `windows-mingw` / `linux-gcc` / `linux-clang-coro` / `macos-clang` | 四平台构建 + 全量测试 | ✅ |
+| `linux-release` | NDEBUG/优化下才暴露的问题（Debug 全绿 ≠ Release 全绿） | ✅ |
+| `linux-sanitize` · ASan+UBSan | 越界/UAF/UB，全量 41 套 | ✅ |
+| `linux-sanitize` · LSan | 进程退出时的对象泄漏 | ❌ 仅报告 |
+| `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ❌ 仅报告 |
+| `perf-gate` | 大文件峰值 RSS + 吞吐下限（与硬件无关的不变量） | ✅ |
+| `coverage` | llvm-cov 行覆盖汇总（artifact + step summary） | 仅产物 |
+| `fuzz-smoke` | HTTP 请求/响应、WS 帧、JSON、WAV 五个解析入口 × 45s | ✅ |
+| `Fuzz (nightly)` | 同五个目标 × 600s，崩溃样本作为 artifact 上传 | 夜间 |
 
-这层防线上线当轮就抓到并修掉了 5 个真问题（详见 CHANGELOG v0.2.1）：ZTEST 断言宏的
-悬垂引用（也是 macOS 段错误根因）、crew WS 的 context 类型混淆、插件卸载与在途任务赛跑、
-HTTP 客户端失败路径的循环引用、空闲定时器强引用连接。
+**perf-gate 的思路**：不做「和上次的绝对数字比」（CI runner 的硬件差异比要抓的回归还大），
+而是校验行为不变量——64MB 静态文件的峰值 RSS 必须保持在 64MB 以内、吞吐不能低于下限。
+上一轮那个「文件分块堆进发送缓冲 → RSS 265MB」的回归，就是这条门禁要拦的形状。
 
-仍待清理的 4 个泄漏套件：`test_websocket` / `test_m5_web` / `test_m13e` / `test_m13g`——
-都是「测试进程退出时连接/会话对象仍被某处持有」，不是增长型泄漏（长时间运行不涨）。
-修好一个就从 CI 报告步骤里划掉一个，清零后并回阻塞步骤。
+**sanitizer 上线当轮抓到 6 个真问题**（详见 CHANGELOG v0.2.1）：ZTEST 断言宏的悬垂引用
+（也是 macOS 段错误根因）、crew WS 的 context 类型混淆、插件卸载与在途任务赛跑、
+HTTP 客户端失败路径的循环引用、空闲定时器强引用连接、EventLoop 线程 id 的数据竞争。
+
+仍在收敛的两项：LSan 有 4 套（`test_websocket` / `test_m5_web` / `test_m13e` / `test_m13g`）
+在进程退出时仍有对象存活（非增长型），TSan 还有存量竞争未清——两者都单列报告步骤，
+清完即并回阻塞步骤。
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
 

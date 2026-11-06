@@ -1,0 +1,59 @@
+name: Fuzz (nightly)
+
+# 夜间长跑 fuzz：白天 CI 只跑 45s/目标的冒烟，真正的深挖放在这里。
+# 发现崩溃会把 artifact 传上来（-artifact_prefix 指定的 crash-* 文件）。
+on:
+  schedule:
+    - cron: "0 18 * * *" # UTC 18:00 = 北京时间 02:00
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: "每个目标的 fuzz 秒数"
+        default: "600"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang libssl-dev
+      - name: 构建 fuzzer
+        run: |
+          cmake -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_SANITIZE=address,undefined \
+                -DZENITH_BUILD_FUZZERS=ON -DZENITH_BUILD_TESTS=OFF \
+                -DZENITH_BUILD_EXAMPLES=OFF -DZENITH_BUILD_PLUGINS=OFF \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build-fuzz -j 4
+      - name: 长跑（${{ inputs.seconds || '600' }}s/目标）
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1
+          SECONDS_PER_TARGET: ${{ inputs.seconds || '600' }}
+        run: |
+          set -uo pipefail
+          mkdir -p crashes
+          rc=0
+          for t in fuzz_http_request fuzz_http_response fuzz_ws_frame fuzz_json fuzz_audio_wav; do
+            mkdir -p "fuzz/corpus/$t"
+            echo "== $t ($SECONDS_PER_TARGET s)"
+            "./build-fuzz/fuzz/$t" -max_total_time="$SECONDS_PER_TARGET" \
+              -rss_limit_mb=2048 -artifact_prefix="crashes/${t}-" \
+              "fuzz/corpus/$t" || rc=1
+          done
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: crashes/
+          if-no-files-found: warn

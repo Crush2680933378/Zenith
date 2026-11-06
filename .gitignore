@@ -19,3 +19,7 @@ logs/
 # 编译数据库 / 本地杂项
 compile_commands.json
 *.tmp
+benchwww/
+prof/
+*.profraw
+*.profdata

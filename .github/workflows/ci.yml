@@ -30,6 +30,123 @@ jobs:
           cmake --build build
           ctest --test-dir build --output-on-failure
 
+  # 性能门禁：只校验与硬件无关的不变量（大文件峰值 RSS、吞吐下限），
+  # 抓「零拷贝退化成整块缓冲」这类回归——上一轮就是靠人肉对比才发现的。
+  perf-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev
+      - name: Build (Release)
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF \
+                -DZENITH_BUILD_TESTS=OFF -DZENITH_BUILD_EXAMPLES=OFF \
+                -DZENITH_BUILD_PLUGINS=OFF
+          cmake --build build --target zenith_bench_server zenith_bench
+      - name: 性能/内存门禁
+        run: |
+          python3 tools/bench_gate.py \
+            --server build/benchmarks/zenith_bench_server \
+            --bench  build/bin/zenith_bench
+
+  # Release 模式跑全量测试：Debug 全绿不代表 Release 全绿（NDEBUG/优化会暴露不同问题）
+  linux-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev sqlite3 libsqlite3-dev
+      - run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl \
+                -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
+          cmake --build build
+          ctest --test-dir build --output-on-failure
+
+  # 覆盖率：Clang profile-instr → llvm-cov 汇总，结果写 step summary 并上传
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang llvm libssl-dev
+      - name: 构建（带插桩）
+        run: |
+          cmake -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_COVERAGE=ON -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF \
+                -DZENITH_BUILD_EXAMPLES=OFF -DZENITH_BUILD_PLUGINS=OFF
+          cmake --build build-cov
+      - name: 跑测试并汇总
+        run: |
+          set -euo pipefail
+          mkdir -p prof
+          LLVM_PROFILE_FILE="$PWD/prof/%p.profraw" \
+            ctest --test-dir build-cov --output-on-failure
+          llvm-profdata merge -sparse prof/*.profraw -o cov.profdata
+          BINS=$(find build-cov/bin -maxdepth 1 -type f -name 'test_*' | tr '\n' ' ')
+          llvm-cov report $BINS -instr-profile=cov.profdata \
+            --ignore-filename-regex='(thirdparty|tests|plugins|examples)/' | tee cov.txt
+          echo '### 覆盖率（行）' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 3 cov.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: cov.txt
+          if-no-files-found: warn
+
+  # fuzz 冒烟：每个目标 45s（夜间 workflow 跑长时段）
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang libssl-dev
+      - name: 构建 fuzzer
+        run: |
+          cmake -B build-fuzz -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_SANITIZE=address,undefined \
+                -DZENITH_BUILD_FUZZERS=ON -DZENITH_BUILD_TESTS=OFF \
+                -DZENITH_BUILD_EXAMPLES=OFF -DZENITH_BUILD_PLUGINS=OFF \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build-fuzz -j 4
+      - name: 冒烟 fuzz（45s/目标）
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          set -euo pipefail
+          for t in fuzz_http_request fuzz_http_response fuzz_ws_frame fuzz_json fuzz_audio_wav; do
+            mkdir -p "fuzz/corpus/$t"
+            echo "== $t"
+            "./build-fuzz/fuzz/$t" -max_total_time=45 -rss_limit_mb=2048 \
+              "fuzz/corpus/$t" || { echo "::error::$t 崩溃"; exit 1; }
+          done
+
   linux-gcc:
     runs-on: ubuntu-latest
     steps:
