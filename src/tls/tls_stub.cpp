@@ -58,6 +58,8 @@ TlsFilter::TlsFilter(bool /*serverSide*/, SSL* /*ssl*/) {
 
 TlsFilter::~TlsFilter() = default;
 
+std::string TlsFilter::alpnProtocol() const { return {}; }  // 没编 TLS 后端，自然没有 ALPN
+
 void TlsFilter::feedCipher(const char*, size_t, std::string&, std::string&) {
     fail(kNoTlsMsg);
 }
