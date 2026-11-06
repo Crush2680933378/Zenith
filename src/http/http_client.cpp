@@ -122,6 +122,11 @@ void HttpClient::returnToPool(const std::shared_ptr<AsyncState>& st) {
 }
 
 std::shared_ptr<tls::OpenSslContext> HttpClient::tlsContextFor(const ClientRequest& req) {
+#if !defined(ZENITH_TLS_OPENSSL)
+    // 没编入 TLS 后端（-DZENITH_TLS=none）：https 请求明确失败，而不是链接期缺符号。
+    (void)req;
+    return nullptr;
+#else
     if (tlsCtx_ && tlsCtx_->valid()) return tlsCtx_;
     tls::TlsClientConfig cfg;
     cfg.verifyPeer = req.verifyPeer;
@@ -130,6 +135,7 @@ std::shared_ptr<tls::OpenSslContext> HttpClient::tlsContextFor(const ClientReque
     if (!ctx) return nullptr;
     tlsCtx_ = std::make_shared<tls::OpenSslContext>(std::move(ctx).value());
     return tlsCtx_;
+#endif
 }
 
 HttpClient::HttpClient(net::EventLoop* loop) : loop_(loop) {}
@@ -239,6 +245,12 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
         [this, st, req](const net::TcpConnection::Ptr& conn) {
             // HTTPS：先装 TLS 滤层（客户端角色 + SNI），请求明文会在握手后自动发出
             if (req.tls) {
+#if !defined(ZENITH_TLS_OPENSSL)
+                finishState(st, core::Result<HttpResponse>::Err(
+                                    core::Error(94, "TLS backend not compiled (-DZENITH_TLS=none)")));
+                conn->forceClose();
+                return;
+#else
                 auto ctx = tlsContextFor(req);
                 SSL* ssl = ctx != nullptr ? ctx->newClientSession(req.host) : nullptr;
                 if (ssl == nullptr) {
@@ -248,6 +260,7 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
                     return;
                 }
                 conn->startTls(std::make_unique<tls::TlsFilter>(false, ssl));
+#endif
             }
             issueOn(conn, req, st);
         },

@@ -351,6 +351,12 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
             st->conn = conn;
             // wss：先装 TLS 滤层（升级请求在握手完成后自动发出——滤层暂存明文）
             if (useTls) {
+#if !defined(ZENITH_TLS_OPENSSL)
+                st->done = true;
+                conn->forceClose();
+                if (st->onFail) st->onFail("TLS backend not compiled (-DZENITH_TLS=none)");
+                return;
+#else
                 static std::mutex ctxMtx;
                 static std::map<bool, std::shared_ptr<tls::OpenSslContext>> ctxCache;
                 std::shared_ptr<tls::OpenSslContext> ctx;
@@ -380,6 +386,7 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
                     return;
                 }
                 conn->startTls(std::make_unique<tls::TlsFilter>(false, ssl));
+#endif
             }
             st->timerId = loop->scheduleAfter(std::chrono::milliseconds(timeoutMs), [st] {
                 if (st->done) return;

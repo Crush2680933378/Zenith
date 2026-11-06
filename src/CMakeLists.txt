@@ -3,6 +3,9 @@
 # ---- TLS 后端（ZENITH_TLS=openssl；先于源列表展开）----
 set(ZENITH_TLS_LIBS)
 set(ZENITH_TLS_SOURCES)
+# 没编入任何 TLS 后端时提供「编译得过、运行期明确报错」的空实现
+# （tls_stub.cpp 内部用 #if !ZENITH_TLS_OPENSSL 保护，openssl 构建下为空 TU）
+list(APPEND ZENITH_TLS_SOURCES tls/tls_stub.cpp)
 if (ZENITH_TLS STREQUAL "openssl")
     # 用 find_package 而不是手工 find_library：链接项会变成 imported target
     # （OpenSSL::SSL / OpenSSL::Crypto），导出给下游时不会带构建机的绝对路径。
