@@ -13,6 +13,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -117,6 +119,61 @@ private:
                      std::string* err);
     void insert(const std::string& name, const std::string& value);
     void evictTo(size_t limit);
+};
+
+/* --------------------------- h2c 服务端连接 --------------------------- */
+
+/// 一次 h2 请求（已解出伪头）
+struct H2Request {
+    std::string method;
+    std::string path;
+    std::string authority;
+    std::string scheme;
+    std::vector<std::pair<std::string, std::string>> headers;  // 不含伪头
+    std::string body;
+};
+
+struct H2Response {
+    int status = 200;
+    std::vector<std::pair<std::string, std::string>> headers;
+    std::string body;
+};
+
+/// h2c（明文、prior-knowledge）服务端连接。
+///
+/// 这一层的职责边界：
+///   - 处理客户端 preface、SETTINGS 交换/ACK、PING ACK、GOAWAY
+///   - HEADERS(+CONTINUATION) → HPACK 解码 → 调 handler → 回 HEADERS + DATA
+///   - **不做流控**（不会发 WINDOW_UPDATE，响应体需 < 64KB 默认窗口）
+///   - **不支持 Huffman**（除非对端也是本库客户端）
+class ZENITH_API H2ServerConnection {
+public:
+    using Handler = std::function<void(const H2Request&, H2Response&)>;
+
+    explicit H2ServerConnection(Handler h);
+
+    /// 喂入字节，返回要写回对端的字节（可能为空）
+    std::string feed(std::string_view data);
+
+    [[nodiscard]] bool closed() const noexcept { return closed_; }
+    [[nodiscard]] const std::string& error() const noexcept { return error_; }
+
+private:
+    void handleFrame(const Frame& f, std::string& out);
+    void dispatch(const H2Request& req, uint32_t streamId, std::string& out);
+    void sendGoAway(std::string& out, ErrorCode code);
+
+    Handler handler_;
+    HpackDecoder decoder_;
+    HpackEncoder encoder_;
+    std::string in_;
+    std::map<uint32_t, H2Request> streams_;  // 流 → 已收头字段/正文累积
+    std::string pendingHeaderBlock_;         // CONTINUATION 拼装
+    uint32_t pendingHeaderStream_ = 0;
+    bool prefaceSeen_ = false;
+    bool settingsSent_ = false;
+    bool closed_ = false;
+    std::string error_;
 };
 
 }  // namespace zenith::http::h2

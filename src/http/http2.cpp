@@ -405,4 +405,209 @@ bool HpackDecoder::decode(std::string_view block,
     return true;
 }
 
+/* --------------------------- h2c 服务端连接 --------------------------- */
+
+H2ServerConnection::H2ServerConnection(Handler h) : handler_(std::move(h)) {}
+
+void H2ServerConnection::sendGoAway(std::string& out, ErrorCode code) {
+    Frame f;
+    f.type = FrameType::GoAway;
+    f.streamId = 0;
+    f.payload.push_back(0);
+    f.payload.push_back(0);
+    f.payload.push_back(0);
+    f.payload.push_back(0);  // last-stream-id = 0
+    putU16(f.payload, static_cast<uint16_t>(code));
+    out += encodeFrame(f);
+    closed_ = true;
+}
+
+std::string H2ServerConnection::feed(std::string_view data) {
+    std::string out;
+    if (closed_) return out;
+    in_.append(data.data(), data.size());
+
+    if (!prefaceSeen_) {
+        const std::string_view want = kClientPreface;
+        const size_t n = in_.size() < want.size() ? in_.size() : want.size();
+        if (std::string_view(in_).substr(0, n) != want.substr(0, n)) {
+            error_ = "bad client preface";
+            sendGoAway(out, ErrorCode::ProtocolError);
+            return out;
+        }
+        if (in_.size() < want.size()) return out;  // 还没收全
+        in_.erase(0, want.size());
+        prefaceSeen_ = true;
+        Frame s;  // 服务端 SETTINGS：全默认值
+        s.type = FrameType::Settings;
+        out += encodeFrame(s);
+        settingsSent_ = true;
+    }
+
+    while (!in_.empty() && !closed_) {
+        const ParseResult r = parseFrame(in_);
+        if (r.status == ParseResult::Status::Pending) break;
+        if (r.status == ParseResult::Status::Error) {
+            error_ = "frame error";
+            sendGoAway(out, r.error);
+            break;
+        }
+        in_.erase(0, r.consumed);
+        handleFrame(r.frame, out);
+    }
+    return out;
+}
+
+void H2ServerConnection::handleFrame(const Frame& f, std::string& out) {
+    switch (f.type) {
+        case FrameType::Settings: {
+            if ((f.flags & 0x1) != 0) return;  // ACK，无需回
+            Frame ack;
+            ack.type = FrameType::Settings;
+            ack.flags = 0x1;
+            out += encodeFrame(ack);
+            return;
+        }
+        case FrameType::Ping: {
+            Frame ack;
+            ack.type = FrameType::Ping;
+            ack.flags = 0x1;
+            ack.payload = f.payload;
+            out += encodeFrame(ack);
+            return;
+        }
+        case FrameType::Headers: {
+            auto& req = streams_[f.streamId];
+            const bool endHeaders = (f.flags & 0x4) != 0;
+            const bool endStream = (f.flags & 0x1) != 0;
+            std::string block = f.payload;
+            // 去掉 PADDED / PRIORITY 前缀（简化：只处理无 pad、无 priority 的常见形态）
+            if ((f.flags & 0x8) != 0 && !block.empty()) {  // PADDED
+                const size_t pad = static_cast<uint8_t>(block[0]);
+                if (block.size() < 1 + pad) {
+                    error_ = "bad padded header";
+                    sendGoAway(out, ErrorCode::ProtocolError);
+                    return;
+                }
+                block = block.substr(1, block.size() - 1 - pad);
+            }
+            if ((f.flags & 0x20) != 0) {  // PRIORITY
+                if (block.size() < 5) {
+                    error_ = "bad priority header";
+                    sendGoAway(out, ErrorCode::ProtocolError);
+                    return;
+                }
+                block = block.substr(5);
+            }
+            if (!endHeaders) {
+                pendingHeaderBlock_ = std::move(block);
+                pendingHeaderStream_ = f.streamId;
+                return;
+            }
+            std::vector<std::pair<std::string, std::string>> fields;
+            std::string err;
+            if (!decoder_.decode(block, fields, &err)) {
+                error_ = "hpack: " + err;
+                sendGoAway(out, ErrorCode::CompressionError);
+                return;
+            }
+            for (auto& [name, value] : fields) {
+                if (name == ":method")
+                    req.method = value;
+                else if (name == ":path")
+                    req.path = value;
+                else if (name == ":authority")
+                    req.authority = value;
+                else if (name == ":scheme")
+                    req.scheme = value;
+                else
+                    req.headers.emplace_back(std::move(name), std::move(value));
+            }
+            if (endStream) dispatch(req, f.streamId, out);
+            return;
+        }
+        case FrameType::Continuation: {
+            if (pendingHeaderStream_ != f.streamId) {
+                error_ = "unexpected continuation";
+                sendGoAway(out, ErrorCode::ProtocolError);
+                return;
+            }
+            pendingHeaderBlock_ += f.payload;
+            if ((f.flags & 0x4) == 0) return;
+            std::vector<std::pair<std::string, std::string>> fields;
+            std::string err;
+            if (!decoder_.decode(pendingHeaderBlock_, fields, &err)) {
+                error_ = "hpack: " + err;
+                sendGoAway(out, ErrorCode::CompressionError);
+                return;
+            }
+            auto& req = streams_[f.streamId];
+            for (auto& [name, value] : fields) {
+                if (name == ":method")
+                    req.method = value;
+                else if (name == ":path")
+                    req.path = value;
+                else if (name == ":authority")
+                    req.authority = value;
+                else if (name == ":scheme")
+                    req.scheme = value;
+                else
+                    req.headers.emplace_back(std::move(name), std::move(value));
+            }
+            pendingHeaderBlock_.clear();
+            pendingHeaderStream_ = 0;
+            if ((f.flags & 0x1) != 0) dispatch(req, f.streamId, out);
+            return;
+        }
+        case FrameType::Data: {
+            auto& req = streams_[f.streamId];
+            req.body += f.payload;
+            if ((f.flags & 0x1) != 0) dispatch(req, f.streamId, out);
+            return;
+        }
+        case FrameType::RstStream: {
+            streams_.erase(f.streamId);
+            return;
+        }
+        case FrameType::GoAway: {
+            closed_ = true;
+            return;
+        }
+        case FrameType::WindowUpdate:
+            return;  // 简化：不做流控
+        default:
+            return;  // PRIORITY / PUSH_PROMISE 等暂不处理
+    }
+}
+
+void H2ServerConnection::dispatch(const H2Request& req, uint32_t streamId, std::string& out) {
+    H2Response resp;
+    if (handler_) handler_(req, resp);
+
+    std::vector<std::pair<std::string, std::string>> fields;
+    fields.emplace_back(":status", std::to_string(resp.status));
+    for (const auto& [k, v] : resp.headers)
+        fields.emplace_back(k, v);
+
+    std::string block = encoder_.encode(fields);
+
+    Frame h;
+    h.type = FrameType::Headers;
+    h.streamId = streamId;
+    h.flags = 0x4;                          // END_HEADERS
+    if (resp.body.empty()) h.flags |= 0x1;  // END_STREAM
+    h.payload = std::move(block);
+    out += encodeFrame(h);
+
+    if (!resp.body.empty()) {
+        Frame d;
+        d.type = FrameType::Data;
+        d.streamId = streamId;
+        d.flags = 0x1;  // END_STREAM
+        d.payload = std::move(resp.body);
+        out += encodeFrame(d);
+    }
+    streams_.erase(streamId);
+}
+
 }  // namespace zenith::http::h2

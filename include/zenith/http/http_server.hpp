@@ -23,6 +23,11 @@
 
 namespace zenith::http {
 
+namespace h2 {
+struct H2Request;
+struct H2Response;
+}  // namespace h2
+
 class ZENITH_API HttpServer : private core::NonCopyable {
 public:
     HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool = nullptr,
@@ -61,6 +66,8 @@ public:
 private:
     void onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& buf);
     void handleRequest(const net::TcpConnection::Ptr& conn);
+    /// M7.7：h2 请求 → 复用同一套 Router/中间件/Context 处理后回填响应
+    void handleH2Request(const h2::H2Request& req, h2::H2Response& resp);
     /// 返回 true 表示已完成 WebSocket 升级（连接被会话接管）
     bool tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn);
 

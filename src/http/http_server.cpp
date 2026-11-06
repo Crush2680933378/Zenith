@@ -1,5 +1,6 @@
 #include "zenith/http/http_server.hpp"
 
+#include "zenith/http/http2.hpp"
 #include "zenith/log/logger.hpp"
 #include "zenith/obs/trace_context.hpp"
 
@@ -13,6 +14,8 @@ struct ConnState {
     bool streaming = false;  // M9.1：流式响应在途（不参与空闲踢除/keep-alive）
     // M7.2a：连接级 Context 池——keep-alive 每请求零构造（reset 复用堆容量）
     std::unique_ptr<Context> ctx;
+    // M7.7：h2c（prior knowledge）连接状态；非空即整条连接走 HTTP/2
+    std::unique_ptr<h2::H2ServerConnection> h2;
 };
 }  // namespace
 
@@ -143,6 +146,59 @@ void HttpServer::enableWebSocket(const std::string& path,
     wsPaths_[path] = std::move(onOpen);
 }
 
+namespace {
+/// h2 的 :method 是字符串，转回内部枚举（未知方法按 GET 处理并让路由决定 404/405）
+HttpMethod methodFromH2(const std::string& m) {
+    if (m == "GET") return HttpMethod::Get;
+    if (m == "POST") return HttpMethod::Post;
+    if (m == "PUT") return HttpMethod::Put;
+    if (m == "DELETE") return HttpMethod::Delete;
+    if (m == "HEAD") return HttpMethod::Head;
+    if (m == "PATCH") return HttpMethod::Patch;
+    if (m == "OPTIONS") return HttpMethod::Options;
+    return HttpMethod::Get;
+}
+}  // namespace
+
+void HttpServer::handleH2Request(const h2::H2Request& r, h2::H2Response& resp) {
+    HttpRequest req;
+    req.method = methodFromH2(r.method);
+    req.httpMajor = 2;
+    req.httpMinor = 0;
+    req.peer = "h2";
+    // :path 里带 query，拆成 path + query map（HTTP/1 解析器也是这么做的）
+    const size_t q = r.path.find('?');
+    if (q == std::string::npos) {
+        req.path = r.path;
+    } else {
+        req.path = r.path.substr(0, q);
+        req.rawQuery = r.path.substr(q + 1);
+        for (const auto& [k, v] : parseQuery(req.rawQuery))
+            req.query[k] = v;
+    }
+    for (const auto& [k, v] : r.headers)
+        req.headers.add(k, v);
+    req.body = r.body;
+
+    Context ctx(std::move(req));
+    ctx.setConnection(nullptr);  // h2 v1 暂不支持流式响应
+    try {
+        router_.dispatch(ctx);
+    } catch (const Context::BadRequestBody& e) {
+        ctx.status(400).text(400, std::string("400 Bad Request: ") + e.what());
+    } catch (const std::exception& e) {
+        ZLOG_ERROR("h2 handler exception: ", e.what(), " (", r.path, ")");
+        ctx.status(500).text(500, "500 Internal Server Error");
+    } catch (...) {
+        ctx.status(500).text(500, "500 Internal Server Error");
+    }
+
+    resp.status = ctx.response().status;
+    for (const auto& [k, v] : ctx.response().headers.entries())
+        resp.headers.emplace_back(k, v);
+    resp.body = ctx.response().body;
+}
+
 bool HttpServer::tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn) {
     auto state = conn->context<ConnState>();
     const std::string path = state->parser.request().path;  // 先拷贝（reset 会清空内部请求）
@@ -178,6 +234,34 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
     if (state == nullptr) {
         state = std::make_shared<ConnState>(maxBodyBytes_);
         conn->setContext(state);
+    }
+
+    // ---- M7.7：h2c（prior knowledge）----
+    // 客户端第一个字节就是 "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"；一旦识别，整条连接交给 h2 层。
+    if (state->h2 != nullptr) {
+        const std::string out = state->h2->feed(
+            std::string_view(reinterpret_cast<const char*>(buf.peek()), buf.readableBytes()));
+        buf.consume(buf.readableBytes());
+        if (!out.empty()) conn->send(out);
+        if (state->h2->closed()) conn->shutdown();
+        return;
+    }
+    if (buf.readableBytes() > 0) {
+        const std::string_view pre = h2::kClientPreface;
+        const size_t n = buf.readableBytes() < pre.size() ? buf.readableBytes() : pre.size();
+        const std::string_view head(reinterpret_cast<const char*>(buf.peek()), n);
+        if (head == pre.substr(0, n)) {
+            if (n < pre.size()) return;  // preface 还没收全，等下一批
+            state->h2 = std::make_unique<h2::H2ServerConnection>(
+                [this](const h2::H2Request& req, h2::H2Response& resp) {
+                    handleH2Request(req, resp);
+                });
+            const std::string out = state->h2->feed(
+                std::string_view(reinterpret_cast<const char*>(buf.peek()), buf.readableBytes()));
+            buf.consume(buf.readableBytes());
+            if (!out.empty()) conn->send(out);
+            return;
+        }
     }
 
     for (;;) {
