@@ -28,4 +28,4 @@ ZENITH_API bool applyGzip(const HttpRequest& req, HttpResponse& resp, size_t min
 /// 中间件形态：全局启用响应压缩（handler 返回后执行）。
 ZENITH_API Middleware gzipMiddleware(size_t minBytes = 1024);
 
-} // namespace zenith::http
+}  // namespace zenith::http

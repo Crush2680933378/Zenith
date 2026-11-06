@@ -28,9 +28,10 @@ uint32_t randomMaskKey() {
 void applyMask(uint8_t* data, size_t n, uint32_t key) {
     const uint8_t k[4] = {static_cast<uint8_t>(key >> 24), static_cast<uint8_t>(key >> 16),
                           static_cast<uint8_t>(key >> 8), static_cast<uint8_t>(key)};
-    for (size_t i = 0; i < n; ++i) data[i] ^= k[i & 3];
+    for (size_t i = 0; i < n; ++i)
+        data[i] ^= k[i & 3];
 }
-} // namespace
+}  // namespace
 
 std::string WsFrame::encode(bool mask, uint32_t maskKey) const {
     std::string out;
@@ -84,8 +85,8 @@ WsDecodeResult wsDecodeFrame(const uint8_t* data, size_t n, bool requireMask) {
     // RFC6455：opcode 只允许 0(continuation)/1(text)/2(binary)/8(close)/9(ping)/10(pong)。
     // 3–7 / 11–15 是保留值，收到必须判错——否则上层会把非法枚举值当正常帧处理
     // （fuzz 首跑就喂出了 0x0D）。
-    if (!(opcode == 0x0 || opcode == 0x1 || opcode == 0x2 || opcode == 0x8 ||
-          opcode == 0x9 || opcode == 0xA)) {
+    if (!(opcode == 0x0 || opcode == 0x1 || opcode == 0x2 || opcode == 0x8 || opcode == 0x9 ||
+          opcode == 0xA)) {
         r.state = WsDecodeResult::State::Error;
         r.error = "invalid opcode " + std::to_string(static_cast<int>(opcode));
         return r;
@@ -104,9 +105,10 @@ WsDecodeResult wsDecodeFrame(const uint8_t* data, size_t n, bool requireMask) {
     } else if (len == 127) {
         if (n < pos + 8) return r;
         len = 0;
-        for (int i = 0; i < 8; ++i) len = (len << 8) | data[pos + i];
+        for (int i = 0; i < 8; ++i)
+            len = (len << 8) | data[pos + i];
         pos += 8;
-        if (len > (1ull << 31)) { // 上限 2GB 防滥用
+        if (len > (1ull << 31)) {  // 上限 2GB 防滥用
             r.state = WsDecodeResult::State::Error;
             r.error = "frame too large";
             return r;
@@ -121,7 +123,7 @@ WsDecodeResult wsDecodeFrame(const uint8_t* data, size_t n, bool requireMask) {
                   static_cast<uint32_t>(data[pos + 3]);
         pos += 4;
     }
-    if (n < pos + len) return r; // 数据不足
+    if (n < pos + len) return r;  // 数据不足
 
     r.frame.fin = fin;
     r.frame.opcode = static_cast<WsOpcode>(opcode);
@@ -184,12 +186,12 @@ void WebSocketSession::handleFrame(WsFrame&& f) {
             sendFrame(WsOpcode::Pong, f.payload);
             return;
         case WsOpcode::Pong:
-            return; // 心跳应答：用户可订阅，M3 忽略
+            return;  // 心跳应答：用户可订阅，M3 忽略
         case WsOpcode::Close: {
             uint16_t code = 1005;
             if (f.payload.size() >= 2) {
-                code = (static_cast<uint8_t>(f.payload[0]) << 8) |
-                       static_cast<uint8_t>(f.payload[1]);
+                code =
+                    (static_cast<uint8_t>(f.payload[0]) << 8) | static_cast<uint8_t>(f.payload[1]);
             }
             if (!closeSent_) {
                 // 对端发起关闭：回 close 帧完成握手
@@ -205,8 +207,9 @@ void WebSocketSession::handleFrame(WsFrame&& f) {
                 return;
             }
             if (f.fin) {
-                if (onMessage_) onMessage_(shared_from_this(), std::move(f.payload),
-                                           f.opcode == WsOpcode::Text);
+                if (onMessage_)
+                    onMessage_(shared_from_this(), std::move(f.payload),
+                               f.opcode == WsOpcode::Text);
             } else {
                 fragmenting_ = true;
                 fragOpcode_ = f.opcode;
@@ -219,7 +222,7 @@ void WebSocketSession::handleFrame(WsFrame&& f) {
                 return;
             }
             fragPayload_ += f.payload;
-            if (fragPayload_.size() > (32ull << 20)) { // 32MB 消息上限
+            if (fragPayload_.size() > (32ull << 20)) {  // 32MB 消息上限
                 finishClose(1009, "message too large");
                 return;
             }
@@ -238,9 +241,15 @@ void WebSocketSession::handleFrame(WsFrame&& f) {
     }
 }
 
-void WebSocketSession::sendText(const std::string& s) { sendFrame(WsOpcode::Text, s); }
-void WebSocketSession::sendBinary(const std::string& s) { sendFrame(WsOpcode::Binary, s); }
-void WebSocketSession::ping(const std::string& payload) { sendFrame(WsOpcode::Ping, payload); }
+void WebSocketSession::sendText(const std::string& s) {
+    sendFrame(WsOpcode::Text, s);
+}
+void WebSocketSession::sendBinary(const std::string& s) {
+    sendFrame(WsOpcode::Binary, s);
+}
+void WebSocketSession::ping(const std::string& payload) {
+    sendFrame(WsOpcode::Ping, payload);
+}
 
 void WebSocketSession::processPending(const std::string& bytes) {
     if (bytes.empty() || closed_) return;
@@ -297,7 +306,7 @@ struct WebSocketClient::Pending {
 };
 
 void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
-                               OpenCallback onOpen, FailCallback onFail) {
+                              OpenCallback onOpen, FailCallback onFail) {
     auto st = std::make_shared<Pending>();
     st->onOpen = std::move(onOpen);
     st->onFail = std::move(onFail);
@@ -310,7 +319,8 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
     {
         std::mt19937 rng{std::random_device{}()};
         std::string raw(16, '\0');
-        for (auto& c : raw) c = static_cast<char>(rng() & 0xFF);
+        for (auto& c : raw)
+            c = static_cast<char>(rng() & 0xFF);
         key = crypto::base64Encode(raw);
     }
     const std::string request = [&] {
@@ -377,46 +387,46 @@ void WebSocketClient::connect(net::EventLoop* loop, const WsConnectOptions& opt,
                 if (st->conn) st->conn->forceClose();
                 if (st->onFail) st->onFail("websocket upgrade timeout");
             });
-            conn->setMessageCallback(
-                [st, expectedAccept](const TcpConnection::Ptr&, core::Buffer& buf) {
-                    auto out = st->parser.feed(buf);
-                    if (out.failed()) {
-                        if (!st->done) {
-                            st->done = true;
-                            if (st->conn) st->conn->forceClose();
-                            if (st->onFail) st->onFail("bad upgrade response");
-                        }
-                        return;
+            conn->setMessageCallback([st, expectedAccept](const TcpConnection::Ptr&,
+                                                          core::Buffer& buf) {
+                auto out = st->parser.feed(buf);
+                if (out.failed()) {
+                    if (!st->done) {
+                        st->done = true;
+                        if (st->conn) st->conn->forceClose();
+                        if (st->onFail) st->onFail("bad upgrade response");
                     }
-                    if (!out.complete()) return;
-                    const http::HttpResponse& resp = st->parser.response();
-                    const bool upgraded = resp.status == 101 &&
-                        resp.headers.get("Upgrade") == "websocket" &&
-                        resp.headers.get("Sec-WebSocket-Accept") == expectedAccept;
-                    if (!upgraded) {
-                        if (!st->done) {
-                            st->done = true;
-                            if (st->conn) st->conn->forceClose();
-                            if (st->onFail) {
-                                st->onFail("upgrade rejected (status=" +
-                                           std::to_string(resp.status) + ")");
-                            }
+                    return;
+                }
+                if (!out.complete()) return;
+                const http::HttpResponse& resp = st->parser.response();
+                const bool upgraded = resp.status == 101 &&
+                                      resp.headers.get("Upgrade") == "websocket" &&
+                                      resp.headers.get("Sec-WebSocket-Accept") == expectedAccept;
+                if (!upgraded) {
+                    if (!st->done) {
+                        st->done = true;
+                        if (st->conn) st->conn->forceClose();
+                        if (st->onFail) {
+                            st->onFail("upgrade rejected (status=" + std::to_string(resp.status) +
+                                       ")");
                         }
-                        return;
                     }
-                    if (st->done) return;
-                    st->done = true;
-                    // 升级响应后可能紧跟早期 WS 帧：取出残留交给会话。
-                    // 关键：takeover 会替换正在执行的这条消息回调（其闭包随即销毁），
-                    // 在自身回调内继续访问捕获即 use-after-free → 投递到下轮任务执行。
-                    const std::string leftover = st->parser.releaseLeftover();
-                    net::EventLoop* wsLoop = st->loop;
-                    wsLoop->queueInLoop([st, leftover]() mutable {
-                        auto session = WebSocketSession::takeover(st->conn, /*clientSide=*/true);
-                        session->processPending(leftover);
-                        if (st->onOpen) st->onOpen(session);
-                    });
+                    return;
+                }
+                if (st->done) return;
+                st->done = true;
+                // 升级响应后可能紧跟早期 WS 帧：取出残留交给会话。
+                // 关键：takeover 会替换正在执行的这条消息回调（其闭包随即销毁），
+                // 在自身回调内继续访问捕获即 use-after-free → 投递到下轮任务执行。
+                const std::string leftover = st->parser.releaseLeftover();
+                net::EventLoop* wsLoop = st->loop;
+                wsLoop->queueInLoop([st, leftover]() mutable {
+                    auto session = WebSocketSession::takeover(st->conn, /*clientSide=*/true);
+                    session->processPending(leftover);
+                    if (st->onOpen) st->onOpen(session);
                 });
+            });
             conn->send(request);
         },
         [st](const std::string& reason) {
@@ -431,4 +441,4 @@ void WebSocketClient::fail(const std::string& reason) {
     (void)reason;
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

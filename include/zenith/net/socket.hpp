@@ -17,7 +17,7 @@ constexpr fd_t kInvalidFd = -1;
 
 struct Endpoint {
     std::string host{"0.0.0.0"};
-    uint16_t    port = 0;
+    uint16_t port = 0;
 };
 
 class ZENITH_API Socket {
@@ -77,4 +77,4 @@ private:
 /// M2 说明：异步 DNS 留待后续里程碑；服务端 accept 路径不经过它。
 ZENITH_API core::Result<uint32_t> resolveHostIpv4(const std::string& host);
 
-} // namespace zenith::net
+}  // namespace zenith::net

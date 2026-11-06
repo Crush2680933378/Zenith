@@ -33,7 +33,7 @@ zenith_status pluginInit(const zenith_host_api* host) {
     if (cfgJson.empty()) {
         host->log_write(host->log_ctx, ZENITH_LOG_WARN, "ai_router", 0,
                         "ai_router: no ai.router.config set — plugin idle");
-        return ZENITH_OK; // 空配置合法装载（不注册服务）
+        return ZENITH_OK;  // 空配置合法装载（不注册服务）
     }
 
     auto parsed = zenith::json::JsonValue::parse(cfgJson);
@@ -65,10 +65,14 @@ zenith_status pluginInit(const zenith_host_api* host) {
                                   static_cast<void*>(router), &destroyRouter);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
-    g_router = nullptr; // 宿主 destroyRouter 负责删除
+    g_router = nullptr;  // 宿主 destroyRouter 负责删除
     g_host = nullptr;
 }
 
@@ -87,6 +91,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

@@ -9,17 +9,17 @@
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
 
-  #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0601
-  #endif
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 namespace zenith::net {
 
@@ -38,7 +38,7 @@ uint16_t fromNativeEvents(uint16_t revents) {
     if ((revents & POLLHUP) != 0) r |= kPollHangup;
     return r;
 }
-} // namespace
+}  // namespace
 
 class WsaPollPoller final : public Poller {
 public:
@@ -95,8 +95,10 @@ private:
     std::map<fd_t, size_t> index_;
 };
 
-std::unique_ptr<Poller> createWsaPollPoller() { return std::make_unique<WsaPollPoller>(); }
+std::unique_ptr<Poller> createWsaPollPoller() {
+    return std::make_unique<WsaPollPoller>();
+}
 
-} // namespace zenith::net
+}  // namespace zenith::net
 
-#endif // ZENITH_PLATFORM_WINDOWS
+#endif  // ZENITH_PLATFORM_WINDOWS

@@ -35,4 +35,4 @@ struct OpenAiApiOptions {
 ZENITH_API void mountOpenAiApi(http::Router& router, IInferenceService& service,
                                const OpenAiApiOptions& options = {});
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

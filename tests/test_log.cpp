@@ -17,12 +17,12 @@ namespace {
 
 LogRecord makeRecord(std::string msg, LogLevel level = LogLevel::Info) {
     LogRecord r;
-    r.level       = level;
+    r.level = level;
     r.timestampMs = zenith::core::nowMilliseconds();
-    r.threadId    = 99;
-    r.file        = "some_file.cpp";
-    r.line        = 12;
-    r.message     = std::move(msg);
+    r.threadId = 99;
+    r.file = "some_file.cpp";
+    r.line = 12;
+    r.message = std::move(msg);
     return r;
 }
 
@@ -53,7 +53,7 @@ std::string fileToString(const std::string& path) {
     return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
-} // namespace
+}  // namespace
 
 /* ---------------- formatLogLine ---------------- */
 
@@ -125,14 +125,14 @@ ZTEST(AsyncFileLogger, PersistsAndRolls) {
         }
         sink.flush();
         std::this_thread::sleep_for(std::chrono::milliseconds(400));
-    } // 析构排空并关闭
+    }  // 析构排空并关闭
 
     const std::string current = fileToString(base);
     const std::string rolled1 = fileToString(base + ".1");
-    ZEXPECT_TRUE(current.find("line-199") != std::string::npos); // 最后一条已落盘
-    ZEXPECT_TRUE(!rolled1.empty());                              // 已发生滚动
+    ZEXPECT_TRUE(current.find("line-199") != std::string::npos);  // 最后一条已落盘
+    ZEXPECT_TRUE(!rolled1.empty());                               // 已发生滚动
     const std::string rolled2 = fileToString(base + ".2");
-    ZEXPECT_TRUE(!rolled2.empty()); // 200 行 × ~50B 远超 1KB × 2 轮滚动
+    ZEXPECT_TRUE(!rolled2.empty());  // 200 行 × ~50B 远超 1KB × 2 轮滚动
 }
 
 ZTEST(AsyncFileLogger, QueueOverflowDropsAndCounts) {
@@ -142,9 +142,10 @@ ZTEST(AsyncFileLogger, QueueOverflowDropsAndCounts) {
     std::remove(base.c_str());
     {
         AsyncFileLogger sink(base);
-        for (int i = 0; i < 1000; ++i) sink.write(makeRecord("x"));
+        for (int i = 0; i < 1000; ++i)
+            sink.write(makeRecord("x"));
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        ZEXPECT_TRUE(sink.droppedCount() <= 1000u); // 读路径可用且数值有界
+        ZEXPECT_TRUE(sink.droppedCount() <= 1000u);  // 读路径可用且数值有界
     }
     std::remove(base.c_str());
 }

@@ -69,8 +69,10 @@ private:
         if (pos_ >= s_.size()) return err("unexpected end of input");
         const char c = s_[pos_];
         switch (c) {
-            case '{': return parseObject(depth);
-            case '[': return parseArray(depth);
+            case '{':
+                return parseObject(depth);
+            case '[':
+                return parseArray(depth);
             case '"': {
                 auto r = parseString();
                 if (!r) return core::Result<JsonValue>::Err(std::move(r).error());
@@ -92,7 +94,7 @@ private:
     }
 
     core::Result<JsonValue> parseObject(int depth) {
-        ++pos_; // '{'
+        ++pos_;  // '{'
         JsonValue v = JsonValue::object();
         skipWs();
         if (consume('}')) return core::Result<JsonValue>::Ok(std::move(v));
@@ -116,7 +118,7 @@ private:
     }
 
     core::Result<JsonValue> parseArray(int depth) {
-        ++pos_; // '['
+        ++pos_;  // '['
         JsonValue v = JsonValue::array();
         skipWs();
         if (consume(']')) return core::Result<JsonValue>::Ok(std::move(v));
@@ -133,7 +135,7 @@ private:
     }
 
     core::Result<std::string> parseString() {
-        ++pos_; // '"'
+        ++pos_;  // '"'
         std::string out;
         for (;;) {
             if (pos_ >= s_.size()) return strErr("unterminated string");
@@ -148,23 +150,40 @@ private:
                 if (pos_ >= s_.size()) return strErr("unterminated escape");
                 const char e = s_[pos_++];
                 switch (e) {
-                    case '"':  out.push_back('"');  break;
-                    case '\\': out.push_back('\\'); break;
-                    case '/':  out.push_back('/');  break;
-                    case 'b':  out.push_back('\b'); break;
-                    case 'f':  out.push_back('\f'); break;
-                    case 'n':  out.push_back('\n'); break;
-                    case 'r':  out.push_back('\r'); break;
-                    case 't':  out.push_back('\t'); break;
+                    case '"':
+                        out.push_back('"');
+                        break;
+                    case '\\':
+                        out.push_back('\\');
+                        break;
+                    case '/':
+                        out.push_back('/');
+                        break;
+                    case 'b':
+                        out.push_back('\b');
+                        break;
+                    case 'f':
+                        out.push_back('\f');
+                        break;
+                    case 'n':
+                        out.push_back('\n');
+                        break;
+                    case 'r':
+                        out.push_back('\r');
+                        break;
+                    case 't':
+                        out.push_back('\t');
+                        break;
                     case 'u': {
                         auto cp = parseHex4();
                         if (!cp) return core::Result<std::string>::Err(std::move(cp).error());
                         uint32_t code = cp.value();
-                        if (code >= 0xD800 && code <= 0xDBFF) { // 高代理 → 需要低代理
+                        if (code >= 0xD800 && code <= 0xDBFF) {  // 高代理 → 需要低代理
                             if (pos_ + 1 < s_.size() && s_[pos_] == '\\' && s_[pos_ + 1] == 'u') {
                                 pos_ += 2;
                                 auto lo = parseHex4();
-                                if (!lo) return core::Result<std::string>::Err(std::move(lo).error());
+                                if (!lo)
+                                    return core::Result<std::string>::Err(std::move(lo).error());
                                 const uint32_t loV = lo.value();
                                 if (loV >= 0xDC00 && loV <= 0xDFFF) {
                                     code = 0x10000 + ((code - 0xD800) << 10) + (loV - 0xDC00);
@@ -180,7 +199,8 @@ private:
                         appendUtf8(out, code);
                         break;
                     }
-                    default: return strErr(std::string("invalid escape '\\") + e + "'");
+                    default:
+                        return strErr(std::string("invalid escape '\\") + e + "'");
                 }
             } else {
                 out.push_back(static_cast<char>(c));
@@ -216,7 +236,8 @@ private:
         if (s_[pos_] == '0') {
             ++pos_;
         } else if (s_[pos_] >= '1' && s_[pos_] <= '9') {
-            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9') ++pos_;
+            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9')
+                ++pos_;
         } else {
             return err("invalid number");
         }
@@ -227,7 +248,8 @@ private:
             if (pos_ >= s_.size() || s_[pos_] < '0' || s_[pos_] > '9') {
                 return err("digit required after decimal point");
             }
-            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9') ++pos_;
+            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9')
+                ++pos_;
         }
         if (pos_ < s_.size() && (s_[pos_] == 'e' || s_[pos_] == 'E')) {
             isDouble = true;
@@ -236,13 +258,15 @@ private:
             if (pos_ >= s_.size() || s_[pos_] < '0' || s_[pos_] > '9') {
                 return err("digit required in exponent");
             }
-            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9') ++pos_;
+            while (pos_ < s_.size() && s_[pos_] >= '0' && s_[pos_] <= '9')
+                ++pos_;
         }
 
         const std::string numStr = s_.substr(begin, pos_ - begin);
         if (!isDouble) {
             int64_t iv = 0;
-            const auto [ptr, ec] = std::from_chars(numStr.data(), numStr.data() + numStr.size(), iv);
+            const auto [ptr, ec] =
+                std::from_chars(numStr.data(), numStr.data() + numStr.size(), iv);
             if (ec == std::errc() && ptr == numStr.data() + numStr.size()) {
                 return core::Result<JsonValue>::Ok(JsonValue(iv));
             }
@@ -294,13 +318,27 @@ void dumpEscaped(const std::string& s, std::string& out) {
     out.push_back('"');
     for (unsigned char c : s) {
         switch (c) {
-            case '"':  out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\b': out += "\\b";  break;
-            case '\f': out += "\\f";  break;
-            case '\n': out += "\\n";  break;
-            case '\r': out += "\\r";  break;
-            case '\t': out += "\\t";  break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\b':
+                out += "\\b";
+                break;
+            case '\f':
+                out += "\\f";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
             default:
                 if (c < 0x20) {
                     char buf[8];
@@ -323,17 +361,23 @@ void dumpImpl(const JsonValue& v, std::string& out, int indent, int depth) {
     };
 
     switch (v.type()) {
-        case JsonValue::Type::Null:    out += "null"; break;
-        case JsonValue::Type::Bool:    out += v.asBool() ? "true" : "false"; break;
-        case JsonValue::Type::Int:     out += std::to_string(v.asInt()); break;
+        case JsonValue::Type::Null:
+            out += "null";
+            break;
+        case JsonValue::Type::Bool:
+            out += v.asBool() ? "true" : "false";
+            break;
+        case JsonValue::Type::Int:
+            out += std::to_string(v.asInt());
+            break;
         case JsonValue::Type::Double: {
             const double d = v.asDouble();
             if (std::isnan(d) || std::isinf(d)) {
-                out += "null"; // JSON 无 NaN/Inf 表示
+                out += "null";  // JSON 无 NaN/Inf 表示
                 break;
             }
             char buf[64];
-            const auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), d); // 最短往返表示
+            const auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), d);  // 最短往返表示
             if (ec == std::errc()) {
                 out.append(buf, static_cast<size_t>(ptr - buf));
                 // 保证是合法 JSON 数值（如 "1e5" → "1e5" 合法；整数形如 "1" 补 ".0"）
@@ -397,7 +441,7 @@ const JsonValue& staticNull() {
     return kNull;
 }
 
-} // namespace
+}  // namespace
 
 const std::string& JsonValue::asString() const noexcept {
     return type_ == Type::String ? s_ : staticNull().s_;
@@ -451,19 +495,27 @@ const JsonValue& JsonValue::operator[](size_t i) const noexcept {
 
 size_t JsonValue::size() const noexcept {
     switch (type_) {
-        case Type::Array:  return arr_.size();
-        case Type::Object: return obj_.size();
-        default:           return 0;
+        case Type::Array:
+            return arr_.size();
+        case Type::Object:
+            return obj_.size();
+        default:
+            return 0;
     }
 }
 
 bool JsonValue::empty() const noexcept {
     switch (type_) {
-        case Type::Array:  return arr_.empty();
-        case Type::Object: return obj_.empty();
-        case Type::String: return s_.empty();
-        case Type::Null:   return true;
-        default:           return false;
+        case Type::Array:
+            return arr_.empty();
+        case Type::Object:
+            return obj_.empty();
+        case Type::String:
+            return s_.empty();
+        case Type::Null:
+            return true;
+        default:
+            return false;
     }
 }
 
@@ -478,4 +530,4 @@ std::string JsonValue::dump(int indent) const {
     return out;
 }
 
-} // namespace zenith::json
+}  // namespace zenith::json

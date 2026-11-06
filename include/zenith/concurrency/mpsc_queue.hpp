@@ -23,12 +23,12 @@ inline constexpr size_t kCacheLine = 64;
 
 template <typename T, size_t Capacity>
 class MpscRingQueue {
-    static_assert(Capacity >= 2 && (Capacity & (Capacity - 1)) == 0,
-                  "Capacity 必须是 2 的幂");
+    static_assert(Capacity >= 2 && (Capacity & (Capacity - 1)) == 0, "Capacity 必须是 2 的幂");
 
 public:
     MpscRingQueue() noexcept {
-        for (size_t i = 0; i < Capacity; ++i) slots_[i].turn.store(i, std::memory_order_relaxed);
+        for (size_t i = 0; i < Capacity; ++i)
+            slots_[i].turn.store(i, std::memory_order_relaxed);
     }
 
     MpscRingQueue(const MpscRingQueue&) = delete;
@@ -64,7 +64,7 @@ public:
         Slot& slot = slots_[pos & kMask];
         const size_t turn = slot.turn.load(std::memory_order_acquire);
         const intptr_t dif = static_cast<intptr_t>(turn) - static_cast<intptr_t>(pos + 1);
-        if (dif != 0) return false; // 尚未写入完成
+        if (dif != 0) return false;  // 尚未写入完成
 
         head_.store(pos + 1, std::memory_order_relaxed);
         out = std::move(slot.value);
@@ -91,4 +91,4 @@ private:
     alignas(kCacheLine) Slot slots_[Capacity];
 };
 
-} // namespace zenith::concurrency
+}  // namespace zenith::concurrency

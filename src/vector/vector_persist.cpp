@@ -20,8 +20,7 @@ core::Result<void> saveCollection(const std::string& dir, const std::string& col
     }
     FILE* f = std::fopen(tmpPath.c_str(), "wb");
     if (f == nullptr) {
-        return core::Result<void>::Err(
-            core::Error(310, "persist: cannot open " + tmpPath));
+        return core::Result<void>::Err(core::Error(310, "persist: cannot open " + tmpPath));
     }
     const size_t n = std::fwrite(blob.value().data(), 1, blob.value().size(), f);
     std::fclose(f);
@@ -29,11 +28,10 @@ core::Result<void> saveCollection(const std::string& dir, const std::string& col
         fs::remove(tmpPath, ec);
         return core::Result<void>::Err(core::Error(311, "persist: short write"));
     }
-    fs::rename(tmpPath, finalPath, ec); // 原子替换
+    fs::rename(tmpPath, finalPath, ec);  // 原子替换
     if (ec) {
         fs::remove(finalPath, ec);
-        return core::Result<void>::Err(
-            core::Error(312, "persist: rename failed: " + ec.message()));
+        return core::Result<void>::Err(core::Error(312, "persist: rename failed: " + ec.message()));
     }
     return core::Result<void>::Ok();
 }
@@ -53,8 +51,7 @@ core::Result<std::unique_ptr<HnswIndex>> loadCollection(const std::string& dir,
         blob.append(buf, n);
     }
     std::fclose(f);
-    return HnswIndex::deserialize(reinterpret_cast<const uint8_t*>(blob.data()),
-                                  blob.size());
+    return HnswIndex::deserialize(reinterpret_cast<const uint8_t*>(blob.data()), blob.size());
 }
 
 std::vector<std::string> listCollections(const std::string& dir) {
@@ -70,4 +67,4 @@ std::vector<std::string> listCollections(const std::string& dir) {
     return out;
 }
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

@@ -57,8 +57,7 @@ public:
         r.usage.completionTokens = 8;
         return r;
     }
-    zenith::ai::EmbeddingResult embeddings(const std::string&,
-                                           const std::string&) override {
+    zenith::ai::EmbeddingResult embeddings(const std::string&, const std::string&) override {
         zenith::ai::EmbeddingResult e;
         e.ok = false;
         return e;
@@ -95,24 +94,22 @@ public:
         return zenith::core::Result<zenith::vector::CollectionInfo>::Ok(i);
     }
     zenith::core::Result<void> upsert(
-        const std::string& n,
-        const std::vector<zenith::vector::VectorPoint>& pts) override {
-        for (const auto& p : pts) cols_[n]->upsert(p.id, p.vec.data());
+        const std::string& n, const std::vector<zenith::vector::VectorPoint>& pts) override {
+        for (const auto& p : pts)
+            cols_[n]->upsert(p.id, p.vec.data());
         return zenith::core::Result<void>::Ok();
     }
     zenith::core::Result<void> remove(const std::string& n,
                                       const std::vector<uint64_t>& ids) override {
-        for (uint64_t id : ids) cols_[n]->remove(id);
+        for (uint64_t id : ids)
+            cols_[n]->remove(id);
         return zenith::core::Result<void>::Ok();
     }
-    zenith::core::Result<zenith::vector::VectorPoint> get(const std::string&,
-                                                          uint64_t) override {
-        return zenith::core::Result<zenith::vector::VectorPoint>::Err(
-            zenith::core::Error(1, "nf"));
+    zenith::core::Result<zenith::vector::VectorPoint> get(const std::string&, uint64_t) override {
+        return zenith::core::Result<zenith::vector::VectorPoint>::Err(zenith::core::Error(1, "nf"));
     }
     zenith::core::Result<std::vector<zenith::vector::ScoredPoint>> search(
-        const std::string& n, const std::vector<float>& q, int k,
-        float) override {
+        const std::string& n, const std::vector<float>& q, int k, float) override {
         auto hits = cols_[n]->search(q.data(), k);
         std::vector<zenith::vector::ScoredPoint> out;
         for (const auto& h : hits) {
@@ -156,12 +153,11 @@ int main() {
     agent::AgentConfig agCfg;
     agCfg.maxSteps = 6;
     agent::Agent ag(inference, agCfg);
-    ag.registerTool("get_weather", "query weather of a city",
-                     [](const http::json::JsonValue& args) {
-                         return "sunny, 26C (mock weather service)";
-                     });
+    ag.registerTool(
+        "get_weather", "query weather of a city",
+        [](const http::json::JsonValue& args) { return "sunny, 26C (mock weather service)"; });
 
-    concurrency::ThreadPool workers(2); // 推理/工具在独立线程跑，不占 IO loop
+    concurrency::ThreadPool workers(2);  // 推理/工具在独立线程跑，不占 IO loop
     server.router().post("/agent/run", [&ag, &workers](http::Context& c) {
         auto body = c.bodyJson();
         const std::string msg = body["message"].asString();
@@ -211,9 +207,7 @@ int main() {
     ZLOG_INFO("  POST /mcp         MCP JSON-RPC (tools/list)");
     ZLOG_INFO("  PUT  /collections Qdrant-compatible vector API");
 
-    net::installSignalHandler([&] {
-        server.beginGracefulShutdown([&] { loop.stop(); });
-    });
+    net::installSignalHandler([&] { server.beginGracefulShutdown([&] { loop.stop(); }); });
     loop.loop();
     io.stop();
     workers.shutdown();

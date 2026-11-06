@@ -41,8 +41,8 @@
 #include "zenith/abi/zenith_abi.h"
 #include "zenith/ai/inference_service.hpp"
 
-#include "backend.hpp"          // 来自 plugins/ai_inference
-#include "engine_supervisor.hpp" // 来自 plugins/ai_inference
+#include "backend.hpp"            // 来自 plugins/ai_inference
+#include "engine_supervisor.hpp"  // 来自 plugins/ai_inference
 
 namespace {
 
@@ -57,9 +57,15 @@ void logAt(zenith_log_level level, const std::string& m) {
         g_host->log_write(g_host->log_ctx, level, "ai_ninfer", 0, m.c_str());
     }
 }
-void logInfo(const std::string& m) { logAt(ZENITH_LOG_INFO, m); }
-void logWarn(const std::string& m) { logAt(ZENITH_LOG_WARN, m); }
-void logError(const std::string& m) { logAt(ZENITH_LOG_ERROR, m); }
+void logInfo(const std::string& m) {
+    logAt(ZENITH_LOG_INFO, m);
+}
+void logWarn(const std::string& m) {
+    logAt(ZENITH_LOG_WARN, m);
+}
+void logError(const std::string& m) {
+    logAt(ZENITH_LOG_ERROR, m);
+}
 
 std::string cfgStr(const char* key, const char* fallback) {
     const char* v = nullptr;
@@ -78,8 +84,10 @@ int cfgInt(const char* key, int fallback) {
 std::string trimCopy(const std::string& s) {
     size_t b = 0;
     size_t e = s.size();
-    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n')) ++b;
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n')) --e;
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n'))
+        ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n'))
+        --e;
     return s.substr(b, e - b);
 }
 
@@ -149,8 +157,10 @@ std::string deriveUrl(const std::vector<std::string>& args) {
     std::string host = "127.0.0.1";
     int port = 0;
     for (size_t i = 0; i + 1 < args.size(); ++i) {
-        if (args[i] == "--host") host = args[i + 1];
-        else if (args[i] == "--port") port = std::atoi(args[i + 1].c_str());
+        if (args[i] == "--host")
+            host = args[i + 1];
+        else if (args[i] == "--port")
+            port = std::atoi(args[i + 1].c_str());
     }
     if (port <= 0) return std::string();
     if (host == "0.0.0.0" || host.empty()) host = "127.0.0.1";
@@ -174,7 +184,7 @@ public:
         : supervisor_(std::move(supervisor)), backend_(std::move(backend)) {}
 
     ~NinferService() override {
-        if (supervisor_ != nullptr) supervisor_->stop(); // 先收进程，再放后端
+        if (supervisor_ != nullptr) supervisor_->stop();  // 先收进程，再放后端
     }
 
     [[nodiscard]] std::vector<zenith::ai::ModelInfo> models() override {
@@ -205,7 +215,9 @@ private:
     std::unique_ptr<zenith::ai::detail::Backend> backend_;
 };
 
-void destroyService(void* p) { delete static_cast<NinferService*>(p); }
+void destroyService(void* p) {
+    delete static_cast<NinferService*>(p);
+}
 
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
@@ -222,7 +234,8 @@ zenith_status pluginInit(const zenith_host_api* host) {
     const std::string engineModel = cfgStr("ai.ninfer.model", "");
     const std::string engineDir = dirOf(exe);
     std::vector<std::string> argv = splitArgs(cfgStr("ai.ninfer.args", ""));
-    for (auto& a : argv) a = expand(a, engineModel, engineDir);
+    for (auto& a : argv)
+        a = expand(a, engineModel, engineDir);
 
     std::string url = cfgStr("ai.ninfer.url", "");
     if (url.empty()) url = deriveUrl(argv);
@@ -265,9 +278,15 @@ zenith_status pluginInit(const zenith_host_api* host) {
                                   &destroyService);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -283,6 +302,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

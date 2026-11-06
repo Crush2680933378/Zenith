@@ -28,21 +28,20 @@ public:
     std::vector<ai::ModelInfo> models() override { return {}; }
 
     std::mutex m;
-    std::map<std::string, std::vector<std::string>> prompts; // role → user prompts
-    std::map<std::string, std::vector<std::string>> models_; // role → req.model
+    std::map<std::string, std::vector<std::string>> prompts;  // role → user prompts
+    std::map<std::string, std::vector<std::string>> models_;  // role → req.model
     std::atomic<int> chatCount{0};
     std::atomic<int> implInFlight{0}, implMaxInFlight{0};
     int chatSleepMs = 0;
     // 行为开关
-    int pmBadJsonTimes = 0;        // PM 前 N 次回非法 JSON
-    bool voteAlwaysRevise = false; // PRD 评审全员 revise（辩论测试）
-    bool streamDeltas = false;     // 回调 onToken
+    int pmBadJsonTimes = 0;         // PM 前 N 次回非法 JSON
+    bool voteAlwaysRevise = false;  // PRD 评审全员 revise（辩论测试）
+    bool streamDeltas = false;      // 回调 onToken
     int64_t usageIn = 0, usageOut = 0;
     std::string deliveryMarker = "ROLE: DELIVERY";
-    std::vector<std::pair<std::string, std::string>> extraTesterCommands; // exec 验证
+    std::vector<std::pair<std::string, std::string>> extraTesterCommands;  // exec 验证
 
-    ai::ChatResult chat(const ai::ChatRequest& req,
-                        const ai::TokenCallback& onToken = nullptr,
+    ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& onToken = nullptr,
                         const ai::TokenCallback& = nullptr) override {
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
@@ -58,11 +57,12 @@ public:
         if (impl) {
             const int n = ++implInFlight;
             int cur = implMaxInFlight.load();
-            while (n > cur && !implMaxInFlight.compare_exchange_weak(cur, n)) {}
+            while (n > cur && !implMaxInFlight.compare_exchange_weak(cur, n)) {
+            }
         }
         if (chatSleepMs > 0) std::this_thread::sleep_for(std::chrono::milliseconds(chatSleepMs));
         if (streamDeltas && onToken) {
-            onToken("abcdefghijklmnopqrstuvwxyz012345"); // 32 字符 → 触发节流事件
+            onToken("abcdefghijklmnopqrstuvwxyz012345");  // 32 字符 → 触发节流事件
         }
 
         ai::ChatResult r;
@@ -97,24 +97,30 @@ public:
             r.content = R"({"files":[{"path":"src/a.cpp","content":"// impl"}],"notes":"d"})";
         } else if (role == "tester") {
             if (user.find("STORY ") != std::string::npos) {
-                r.content = R"({"cases":[{"id":"T1"}],"results":[)"
-                            R"({"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
+                r.content =
+                    R"({"cases":[{"id":"T1"}],"results":[)"
+                    R"({"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
             } else if (user.find("RETEST") == std::string::npos && !retested_) {
                 retested_ = true;
-                r.content = R"({"cases":[{"id":"T1"}],"results":[)"
-                            R"({"case":"T1","status":"fail","detail":"500","component":"backend"}]})";
+                r.content =
+                    R"({"cases":[{"id":"T1"}],"results":[)"
+                    R"({"case":"T1","status":"fail","detail":"500","component":"backend"}]})";
             } else {
-                json::JsonValue j = json::JsonValue::parse(
-                    R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})").value();
+                json::JsonValue j =
+                    json::JsonValue::parse(
+                        R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})")
+                        .value();
                 if (!extraTesterCommands.empty()) {
                     json::JsonValue cmds = json::JsonValue::array();
-                    for (auto& [c, expect] : extraTesterCommands) cmds.push_back(c);
+                    for (auto& [c, expect] : extraTesterCommands)
+                        cmds.push_back(c);
                     j["commands"] = std::move(cmds);
                 }
                 r.content = j.dump();
             }
         } else if (role == "devops") {
-            r.content = R"({"files":[{"path":"Dockerfile","content":"FROM x"}],"deploy":{"strategy":"docker"}})";
+            r.content =
+                R"({"files":[{"path":"Dockerfile","content":"FROM x"}],"deploy":{"strategy":"docker"}})";
         } else if (sys.find(deliveryMarker) != std::string::npos) {
             r.content = R"({"changelog":"# v0.1.0","release_notes":"n","version":"0.1.0"})";
         } else {
@@ -168,7 +174,7 @@ bool hasEvent(const crew::CrewEngine& eng, const std::string& id, const std::str
     }
     return false;
 }
-} // namespace
+}  // namespace
 
 /* ---------------- P0 ---------------- */
 
@@ -199,18 +205,20 @@ ZTEST(CrewM14, PerRoleModelRouting) {
     waitTerminal(eng, id);
     {
         std::lock_guard<std::mutex> lk(rec->m);
-        for (const std::string& mm : rec->models_["pm"]) ZEXPECT_EQ(mm, std::string("pm-cheap"));
+        for (const std::string& mm : rec->models_["pm"])
+            ZEXPECT_EQ(mm, std::string("pm-cheap"));
         for (const std::string& mm : rec->models_["architect"]) {
             ZEXPECT_EQ(mm, std::string("arch-strong"));
         }
-        for (const std::string& mm : rec->models_["tester"]) ZEXPECT_EQ(mm, std::string(""));
+        for (const std::string& mm : rec->models_["tester"])
+            ZEXPECT_EQ(mm, std::string(""));
     }
 }
 
 ZTEST(CrewM14, StructuredOutputRetry) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->pmBadJsonTimes = 1; // 第一次坏 JSON → 重试修正
+    rec->pmBadJsonTimes = 1;  // 第一次坏 JSON → 重试修正
     eng.setInference(rec);
     const std::string id = eng.createTask("retry json");
     const auto st = waitTerminal(eng, id);
@@ -218,7 +226,7 @@ ZTEST(CrewM14, StructuredOutputRetry) {
     ZEXPECT_TRUE(hasEvent(eng, id, "retry"));
     {
         std::lock_guard<std::mutex> lk(rec->m);
-        ZEXPECT_TRUE(rec->prompts["pm"].size() >= 2); // PM 至少两次（坏+好）
+        ZEXPECT_TRUE(rec->prompts["pm"].size() >= 2);  // PM 至少两次（坏+好）
         // 重试提示带错误反馈
         bool sawFeedback = false;
         for (const std::string& p : rec->prompts["pm"]) {
@@ -260,7 +268,7 @@ ZTEST(CrewM14, StreamingTokensIntoEvents) {
     for (const crew::CrewEvent& e : eng.events(id)) {
         if (e.type == "token") ++tokenEvents;
     }
-    ZEXPECT_TRUE(tokenEvents >= 5); // 多角色都有增量
+    ZEXPECT_TRUE(tokenEvents >= 5);  // 多角色都有增量
 }
 
 ZTEST(CrewM14, QualityScorecard) {
@@ -291,9 +299,8 @@ ZTEST(CrewM14, StrictRetestPrompt) {
     std::lock_guard<std::mutex> lk(rec->m);
     bool sawStrict = false;
     for (const std::string& p : rec->prompts["tester"]) {
-        if (p.find("RETEST") != std::string::npos &&
-            p.find("verify") != std::string::npos) {
-            sawStrict = true; // 严格模式：要求对照修复证据验证，不是直接改口
+        if (p.find("RETEST") != std::string::npos && p.find("verify") != std::string::npos) {
+            sawStrict = true;  // 严格模式：要求对照修复证据验证，不是直接改口
         }
     }
     ZEXPECT_TRUE(sawStrict);
@@ -302,12 +309,12 @@ ZTEST(CrewM14, StrictRetestPrompt) {
 ZTEST(CrewM14, ParallelImplementOverlap) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->chatSleepMs = 300; // 慢机器（CI）下也保证两线程窗口重叠
+    rec->chatSleepMs = 300;  // 慢机器（CI）下也保证两线程窗口重叠
     eng.setInference(rec);
     const std::string id = eng.createTask("parallel impl");
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
-    ZEXPECT_TRUE(rec->implMaxInFlight.load() >= 2); // 真·并行
+    ZEXPECT_TRUE(rec->implMaxInFlight.load() >= 2);  // 真·并行
 }
 
 ZTEST(CrewM14, PersistenceAndResume) {
@@ -333,7 +340,7 @@ ZTEST(CrewM14, PersistenceAndResume) {
             if (st && st.value().phase == crew::CrewPhase::AwaitingApproval) break;
             std::this_thread::sleep_for(50ms);
         }
-    } // 析构 = 模拟重启
+    }  // 析构 = 模拟重启
 
     // 引擎 B：同目录恢复 → resumable → 放行 + 断点续跑
     RecPtr rec2 = std::make_shared<Rec>();
@@ -345,7 +352,7 @@ ZTEST(CrewM14, PersistenceAndResume) {
     ZEXPECT_EQ(listed.size(), size_t{1});
     ZEXPECT_EQ(listed[0].id, id);
     ZEXPECT_TRUE(listed[0].resumable);
-    ZEXPECT_TRUE(eng2.artifacts(id).size() >= 3); // prd/architecture/contract 已落盘
+    ZEXPECT_TRUE(eng2.artifacts(id).size() >= 3);  // prd/architecture/contract 已落盘
 
     ZEXPECT_TRUE(static_cast<bool>(eng2.approve(id, "looking good")));
     ZEXPECT_TRUE(static_cast<bool>(eng2.resume(id)));
@@ -422,17 +429,17 @@ ZTEST(CrewM14, OrganizationalMemory) {
 ZTEST(CrewM14, HumanVoterBallot) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->chatSleepMs = 50; // 投票慢一点，保证人工票窗口可命中
+    rec->chatSleepMs = 50;  // 投票慢一点，保证人工票窗口可命中
     eng.setInference(rec);
     crew::CrewConfig cfg;
     cfg.humanVoter = true;
     cfg.humanVoteTimeoutSec = 1;
     const std::string id = eng.createTask("human vote task", cfg);
-    std::this_thread::sleep_for(600ms); // 7 角色 x50ms 投完 → 人工票窗口内
+    std::this_thread::sleep_for(600ms);  // 7 角色 x50ms 投完 → 人工票窗口内
     ZEXPECT_TRUE(static_cast<bool>(eng.castHumanVote(id, "revise")));
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
-    bool sawHuman = false; // 第一张人工票 = PRD 评审（后续票默认首项也合法）
+    bool sawHuman = false;  // 第一张人工票 = PRD 评审（后续票默认首项也合法）
     for (const crew::VoteRecord& v : eng.votes(id)) {
         for (const auto& [agent, choice] : v.votes) {
             if (agent == "human" && !sawHuman) {
@@ -447,7 +454,7 @@ ZTEST(CrewM14, HumanVoterBallot) {
 ZTEST(CrewM14, DebateRounds) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->voteAlwaysRevise = true; // 全员永远 revise → 辩论到轮数上限
+    rec->voteAlwaysRevise = true;  // 全员永远 revise → 辩论到轮数上限
     eng.setInference(rec);
     crew::CrewConfig cfg;
     cfg.prdVoteRounds = 2;
@@ -458,9 +465,9 @@ ZTEST(CrewM14, DebateRounds) {
     for (const crew::Artifact& a : eng.artifacts(id)) {
         if (a.type == "prd") prdVersion = std::max(prdVersion, a.version);
     }
-    ZEXPECT_EQ(prdVersion, 3); // 初稿 + 2 轮 revise
+    ZEXPECT_EQ(prdVersion, 3);  // 初稿 + 2 轮 revise
     ZEXPECT_TRUE(hasEvent(eng, id, "gate"));
-    ZEXPECT_TRUE(eng.votes(id).size() >= 3); // PRD×2 + storage×1
+    ZEXPECT_TRUE(eng.votes(id).size() >= 3);  // PRD×2 + storage×1
 }
 
 ZTEST(CrewM14, ExecVerifyRunsCommands) {
@@ -527,7 +534,7 @@ ZTEST(CrewM14, RolesConfigOverride) {
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
     ZEXPECT_EQ(st.agents.size(), size_t{7});
-    ZEXPECT_FALSE(rec->models_["delivery"].empty()); // V2 人设被命中（走默认分支会返回 {}）
+    ZEXPECT_FALSE(rec->models_["delivery"].empty());  // V2 人设被命中（走默认分支会返回 {}）
     std::string release;
     for (const crew::Artifact& a : eng.artifacts(id)) {
         if (a.type == "release") release = a.content;

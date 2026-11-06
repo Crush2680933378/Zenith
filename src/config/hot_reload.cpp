@@ -10,15 +10,17 @@ namespace fs = std::filesystem;
 HotReloader::HotReloader(std::string path, unsigned intervalMs)
     : path_(std::move(path)), intervalMs_(intervalMs) {}
 
-HotReloader::~HotReloader() { stop(); }
+HotReloader::~HotReloader() {
+    stop();
+}
 
 void HotReloader::start() {
-    if (worker_.joinable()) return; // 幂等
+    if (worker_.joinable()) return;  // 幂等
     stop_.store(false, std::memory_order_release);
 
-    reload(); // 首次装载（失败不阻塞启动——后续变更可恢复）
+    reload();  // 首次装载（失败不阻塞启动——后续变更可恢复）
 
-    if (intervalMs_ == 0) return; // 仅手动模式
+    if (intervalMs_ == 0) return;  // 仅手动模式
     worker_ = std::thread([this] { monitorLoop(); });
 }
 
@@ -43,8 +45,7 @@ bool HotReloader::reloadLocked() {
         return false;
     }
     auto fresh = std::make_shared<JsonConfig>(std::move(cfg).value());
-    std::atomic_store(&current_,
-                      std::shared_ptr<const JsonConfig>(std::move(fresh)));
+    std::atomic_store(&current_, std::shared_ptr<const JsonConfig>(std::move(fresh)));
     lastMtime_ = fileMtime();
     // 基线记录（用于轮询检测）
     if (auto content = readFile()) lastHash_ = fnv1a(*content);
@@ -88,10 +89,10 @@ void HotReloader::monitorLoop() {
         if (!hasBaseline_) continue;
         if (auto content = readFile()) {
             if (fnv1a(*content) != lastHash_) {
-                reloadLocked(); // 内容确实变化 → 重载
+                reloadLocked();  // 内容确实变化 → 重载
             }
         }
     }
 }
 
-} // namespace zenith::config
+}  // namespace zenith::config

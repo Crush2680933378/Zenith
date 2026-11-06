@@ -53,11 +53,11 @@ private:
     enum class State : uint8_t {
         ReqLine,
         Headers,
-        BodyIdentity,   // Content-Length
+        BodyIdentity,  // Content-Length
         BodyChunkSize,
         BodyChunkData,
-        BodyChunkCrlf,  // 数据块后的 CRLF
-        BodyChunkTrail, // 0 大小块后的 trailer 头
+        BodyChunkCrlf,   // 数据块后的 CRLF
+        BodyChunkTrail,  // 0 大小块后的 trailer 头
         Done,
     };
 
@@ -101,7 +101,7 @@ private:
         BodyChunkData,
         BodyChunkCrlf,
         BodyChunkTrail,
-        ReadUntilClose, // 无 CL 且非 chunked：读到对端关闭
+        ReadUntilClose,  // 无 CL 且非 chunked：读到对端关闭
         Done,
     };
 
@@ -112,4 +112,4 @@ private:
     size_t chunkRemaining_ = 0;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

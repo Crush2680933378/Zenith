@@ -70,8 +70,7 @@ ZTEST(Resp, IncrementalSplit) {
         redis::RespParser p;
         auto r = p.feed(reinterpret_cast<const uint8_t*>(wire.data()), cut);
         if (r.state == redis::RespParser::State::Ok) {
-            ztest::reportFail(__FILE__, __LINE__,
-                              "completed early at cut " + std::to_string(cut));
+            ztest::reportFail(__FILE__, __LINE__, "completed early at cut " + std::to_string(cut));
         }
     }
     redis::RespParser p2;
@@ -91,10 +90,9 @@ struct MockRedis {
     std::atomic<int> commands{0};
 
     MockRedis() {
-        server.setMessageCallback(
-            [this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
-                onMessage(conn, buf);
-            });
+        server.setMessageCallback([this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
+            onMessage(conn, buf);
+        });
         (void)server.listen("127.0.0.1", 0);
         runner = std::thread([this] { loop.loop(); });
         std::this_thread::sleep_for(80ms);
@@ -108,8 +106,7 @@ struct MockRedis {
     void onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
         for (;;) {
             // 找到一条完整命令（以 \r\n 结尾的 *N ... 行集）
-            const std::string all(reinterpret_cast<const char*>(buf.peek()),
-                                  buf.readableBytes());
+            const std::string all(reinterpret_cast<const char*>(buf.peek()), buf.readableBytes());
             size_t pos = 0;
             std::string line;
             auto takeLine = [&](std::string& out) {
@@ -169,7 +166,7 @@ struct MockRedis {
         return "-ERR unknown command\r\n";
     }
 };
-} // namespace
+}  // namespace
 
 ZTEST(RedisE2E, SetGetDelIncr) {
     MockRedis mock;
@@ -225,14 +222,16 @@ ZTEST(RedisE2E, PipelineOrderingOnClient) {
     std::mutex orderMtx;
 
     loop.queueInLoop([&] {
-        client.connect("127.0.0.1", mock.port(), [&] { ready.store(1); },
-                        [&](const std::string& r) {
-                            ztest::reportFail(__FILE__, __LINE__, "connect failed: " + r);
-                            done.store(true);
-                        });
+        client.connect(
+            "127.0.0.1", mock.port(), [&] { ready.store(1); },
+            [&](const std::string& r) {
+                ztest::reportFail(__FILE__, __LINE__, "connect failed: " + r);
+                done.store(true);
+            });
     });
 
-    for (int i = 0; i < 200 && ready.load() == 0; ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 200 && ready.load() == 0; ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_EQ(ready.load(), 1);
 
     loop.runInLoop([&] {
@@ -251,20 +250,22 @@ ZTEST(RedisE2E, PipelineOrderingOnClient) {
         }
     });
 
-    for (int i = 0; i < 400 && !done.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 400 && !done.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     loop.stop();
     t.join();
 
     std::lock_guard<std::mutex> lk(orderMtx);
     ZEXPECT_EQ(order.size(), size_t{20});
-    for (const auto& o : order) ZEXPECT_EQ(o, std::string("OK"));
+    for (const auto& o : order)
+        ZEXPECT_EQ(o, std::string("OK"));
     ZEXPECT_TRUE(mock.commands.load() >= 20);
 }
 
 ZTEST(RedisE2E, ConnectRefused) {
     auto r = redis::RedisClient::commandBlocking("127.0.0.1", 1, {"PING"}, 1500);
     ZEXPECT_TRUE(r.isErr());
-    ZEXPECT_TRUE(!r.error().message.empty()); // 拒绝/超时措辞随平台，统一走 Err
+    ZEXPECT_TRUE(!r.error().message.empty());  // 拒绝/超时措辞随平台，统一走 Err
 }
 
 ZTEST_MAIN

@@ -2,10 +2,11 @@
 
 namespace zenith::net {
 
-TcpServer::TcpServer(EventLoop* loop, EventLoopThreadPool* ioPool)
-    : loop_(loop), ioPool_(ioPool) {}
+TcpServer::TcpServer(EventLoop* loop, EventLoopThreadPool* ioPool) : loop_(loop), ioPool_(ioPool) {}
 
-TcpServer::~TcpServer() { stop(); }
+TcpServer::~TcpServer() {
+    stop();
+}
 
 core::Result<void> TcpServer::listen(const std::string& host, uint16_t port, int backlog) {
     auto sockR = Socket::createTcp();
@@ -27,7 +28,7 @@ core::Result<void> TcpServer::listen(const std::string& host, uint16_t port, int
 
     listenSock_ = std::move(sock);
 
-// 监听注册投递到 loop 线程（registerFd 仅 loop 线程调用；
+    // 监听注册投递到 loop 线程（registerFd 仅 loop 线程调用；
     // loop 尚未启动时 runInLoop 内联执行，行为不变）
     TcpServer* self = this;
     const fd_t listenFd = listenSock_.fd();
@@ -47,14 +48,15 @@ void TcpServer::handleAccept() {
             continue;
         }
         const fd_t cfd = cr.value();
-        if (cfd == kInvalidFd) return; // EAGAIN
+        if (cfd == kInvalidFd) return;  // EAGAIN
 
         EventLoop* ioLoop = ioPool_ != nullptr ? ioPool_->nextLoop() : loop_;
         auto conn = TcpConnection::create(ioLoop, cfd, peer.host + ":" + std::to_string(peer.port));
         conn->setConnectCallback(onConn_);
         conn->setMessageCallback(onMsg_);
         conn->finalize([this](const TcpConnection::Ptr& c) { removeConnection(c); });
-        for (auto& d : decorators_) d(conn); // TLS 滤层/防护计数等（establish 前）
+        for (auto& d : decorators_)
+            d(conn);  // TLS 滤层/防护计数等（establish 前）
 
         // 连接表在主 loop 维护（accept 顺序确定）；
         // fd 注册与回调必须发生在所属 IO loop 线程内（跨线程经 runInLoop 投递）
@@ -78,4 +80,4 @@ void TcpServer::stop() {
     conns_.clear();
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

@@ -6,8 +6,8 @@
 #include <thread>
 
 #include <openssl/evp.h>
-#include <openssl/x509v3.h>
 #include <openssl/pem.h>
+#include <openssl/x509v3.h>
 
 #include "ztest.hpp"
 
@@ -31,8 +31,7 @@ ZTEST(Multipart, ParseFieldsAndFiles) {
         "--BND\r\n"
         "Content-Disposition: form-data; name=\"upload\"; filename=\"a.bin\"\r\n"
         "Content-Type: application/octet-stream\r\n\r\n" +
-        std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1) + "\r\n" +
-        "--BND--\r\n";
+        std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1) + "\r\n" + "--BND--\r\n";
     auto parts = http::multipart::parse(body, "BND");
     ZEXPECT_TRUE(static_cast<bool>(parts));
     ZEXPECT_EQ(parts.value().size(), size_t{2});
@@ -40,14 +39,15 @@ ZTEST(Multipart, ParseFieldsAndFiles) {
     ZEXPECT_TRUE(!parts.value()[0].isFile());
     ZEXPECT_EQ(parts.value()[0].data, std::string("value1"));
     ZEXPECT_EQ(parts.value()[1].filename, std::string("a.bin"));
-    ZEXPECT_EQ(parts.value()[1].data, std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1));
-    ZEXPECT_EQ(parts.value()[1].data, std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1));
+    ZEXPECT_EQ(parts.value()[1].data,
+               std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1));
+    ZEXPECT_EQ(parts.value()[1].data,
+               std::string("\x00\x01\x02", 3) + "binary" + std::string("\xff", 1));
     ZEXPECT_EQ(parts.value()[1].contentType, std::string("application/octet-stream"));
 }
 
 ZTEST(Multipart, BoundaryExtractionAndErrors) {
-    auto b1 = http::multipart::extractBoundary(
-        "multipart/form-data; boundary=----WebKitFormABC");
+    auto b1 = http::multipart::extractBoundary("multipart/form-data; boundary=----WebKitFormABC");
     ZEXPECT_TRUE(static_cast<bool>(b1));
     ZEXPECT_EQ(b1.value(), std::string("----WebKitFormABC"));
     auto b2 = http::multipart::extractBoundary("multipart/form-data; boundary=\"quoted\"");
@@ -81,10 +81,15 @@ struct WebFixture {
         std::error_code ec;
         std::filesystem::remove_all(docRoot, ec);
         std::filesystem::create_directories(docRoot + "/sub", ec);
-        { std::ofstream(docRoot + "/index.html") << "<h1>zenith static</h1>"; }
-        { std::ofstream(docRoot + "/sub/app.js") << "console.log(1);"; }
-        { std::ofstream(docRoot + "/big.bin", std::ios::binary)
-              << std::string(10000, 'B'); }
+        {
+            std::ofstream(docRoot + "/index.html") << "<h1>zenith static</h1>";
+        }
+        {
+            std::ofstream(docRoot + "/sub/app.js") << "console.log(1);";
+        }
+        {
+            std::ofstream(docRoot + "/big.bin", std::ios::binary) << std::string(10000, 'B');
+        }
 
         io.start();
         server.router().get("/assets/*path", http::staticHandler(docRoot, "/assets"));
@@ -111,14 +116,14 @@ struct WebFixture {
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
-} // namespace
+}  // namespace
 
 ZTEST(StaticE2E, Get304RangeTraversal) {
     WebFixture f;
 
     // 基础 GET
-    auto r = http::HttpClient::fetchBlockingUrl(
-        "http://127.0.0.1:" + std::to_string(f.port()) + "/assets/index.html");
+    auto r = http::HttpClient::fetchBlockingUrl("http://127.0.0.1:" + std::to_string(f.port()) +
+                                                "/assets/index.html");
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 200);
     ZEXPECT_EQ(r.value().body, std::string("<h1>zenith static</h1>"));
@@ -128,8 +133,8 @@ ZTEST(StaticE2E, Get304RangeTraversal) {
     ZEXPECT_EQ(r.value().headers.get("Accept-Ranges"), std::string("bytes"));
 
     // 子目录 + mime
-    auto js = http::HttpClient::fetchBlockingUrl(
-        "http://127.0.0.1:" + std::to_string(f.port()) + "/assets/sub/app.js");
+    auto js = http::HttpClient::fetchBlockingUrl("http://127.0.0.1:" + std::to_string(f.port()) +
+                                                 "/assets/sub/app.js");
     ZEXPECT_EQ(js.value().status, 200);
     ZEXPECT_EQ(js.value().headers.get("Content-Type"),
                std::string("application/javascript; charset=utf-8"));
@@ -184,12 +189,12 @@ ZTEST(StaticE2E, Get304RangeTraversal) {
     }
 
     // 目录穿越 → 403 / 缺失 → 404
-    auto trav = http::HttpClient::fetchBlockingUrl(
-        "http://127.0.0.1:" + std::to_string(f.port()) + "/assets/..%2F..%2FCMakeLists.txt");
+    auto trav = http::HttpClient::fetchBlockingUrl("http://127.0.0.1:" + std::to_string(f.port()) +
+                                                   "/assets/..%2F..%2FCMakeLists.txt");
     // 注：path 已解码为 /assets/../../CMakeLists.txt → Router catch-all 收到后 staticHandler 拒绝
     (void)trav;
-    auto miss = http::HttpClient::fetchBlockingUrl(
-        "http://127.0.0.1:" + std::to_string(f.port()) + "/assets/nope.txt");
+    auto miss = http::HttpClient::fetchBlockingUrl("http://127.0.0.1:" + std::to_string(f.port()) +
+                                                   "/assets/nope.txt");
     ZEXPECT_EQ(miss.value().status, 404);
 }
 
@@ -204,8 +209,12 @@ ZTEST(SpaE2E, FallbackAndAssetPriority) {
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     std::filesystem::create_directories(root + "/assets", ec);
-    { std::ofstream(root + "/index.html") << "<div id=spa-shell>"; }
-    { std::ofstream(root + "/assets/app.js") << "console.log('real');"; }
+    {
+        std::ofstream(root + "/index.html") << "<div id=spa-shell>";
+    }
+    {
+        std::ofstream(root + "/assets/app.js") << "console.log('real');";
+    }
 
     net::EventLoop loop;
     net::EventLoopThreadPool io{1};
@@ -253,15 +262,19 @@ ZTEST(FormE2E, MultipartUpload) {
     const std::string boundary = "ZenBoundary123";
     const std::string fileData(3000, 'F');
     const std::string body =
-        "--" + boundary + "\r\n"
+        "--" + boundary +
+        "\r\n"
         "Content-Disposition: form-data; name=\"name\"\r\n\r\n"
         "zenith\r\n"
-        "--" + boundary + "\r\n"
+        "--" +
+        boundary +
+        "\r\n"
         "Content-Disposition: form-data; name=\"doc\"; filename=\"report.dat\"\r\n"
         "Content-Type: application/octet-stream\r\n\r\n" +
         fileData +
         "\r\n"
-        "--" + boundary + "--\r\n";
+        "--" +
+        boundary + "--\r\n";
 
     http::ClientRequest rq;
     rq.url = "http://127.0.0.1:" + std::to_string(f.port()) + "/form";
@@ -281,8 +294,7 @@ ZTEST(FormE2E, MultipartUpload) {
 /* ---------------- Session ---------------- */
 
 ZTEST(SessionE2E, CookieRoundTripAndPersist) {
-    auto mgr = std::make_shared<http::SessionManager>(
-        std::make_shared<http::MemorySessionStore>());
+    auto mgr = std::make_shared<http::SessionManager>(std::make_shared<http::MemorySessionStore>());
 
     net::EventLoop loop;
     net::EventLoopThreadPool io{1};
@@ -293,9 +305,8 @@ ZTEST(SessionE2E, CookieRoundTripAndPersist) {
         c.session()->set("user", "tom");
         c.text(200, "ok");
     });
-    server.router().get("/whoami", [](http::Context& c) {
-        c.text(200, c.session()->get("user", "anonymous"));
-    });
+    server.router().get(
+        "/whoami", [](http::Context& c) { c.text(200, c.session()->get("user", "anonymous")); });
     (void)server.listen("127.0.0.1", 0);
     std::thread t([&] { loop.loop(); });
     std::this_thread::sleep_for(120ms);
@@ -310,8 +321,7 @@ ZTEST(SessionE2E, CookieRoundTripAndPersist) {
 
     // 提取 sid
     const size_t eq = setCookie.find('=');
-    const std::string sid = setCookie.substr(eq + 1,
-                                             setCookie.find(';', eq) - eq - 1);
+    const std::string sid = setCookie.substr(eq + 1, setCookie.find(';', eq) - eq - 1);
 
     // 2) 带 cookie 访问 → 会话命中
     http::ClientRequest rq;
@@ -338,13 +348,12 @@ ZTEST(Session, SerializeRoundtripAndStore) {
     store.remove("s1");
     ZEXPECT_EQ(store.size(), size_t{0});
 
-    auto mgr = std::make_shared<http::SessionManager>(
-        std::make_shared<http::MemorySessionStore>());
+    auto mgr = std::make_shared<http::SessionManager>(std::make_shared<http::MemorySessionStore>());
     auto s = mgr->load("");
     ZEXPECT_TRUE(s->isNew());
     s->set("k", "v");
-    ZEXPECT_TRUE(mgr->save(s)); // 新建 → true
-    ZEXPECT_FALSE(mgr->save(s)); // 未变 → false
+    ZEXPECT_TRUE(mgr->save(s));   // 新建 → true
+    ZEXPECT_FALSE(mgr->save(s));  // 未变 → false
     auto s2 = mgr->load(s->id());
     ZEXPECT_FALSE(s2->isNew());
     ZEXPECT_EQ(s2->get("k"), std::string("v"));
@@ -374,12 +383,12 @@ ZTEST(GracefulShutdown, SlowRequestCompletesThenDrained) {
             "http://127.0.0.1:" + std::to_string(server.port()) + "/slow");
         if (r && r.value().status == 200) gotResponse.store(true);
     });
-    std::this_thread::sleep_for(50ms); // 等请求进入
+    std::this_thread::sleep_for(50ms);  // 等请求进入
 
     loop.runInLoop([&] {
         server.beginGracefulShutdown([&] {
             drained.store(true);
-            loop.stop(); // 排空完成 → 停 loop
+            loop.stop();  // 排空完成 → 停 loop
         });
     });
 
@@ -407,8 +416,8 @@ ZTEST(WssE2E, WebSocketOverTls) {
         // OpenSSL 3 的 X509_get_subject_name 返回 const X509_NAME*（macOS brew
         // 版本直接暴露该签名），故显式构造名字对象——1.1/3.x/LibreSSL 通吃。
         X509_NAME* n = X509_NAME_new();
-        X509_NAME_add_entry_by_txt(n, "CN", MBSTRING_ASC,
-                                   (const unsigned char*)"127.0.0.1", -1, -1, 0);
+        X509_NAME_add_entry_by_txt(n, "CN", MBSTRING_ASC, (const unsigned char*)"127.0.0.1", -1, -1,
+                                   0);
         X509_set_subject_name(x, n);
         X509_set_issuer_name(x, n);
         X509_NAME_free(n);
@@ -472,16 +481,16 @@ ZTEST(WssE2E, WebSocketOverTls) {
                     gotEcho.store(true);
                     s->close();
                 });
-            s->setCloseCallback([&closed](const net::WebSocketSession::Ptr&) {
-                closed.store(true);
-            });
+            s->setCloseCallback(
+                [&closed](const net::WebSocketSession::Ptr&) { closed.store(true); });
             s->sendText("secure-hello");
         },
         [](const std::string& reason) {
             ztest::reportFail(__FILE__, __LINE__, "wss connect failed: " + reason);
         });
 
-    for (int i = 0; i < 400 && !closed.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 400 && !closed.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(gotEcho.load());
     ZEXPECT_EQ(echoed, std::string("wss-echo:secure-hello"));
 

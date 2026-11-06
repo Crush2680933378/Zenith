@@ -59,8 +59,8 @@ std::string bioToString(BIO* bio) {
 std::string writePrivatePem(EVP_PKEY* key) {
     BIO* bio = BIO_new(BIO_s_mem());
     if (bio == nullptr) return {};
-    const bool ok = PEM_write_bio_PKCS8PrivateKey(bio, key, nullptr, nullptr, 0, nullptr,
-                                                  nullptr) == 1;
+    const bool ok =
+        PEM_write_bio_PKCS8PrivateKey(bio, key, nullptr, nullptr, 0, nullptr, nullptr) == 1;
     const std::string out = ok ? bioToString(bio) : std::string();
     BIO_free(bio);
     return out;
@@ -97,9 +97,12 @@ const char* ecCurveAlg(EVP_PKEY* key) {
 /// 私钥 → 算法名（不支持返回 nullptr）
 const char* algForPrivateKey(EVP_PKEY* key) {
     switch (EVP_PKEY_base_id(key)) {
-        case EVP_PKEY_RSA: return "RS256";
-        case EVP_PKEY_EC: return ecCurveAlg(key);
-        default: return nullptr;
+        case EVP_PKEY_RSA:
+            return "RS256";
+        case EVP_PKEY_EC:
+            return ecCurveAlg(key);
+        default:
+            return nullptr;
     }
 }
 
@@ -130,22 +133,25 @@ bool readDerLength(const uint8_t* der, size_t derLen, size_t& pos, size_t& len) 
     const size_t n = first & 0x7F;
     if (n == 0 || n > 2 || pos + n > derLen) return false;
     len = 0;
-    for (size_t i = 0; i < n; ++i) len = (len << 8) | der[pos++];
+    for (size_t i = 0; i < n; ++i)
+        len = (len << 8) | der[pos++];
     return true;
 }
 
 bool derToRaw(const uint8_t* der, size_t derLen, size_t fieldLen, std::vector<uint8_t>& out) {
     size_t pos = 0;
     size_t seqLen = 0;
-    if (pos >= derLen || der[pos++] != 0x30 || !readDerLength(der, derLen, pos, seqLen)) return false;
+    if (pos >= derLen || der[pos++] != 0x30 || !readDerLength(der, derLen, pos, seqLen))
+        return false;
     std::vector<uint8_t> part[2];
     for (int k = 0; k < 2; ++k) {
         size_t len = 0;
-        if (pos >= derLen || der[pos++] != 0x02 || !readDerLength(der, derLen, pos, len)) return false;
+        if (pos >= derLen || der[pos++] != 0x02 || !readDerLength(der, derLen, pos, len))
+            return false;
         if (pos + len > derLen) return false;
         const uint8_t* p = der + pos;
         pos += len;
-        while (len > 1 && p[0] == 0x00) { // 去 DER 前导零
+        while (len > 1 && p[0] == 0x00) {  // 去 DER 前导零
             ++p;
             --len;
         }
@@ -171,7 +177,7 @@ std::vector<uint8_t> rawToDer(const uint8_t* raw, size_t fieldLen) {
             --n;
         }
         body.push_back(0x02);
-        if ((p[0] & 0x80) != 0) { // 最高位为 1 → 补 0 视为正数
+        if ((p[0] & 0x80) != 0) {  // 最高位为 1 → 补 0 视为正数
             body.push_back(static_cast<uint8_t>(n + 1));
             body.push_back(0x00);
         } else {
@@ -207,23 +213,29 @@ core::Result<std::string> err(std::string msg) {
     return core::Result<std::string>::Err(core::Error(400, std::move(msg)));
 }
 
-std::string b64url(const std::string& s) { return detail::b64url(s); }
-std::string b64url(const uint8_t* d, size_t n) { return detail::b64url(d, n); }
+std::string b64url(const std::string& s) {
+    return detail::b64url(s);
+}
+std::string b64url(const uint8_t* d, size_t n) {
+    return detail::b64url(d, n);
+}
 
-} // namespace
+}  // namespace
 
 // ---- 密钥生成 --------------------------------------------------------------
 core::Result<KeyPair> generateRsa(int bits) {
-    if (bits < 2048) return core::Result<KeyPair>::Err(core::Error(400, "RSA bits must be >= 2048"));
+    if (bits < 2048)
+        return core::Result<KeyPair>::Err(core::Error(400, "RSA bits must be >= 2048"));
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
-    if (ctx == nullptr) return core::Result<KeyPair>::Err(core::Error(500, "EVP_PKEY_CTX_new_id failed"));
+    if (ctx == nullptr)
+        return core::Result<KeyPair>::Err(core::Error(500, "EVP_PKEY_CTX_new_id failed"));
     EVP_PKEY* raw = nullptr;
-    bool ok = EVP_PKEY_keygen_init(ctx) == 1 &&
-              EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) == 1 &&
+    bool ok = EVP_PKEY_keygen_init(ctx) == 1 && EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) == 1 &&
               EVP_PKEY_keygen(ctx, &raw) == 1;
     EVP_PKEY_CTX_free(ctx);
     PkeyPtr key(raw, EVP_PKEY_free);
-    if (!ok || key == nullptr) return core::Result<KeyPair>::Err(core::Error(500, "RSA keygen failed"));
+    if (!ok || key == nullptr)
+        return core::Result<KeyPair>::Err(core::Error(500, "RSA keygen failed"));
 
     KeyPair kp;
     kp.privatePem = writePrivatePem(key.get());
@@ -236,14 +248,16 @@ core::Result<KeyPair> generateRsa(int bits) {
 
 core::Result<KeyPair> generateEcP256() {
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
-    if (ctx == nullptr) return core::Result<KeyPair>::Err(core::Error(500, "EVP_PKEY_CTX_new_id failed"));
+    if (ctx == nullptr)
+        return core::Result<KeyPair>::Err(core::Error(500, "EVP_PKEY_CTX_new_id failed"));
     EVP_PKEY* raw = nullptr;
     const bool ok = EVP_PKEY_keygen_init(ctx) == 1 &&
                     EVP_PKEY_CTX_set_ec_paramgen_curve_nid(ctx, NID_X9_62_prime256v1) == 1 &&
                     EVP_PKEY_keygen(ctx, &raw) == 1;
     EVP_PKEY_CTX_free(ctx);
     PkeyPtr key(raw, EVP_PKEY_free);
-    if (!ok || key == nullptr) return core::Result<KeyPair>::Err(core::Error(500, "EC keygen failed"));
+    if (!ok || key == nullptr)
+        return core::Result<KeyPair>::Err(core::Error(500, "EC keygen failed"));
 
     KeyPair kp;
     kp.privatePem = writePrivatePem(key.get());
@@ -272,7 +286,8 @@ core::Result<std::string> sign(const std::string& privatePem, const std::string&
 
     MdCtx ctx;
     if (!ctx.ok()) return err("EVP_MD_CTX_new failed");
-    if (EVP_DigestSignInit(ctx.p, nullptr, md, nullptr, key.get()) != 1) return err("sign init failed");
+    if (EVP_DigestSignInit(ctx.p, nullptr, md, nullptr, key.get()) != 1)
+        return err("sign init failed");
     if (EVP_DigestSignUpdate(ctx.p, signingInput.data(), signingInput.size()) != 1) {
         return err("sign update failed");
     }
@@ -283,9 +298,10 @@ core::Result<std::string> sign(const std::string& privatePem, const std::string&
     sig.resize(sigLen);
 
     const size_t fieldLen = fieldLenFor(alg);
-    if (fieldLen != 0) { // ECDSA：DER → R||S 定长
+    if (fieldLen != 0) {  // ECDSA：DER → R||S 定长
         std::vector<uint8_t> rawSig;
-        if (!derToRaw(sig.data(), sig.size(), fieldLen, rawSig)) return err("ECDSA DER decode failed");
+        if (!derToRaw(sig.data(), sig.size(), fieldLen, rawSig))
+            return err("ECDSA DER decode failed");
         sig = std::move(rawSig);
     }
     return core::Result<std::string>::Ok(signingInput + "." + b64url(sig.data(), sig.size()));
@@ -313,7 +329,7 @@ VerifyResult verify(const std::string& publicPem, const std::string& token, int6
         return r;
     }
     if (alg == "none" || alg.compare(0, 2, "HS") == 0) {
-        r.error = "asymmetric verify rejects alg=" + alg; // 防算法混淆攻击
+        r.error = "asymmetric verify rejects alg=" + alg;  // 防算法混淆攻击
         return r;
     }
     const EVP_MD* md = mdFor(alg);
@@ -382,6 +398,6 @@ VerifyResult verify(const std::string& publicPem, const std::string& token, int6
     return r;
 }
 
-} // namespace zenith::http::jwt::asym
+}  // namespace zenith::http::jwt::asym
 
-#endif // ZENITH_HAS_OPENSSL
+#endif  // ZENITH_HAS_OPENSSL

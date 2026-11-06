@@ -8,15 +8,15 @@
 #include "zenith/core/platform.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <windows.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
-  #include <csignal>
+#include <csignal>
 #endif
 
 namespace zenith::net {
@@ -37,10 +37,10 @@ BOOL WINAPI consoleCtrl(DWORD type) {
 #else
 std::atomic<bool> g_fired{false};
 void posixSignal(int) {
-    g_fired.store(true); // 处理器内只置位；轮询线程触发回调
+    g_fired.store(true);  // 处理器内只置位；轮询线程触发回调
 }
 #endif
-} // namespace
+}  // namespace
 
 bool installSignalHandler(std::function<void()> handler) {
     g_handler = std::move(handler);
@@ -65,4 +65,4 @@ bool installSignalHandler(std::function<void()> handler) {
 #endif
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

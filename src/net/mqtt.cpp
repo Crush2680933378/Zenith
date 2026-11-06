@@ -27,9 +27,9 @@ using SockT = SOCKET;
 using SockT = int;
 #endif
 
-constexpr uint8_t kTypeConnect = 1, kTypeConnack = 2, kTypePublish = 3,
-                  kTypePuback = 4, kTypeSubscribe = 8, kTypeSuback = 9,
-                  kTypePingreq = 12, kTypePingresp = 13, kTypeDisconnect = 14;
+constexpr uint8_t kTypeConnect = 1, kTypeConnack = 2, kTypePublish = 3, kTypePuback = 4,
+                  kTypeSubscribe = 8, kTypeSuback = 9, kTypePingreq = 12, kTypePingresp = 13,
+                  kTypeDisconnect = 14;
 
 void closeSock(int64_t fd) {
     if (fd < 0) return;
@@ -43,10 +43,10 @@ void closeSock(int64_t fd) {
 void sockTimeout(int64_t fd, int recvMs, int sendMs) {
 #if defined(_WIN32)
     DWORD r = static_cast<DWORD>(recvMs), s = static_cast<DWORD>(sendMs);
-    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_RCVTIMEO,
-                 reinterpret_cast<const char*>(&r), sizeof(r));
-    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_SNDTIMEO,
-                 reinterpret_cast<const char*>(&s), sizeof(s));
+    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&r),
+                 sizeof(r));
+    ::setsockopt(static_cast<SockT>(fd), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&s),
+                 sizeof(s));
 #else
     timeval tv{};
     tv.tv_sec = recvMs / 1000;
@@ -80,13 +80,13 @@ uint16_t readU16(const std::string& s, size_t pos) {
                                  static_cast<uint8_t>(s[pos + 1]));
 }
 
-} // namespace
+}  // namespace
 
 core::Result<MqttClient> MqttClient::connect(const std::string& host, uint16_t port,
                                              const std::string& clientId,
                                              const std::string& username,
-                                             const std::string& password,
-                                             int keepAliveSeconds, int timeoutMs) {
+                                             const std::string& password, int keepAliveSeconds,
+                                             int timeoutMs) {
 #if defined(_WIN32)
     static std::once_flag wsa;
     std::call_once(wsa, [] {
@@ -102,15 +102,14 @@ core::Result<MqttClient> MqttClient::connect(const std::string& host, uint16_t p
         res == nullptr) {
         return core::Result<MqttClient>::Err(core::Error(501, "mqtt: dns failed"));
     }
-    const int64_t fd = static_cast<int64_t>(
-        ::socket(res->ai_family, res->ai_socktype, res->ai_protocol));
+    const int64_t fd =
+        static_cast<int64_t>(::socket(res->ai_family, res->ai_socktype, res->ai_protocol));
     if (fd < 0) {
         ::freeaddrinfo(res);
         return core::Result<MqttClient>::Err(core::Error(502, "mqtt: socket()"));
     }
     sockTimeout(fd, timeoutMs, timeoutMs);
-    if (::connect(static_cast<SockT>(fd), res->ai_addr,
-                  static_cast<int>(res->ai_addrlen)) != 0) {
+    if (::connect(static_cast<SockT>(fd), res->ai_addr, static_cast<int>(res->ai_addrlen)) != 0) {
         ::freeaddrinfo(res);
         closeSock(fd);
         return core::Result<MqttClient>::Err(core::Error(503, "mqtt: connect failed"));
@@ -119,9 +118,9 @@ core::Result<MqttClient> MqttClient::connect(const std::string& host, uint16_t p
 
     // CONNECT 可变头 + 载荷
     std::string vh;
-    putStr(vh, "MQTT");   // 协议名（3.1.1）
-    vh.push_back(4);      // level 4
-    uint8_t flags = 0x02; // clean session
+    putStr(vh, "MQTT");    // 协议名（3.1.1）
+    vh.push_back(4);       // level 4
+    uint8_t flags = 0x02;  // clean session
     if (!username.empty()) flags |= 0x80;
     if (!password.empty()) flags |= 0x40;
     vh.push_back(static_cast<char>(flags));
@@ -143,12 +142,13 @@ core::Result<MqttClient> MqttClient::connect(const std::string& host, uint16_t p
     }
     uint8_t h = 0;
     auto ack = c.readPacket(h);
-    if (!ack || (h >> 4) != kTypeConnack ||
-        ack.value().size() < 2 || ack.value()[1] != 0) {  // [0]=flags [1]=code
+    if (!ack || (h >> 4) != kTypeConnack || ack.value().size() < 2 ||
+        ack.value()[1] != 0) {  // [0]=flags [1]=code
         return core::Result<MqttClient>::Err(core::Error(
-            505, "mqtt: CONNACK rejected" + (ack ? " code=" +
-                     std::to_string(static_cast<int>(
-                         static_cast<uint8_t>(ack.value()[1]))) : std::string())));
+            505, "mqtt: CONNACK rejected" +
+                     (ack ? " code=" + std::to_string(
+                                           static_cast<int>(static_cast<uint8_t>(ack.value()[1])))
+                          : std::string())));
     }
     return core::Result<MqttClient>::Ok(std::move(c));
 }
@@ -192,8 +192,7 @@ bool MqttClient::sendAll(const std::string& bytes) {
 bool MqttClient::recvAll(char* buf, size_t n) {
     size_t got = 0;
     while (got < n) {
-        const int r = ::recv(static_cast<SockT>(fd_), buf + got,
-                             static_cast<int>(n - got), 0);
+        const int r = ::recv(static_cast<SockT>(fd_), buf + got, static_cast<int>(n - got), 0);
         if (r <= 0) return false;
         got += static_cast<size_t>(r);
     }
@@ -208,7 +207,7 @@ core::Result<std::string> MqttClient::readPacket(uint8_t& headerByte) {
     headerByte = static_cast<uint8_t>(head[0]);
     size_t remain = 0;
     int shift = 0;
-    for (;;) { // 剩余长度变长解码
+    for (;;) {  // 剩余长度变长解码
         if (!recvAll(head, 1)) {
             return core::Result<std::string>::Err(core::Error(510, "mqtt: eof in len"));
         }
@@ -227,20 +226,20 @@ core::Result<std::string> MqttClient::readPacket(uint8_t& headerByte) {
     return core::Result<std::string>::Ok(std::move(body));
 }
 
-core::Result<void> MqttClient::publish(const std::string& topic, std::string_view payload,
-                                       int qos, bool retain) {
+core::Result<void> MqttClient::publish(const std::string& topic, std::string_view payload, int qos,
+                                       bool retain) {
     if (fd_ < 0) {
         return core::Result<void>::Err(core::Error(520, "mqtt: not connected"));
     }
     if (topic.empty()) {
         return core::Result<void>::Err(core::Error(521, "mqtt: empty topic"));
     }
-    if (qos > 1) qos = 1; // 本实现 QoS 上限 1
+    if (qos > 1) qos = 1;  // 本实现 QoS 上限 1
     uint8_t flags = static_cast<uint8_t>(qos << 1);
     if (retain) flags |= 1;
     std::string vh;
     putStr(vh, topic);
-    if (qos >= 1) { // 包标识
+    if (qos >= 1) {  // 包标识
         static uint16_t nextPid = 1;
         const uint16_t pid = nextPid++;
         vh.push_back(static_cast<char>((pid >> 8) & 0xFF));
@@ -256,7 +255,7 @@ core::Result<void> MqttClient::publish(const std::string& topic, std::string_vie
     }
     if (qos >= 1) {
         uint8_t h = 0;
-        auto ack = readPacket(h); // 阻塞等 PUBACK
+        auto ack = readPacket(h);  // 阻塞等 PUBACK
         if (!ack || (h >> 4) != kTypePuback) {
             return core::Result<void>::Err(core::Error(523, "mqtt: no PUBACK"));
         }
@@ -277,7 +276,7 @@ core::Result<void> MqttClient::subscribe(const std::string& topic, int qos) {
     putStr(pl, topic);
     pl.push_back(static_cast<char>(qos & 0x03));
     std::string pkt;
-    pkt.push_back(static_cast<char>((kTypeSubscribe << 4) | 0x02)); // 保留位必置
+    pkt.push_back(static_cast<char>((kTypeSubscribe << 4) | 0x02));  // 保留位必置
     putRemain(pkt, vh.size() + pl.size());
     pkt += vh + pl;
     if (!sendAll(pkt)) {
@@ -309,14 +308,14 @@ int MqttClient::pollOnce(int timeoutMs) {
         m.topic = b.substr(2, tlen);
         size_t pos = 2 + tlen;
         uint16_t pid = 0;
-        if (qos >= 1) { // 包标识（QoS0 无）
+        if (qos >= 1) {  // 包标识（QoS0 无）
             if (pos + 2 > b.size()) return 1;
             pid = readU16(b, pos);
             pos += 2;
         }
         m.payload = b.substr(pos);
         if (onMessage_) onMessage_(m);
-        if (qos == 1) { // 回 PUBACK（包标识原样）
+        if (qos == 1) {  // 回 PUBACK（包标识原样）
             std::string ack;
             ack.push_back(static_cast<char>(kTypePuback << 4));
             ack.push_back('\x02');
@@ -327,7 +326,7 @@ int MqttClient::pollOnce(int timeoutMs) {
         return 1;
     }
     if (type == kTypePingresp) return 1;
-    if (type == kTypeDisconnect) { // 服务器断开
+    if (type == kTypeDisconnect) {  // 服务器断开
         closeSock(fd_);
         fd_ = -1;
         return -1;
@@ -363,4 +362,4 @@ void MqttClient::disconnect() {
     fd_ = -1;
 }
 
-} // namespace zenith::net::mqtt
+}  // namespace zenith::net::mqtt

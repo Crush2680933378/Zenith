@@ -2,17 +2,19 @@
 
 namespace zenith::net {
 
-EventLoopThreadPool::EventLoopThreadPool(size_t n, std::string name)
-    : name_(std::move(name)) {
+EventLoopThreadPool::EventLoopThreadPool(size_t n, std::string name) : name_(std::move(name)) {
     if (n == 0) {
         const unsigned hw = std::thread::hardware_concurrency();
         n = hw > 1 ? hw - 1 : 1;
     }
     loops_.reserve(n);
-    for (size_t i = 0; i < n; ++i) loops_.emplace_back(new EventLoop());
+    for (size_t i = 0; i < n; ++i)
+        loops_.emplace_back(new EventLoop());
 }
 
-EventLoopThreadPool::~EventLoopThreadPool() { stop(); }
+EventLoopThreadPool::~EventLoopThreadPool() {
+    stop();
+}
 
 void EventLoopThreadPool::start() {
     if (started_) return;
@@ -29,7 +31,8 @@ void EventLoopThreadPool::start() {
 
 void EventLoopThreadPool::stop() {
     if (!started_) return;
-    for (auto& l : loops_) l->stop();
+    for (auto& l : loops_)
+        l->stop();
     for (auto& t : threads_) {
         if (t.joinable()) t.join();
     }
@@ -43,4 +46,4 @@ EventLoop* EventLoopThreadPool::nextLoop() {
     return loops_[i].get();
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

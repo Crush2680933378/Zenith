@@ -60,10 +60,10 @@ RespParser::Result RespParser::parseValue(const std::string& s, size_t& pos, int
     ++pos;
     std::string line;
     switch (t) {
-        case '+': // 简单字符串
-        case '-': // 错误
-        case ':': { // 整数
-            if (!takeLine(s, pos, line)) return r; // Incomplete
+        case '+':                                   // 简单字符串
+        case '-':                                   // 错误
+        case ':': {                                 // 整数
+            if (!takeLine(s, pos, line)) return r;  // Incomplete
             if (t == '+') {
                 r.reply.type = RedisReply::Type::Simple;
                 r.reply.str = std::move(line);
@@ -77,7 +77,7 @@ RespParser::Result RespParser::parseValue(const std::string& s, size_t& pos, int
             r.state = State::Ok;
             return r;
         }
-        case '$': { // 批量字符串
+        case '$': {  // 批量字符串
             if (!takeLine(s, pos, line)) return r;
             const int64_t len = std::strtoll(line.c_str(), nullptr, 10);
             if (len < 0) {
@@ -86,14 +86,14 @@ RespParser::Result RespParser::parseValue(const std::string& s, size_t& pos, int
                 return r;
             }
             const size_t need = pos + static_cast<size_t>(len) + 2;
-            if (s.size() < need) return r; // 数据不足：pos 由外层丢弃，下次重解
+            if (s.size() < need) return r;  // 数据不足：pos 由外层丢弃，下次重解
             r.reply.type = RedisReply::Type::Bulk;
             r.reply.str.assign(s, pos, static_cast<size_t>(len));
             pos = need;
             r.state = State::Ok;
             return r;
         }
-        case '*': { // 数组
+        case '*': {  // 数组
             if (!takeLine(s, pos, line)) return r;
             const int64_t count = std::strtoll(line.c_str(), nullptr, 10);
             if (count < 0) {
@@ -105,7 +105,7 @@ RespParser::Result RespParser::parseValue(const std::string& s, size_t& pos, int
             r.reply.items.reserve(static_cast<size_t>(count));
             for (int64_t i = 0; i < count; ++i) {
                 Result item = parseValue(s, pos, depth + 1);
-                if (item.state != State::Ok) return Result{}; // Incomplete：整体重解
+                if (item.state != State::Ok) return Result{};  // Incomplete：整体重解
                 r.reply.items.push_back(std::move(item.reply));
             }
             r.state = State::Ok;
@@ -123,9 +123,8 @@ RespParser::Result RespParser::parseValue(const std::string& s, size_t& pos, int
 // ---------------------------------------------------------------------------
 RedisClient::RedisClient(net::EventLoop* loop) : loop_(loop) {}
 
-void RedisClient::connect(const std::string& host, uint16_t port,
-                           std::function<void()> onReady,
-                           std::function<void(const std::string&)> onFail) {
+void RedisClient::connect(const std::string& host, uint16_t port, std::function<void()> onReady,
+                          std::function<void(const std::string&)> onFail) {
     auto client = std::make_shared<net::TcpClient>(loop_);
     net::ConnectOptions copt;
     copt.host = host;
@@ -137,11 +136,10 @@ void RedisClient::connect(const std::string& host, uint16_t port,
         copt,
         [self, onReady](const net::TcpConnection::Ptr& conn) {
             self->conn_ = conn;
-            conn->setMessageCallback(
-                [self](const net::TcpConnection::Ptr&, core::Buffer& buf) {
-                    self->handleIncoming(buf);
-                });
-            if (onReady) onReady(); // Redis 无握手，连接即就绪
+            conn->setMessageCallback([self](const net::TcpConnection::Ptr&, core::Buffer& buf) {
+                self->handleIncoming(buf);
+            });
+            if (onReady) onReady();  // Redis 无握手，连接即就绪
         },
         [onFail](const std::string& reason) {
             if (onFail) onFail("redis connect failed: " + reason);
@@ -151,7 +149,7 @@ void RedisClient::connect(const std::string& host, uint16_t port,
 }
 
 void RedisClient::command(std::vector<std::string> args, ReplyCallback cb) {
-    if (!conn_) return; // 未连接：静默丢弃（调用方应保证先 connect）
+    if (!conn_) return;  // 未连接：静默丢弃（调用方应保证先 connect）
     conn_->send(encodeCommand(args));
     pending_.push_back(std::move(cb));
 }
@@ -176,13 +174,12 @@ void RedisClient::handleIncoming(core::Buffer& buf) {
                 auto cb = std::move(pending_.front());
                 pending_.pop_front();
                 if (cb) {
-                    cb(core::Result<RedisReply>::Err(
-                        core::Error(60, "resp error: " + r.error)));
+                    cb(core::Result<RedisReply>::Err(core::Error(60, "resp error: " + r.error)));
                 }
             }
             return;
         }
-        if (pending_.empty()) return; // 服务端主动推送（如订阅）：M3 忽略
+        if (pending_.empty()) return;  // 服务端主动推送（如订阅）：M3 忽略
         auto cb = std::move(pending_.front());
         pending_.pop_front();
         if (cb) cb(core::Result<RedisReply>::Ok(std::move(r.reply)));
@@ -190,39 +187,37 @@ void RedisClient::handleIncoming(core::Buffer& buf) {
 }
 
 core::Result<RedisReply> RedisClient::commandBlocking(const std::string& host, uint16_t port,
-                                                        std::vector<std::string> args,
-                                                        int timeoutMs) {
-    net::EventLoop loop; // 调用线程上的临时 loop
-    core::Result<RedisReply> result =
-        core::Result<RedisReply>::Err(core::Error(61, "not started"));
+                                                      std::vector<std::string> args,
+                                                      int timeoutMs) {
+    net::EventLoop loop;  // 调用线程上的临时 loop
+    core::Result<RedisReply> result = core::Result<RedisReply>::Err(core::Error(61, "not started"));
     std::atomic<bool> got{false};
 
     {
         RedisClient client(&loop);
         loop.queueInLoop([&] {
-            client.connect(host, port,
-                           [&client, &loop, &args, &result, &got] {
-                               client.command(std::move(args),
-                                              [&loop, &result, &got](core::Result<RedisReply> r) {
-                                                  result = std::move(r);
-                                                  got.store(true, std::memory_order_release);
-                                                  loop.stop();
-                                              });
-                           },
-                           [&loop, &result, &got](const std::string& reason) {
-                               result = core::Result<RedisReply>::Err(core::Error(62, reason));
-                               got.store(true, std::memory_order_release);
-                               loop.stop();
-                           });
+            client.connect(
+                host, port,
+                [&client, &loop, &args, &result, &got] {
+                    client.command(std::move(args),
+                                   [&loop, &result, &got](core::Result<RedisReply> r) {
+                                       result = std::move(r);
+                                       got.store(true, std::memory_order_release);
+                                       loop.stop();
+                                   });
+                },
+                [&loop, &result, &got](const std::string& reason) {
+                    result = core::Result<RedisReply>::Err(core::Error(62, reason));
+                    got.store(true, std::memory_order_release);
+                    loop.stop();
+                });
         });
-        loop.scheduleAfter(std::chrono::milliseconds(timeoutMs),
-                           [&loop, &result, &got] {
-                               if (got.load()) return;
-                               result = core::Result<RedisReply>::Err(
-                                   core::Error(63, "redis command timeout"));
-                               got.store(true, std::memory_order_release);
-                               loop.stop();
-                           });
+        loop.scheduleAfter(std::chrono::milliseconds(timeoutMs), [&loop, &result, &got] {
+            if (got.load()) return;
+            result = core::Result<RedisReply>::Err(core::Error(63, "redis command timeout"));
+            got.store(true, std::memory_order_release);
+            loop.stop();
+        });
         loop.loop();
     }
     if (!got.load(std::memory_order_acquire)) {
@@ -231,4 +226,4 @@ core::Result<RedisReply> RedisClient::commandBlocking(const std::string& host, u
     return result;
 }
 
-} // namespace zenith::redis
+}  // namespace zenith::redis

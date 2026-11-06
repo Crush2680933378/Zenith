@@ -8,27 +8,27 @@
 #include <map>
 
 #if defined(_WIN32)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  using UpSocket = SOCKET;
-  #define UP_INVALID INVALID_SOCKET
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using UpSocket = SOCKET;
+#define UP_INVALID INVALID_SOCKET
 #else
-  #include <arpa/inet.h>
-  #include <cerrno>
-  #include <netdb.h>
-  #include <netinet/in.h>
-  #include <netinet/tcp.h>
-  #include <sys/socket.h>
-  #include <sys/time.h>
-  #include <unistd.h>
-  using UpSocket = int;
-  #define UP_INVALID (-1)
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+#include <cerrno>
+using UpSocket = int;
+#define UP_INVALID (-1)
 #endif
 
 namespace zenith::ai::detail {
@@ -140,12 +140,14 @@ std::string lower(std::string s) {
 std::string trim(const std::string& s) {
     size_t b = 0;
     size_t e = s.size();
-    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n')) ++b;
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n')) --e;
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n'))
+        ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n'))
+        --e;
     return s.substr(b, e - b);
 }
 
-} // namespace
+}  // namespace
 
 bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamResult& out) {
     std::string host;
@@ -230,9 +232,8 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
     size_t pos = head.find("\r\n");
     while (pos != std::string::npos && pos + 2 < head.size()) {
         const size_t lineEnd = head.find("\r\n", pos + 2);
-        const std::string line = head.substr(pos + 2, (lineEnd == std::string::npos ? head.size()
-                                                                                  : lineEnd) -
-                                                          (pos + 2));
+        const std::string line = head.substr(
+            pos + 2, (lineEnd == std::string::npos ? head.size() : lineEnd) - (pos + 2));
         const size_t colon = line.find(':');
         if (colon != std::string::npos) {
             headers[lower(trim(line.substr(0, colon)))] = trim(line.substr(colon + 1));
@@ -242,7 +243,8 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
     }
 
     const auto chunky = headers.find("transfer-encoding");
-    const bool chunked = chunky != headers.end() && chunky->second.find("chunked") != std::string::npos;
+    const bool chunked =
+        chunky != headers.end() && chunky->second.find("chunked") != std::string::npos;
     long long remaining = -1;
     if (const auto it = headers.find("content-length"); it != headers.end()) {
         remaining = std::atoll(it->second.c_str());
@@ -264,9 +266,10 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
         if (remaining >= 0) {
             remaining -= static_cast<long long>(std::min<size_t>(rest.size(), rest.size()));
             while (remaining > 0) {
-                const int n = ::recv(s, tmp, static_cast<int>(std::min<size_t>(sizeof(tmp),
-                                                                              static_cast<size_t>(remaining))),
-                                     0);
+                const int n = ::recv(
+                    s, tmp,
+                    static_cast<int>(std::min<size_t>(sizeof(tmp), static_cast<size_t>(remaining))),
+                    0);
                 if (n <= 0) break;
                 if (!deliver(std::string_view(tmp, static_cast<size_t>(n)))) {
                     closeSocket(s);
@@ -274,7 +277,7 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
                 }
                 remaining -= n;
             }
-        } else { // 读到断开
+        } else {  // 读到断开
             for (;;) {
                 const int n = ::recv(s, tmp, sizeof(tmp), 0);
                 if (n <= 0) break;
@@ -325,11 +328,11 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
                 aborted = true;
                 break;
             }
-            pending.erase(0, need + 2); // 数据 + CRLF
+            pending.erase(0, need + 2);  // 数据 + CRLF
             st = St::Size;
             continue;
         }
-        if (st == St::Trail) { // 尾随头：空行即结束
+        if (st == St::Trail) {  // 尾随头：空行即结束
             const size_t eol = pending.find("\r\n");
             if (eol == std::string::npos) {
                 if (!fill()) break;
@@ -345,4 +348,4 @@ bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamR
     return true;
 }
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

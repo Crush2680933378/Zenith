@@ -8,31 +8,31 @@
 #include "zenith/core/string.hpp"
 
 #if defined(ZENITH_TLS_OPENSSL)
-  #include <openssl/err.h>
-  #include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #endif
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  using SockFd = SOCKET;
-  #define ROUTER_INVALID INVALID_SOCKET
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using SockFd = SOCKET;
+#define ROUTER_INVALID INVALID_SOCKET
 #else
-  #include <arpa/inet.h>
-  #include <netdb.h>
-  #include <netinet/in.h>
-  #include <netinet/tcp.h>
-  #include <sys/socket.h>
-  #include <sys/time.h>
-  #include <unistd.h>
-  using SockFd = int;
-  #define ROUTER_INVALID (-1)
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <unistd.h>
+using SockFd = int;
+#define ROUTER_INVALID (-1)
 #endif
 
 namespace zenith::ai {
@@ -41,9 +41,12 @@ thread_local std::string ProviderRouter::lastProviderUsed;
 
 const char* providerApiName(ProviderApi api) noexcept {
     switch (api) {
-        case ProviderApi::OpenAiChat: return "openai-chat";
-        case ProviderApi::Anthropic: return "anthropic";
-        case ProviderApi::Gemini: return "gemini";
+        case ProviderApi::OpenAiChat:
+            return "openai-chat";
+        case ProviderApi::Anthropic:
+            return "anthropic";
+        case ProviderApi::Gemini:
+            return "gemini";
     }
     return "?";
 }
@@ -58,8 +61,7 @@ core::Result<ProviderApi> providerApiFrom(const std::string& s) {
     if (s == "gemini" || s == "gemini-generatecontent") {
         return core::Result<ProviderApi>::Ok(ProviderApi::Gemini);
     }
-    return core::Result<ProviderApi>::Err(
-        core::Error(400, "unknown provider api: " + s));
+    return core::Result<ProviderApi>::Err(core::Error(400, "unknown provider api: " + s));
 }
 
 // ---------------------------------------------------------------------------
@@ -78,8 +80,8 @@ bool parseUrl(const std::string& url, UrlParts& out) {
     if (url.compare(0, 7, "http://") == 0) hostBegin = 7;
     // https 由 simpleHttpRequest 的 TLS 路径处理（ZENITH_TLS_OPENSSL 门控）
     const size_t slash = url.find('/', hostBegin);
-    std::string hostPort =
-        slash == std::string::npos ? url.substr(hostBegin) : url.substr(hostBegin, slash - hostBegin);
+    std::string hostPort = slash == std::string::npos ? url.substr(hostBegin)
+                                                      : url.substr(hostBegin, slash - hostBegin);
     out.pathAndQuery = slash == std::string::npos ? "/" : url.substr(slash);
     const size_t colon = hostPort.rfind(':');
     if (colon != std::string::npos) {
@@ -99,7 +101,7 @@ void closeSock(SockFd s) {
     ::close(s);
 #endif
 }
-} // namespace
+}  // namespace
 
 SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
     SimpleHttpResult out;
@@ -148,8 +150,8 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     addrinfo* res = nullptr;
-    if (::getaddrinfo(parts.host.c_str(), std::to_string(parts.port).c_str(), &hints,
-                      &res) != 0 || res == nullptr) {
+    if (::getaddrinfo(parts.host.c_str(), std::to_string(parts.port).c_str(), &hints, &res) != 0 ||
+        res == nullptr) {
         out.error = "dns failed for " + parts.host;
         closeSock(fd);
         return out;
@@ -172,7 +174,7 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
             if (c != nullptr) {
                 SSL_CTX_set_min_proto_version(c, TLS1_2_VERSION);
                 SSL_CTX_set_default_verify_paths(c);
-                SSL_CTX_set_verify(c, SSL_VERIFY_PEER, nullptr); // 证书校验失败必须致命
+                SSL_CTX_set_verify(c, SSL_VERIFY_PEER, nullptr);  // 证书校验失败必须致命
                 SSL_CTX_set_options(c, SSL_OP_NO_COMPRESSION);
             }
             return c;
@@ -196,16 +198,16 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
-        SSL_set_tlsext_host_name(ssl, parts.host.c_str()); // SNI
+        SSL_set_tlsext_host_name(ssl, parts.host.c_str());  // SNI
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #endif
         if (!call.insecureTls) {
-            SSL_set1_host(ssl, parts.host.c_str());         // 证书主机名校验
+            SSL_set1_host(ssl, parts.host.c_str());  // 证书主机名校验
         }
         if (SSL_connect(ssl) != 1) {
-            out.error = std::string("tls handshake failed: ") +
-                        ERR_reason_error_string(ERR_get_error());
+            out.error =
+                std::string("tls handshake failed: ") + ERR_reason_error_string(ERR_get_error());
             SSL_free(ssl);
             if (ownCtx != nullptr) SSL_CTX_free(ownCtx);
             closeSock(fd);
@@ -241,7 +243,8 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
         req += ":" + std::to_string(parts.port);
     }
     req += "\r\n";
-    for (const auto& [k, v] : call.headers) req += k + ": " + v + "\r\n";
+    for (const auto& [k, v] : call.headers)
+        req += k + ": " + v + "\r\n";
     if (!call.body.empty() || call.method == "POST" || call.method == "PUT") {
         req += "Content-Length: " + std::to_string(call.body.size()) + "\r\n";
     }
@@ -291,7 +294,7 @@ SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call) {
     closeSock(fd);
 
     if (call.onData) {
-        out.ok = !aborted; // 状态行解析归调用方（流式契约见头注释）
+        out.ok = !aborted;  // 状态行解析归调用方（流式契约见头注释）
         return out;
     }
     if (aborted) {
@@ -345,8 +348,7 @@ struct SseTranslator {
 
     SseTranslator(ProviderApi a, std::string* content, std::string* reasoning,
                   const TokenCallback* tok, const TokenCallback* rea)
-        : api(a), contentOut(content), reasoningOut(reasoning), onToken(tok),
-          onReasoning(rea) {}
+        : api(a), contentOut(content), reasoningOut(reasoning), onToken(tok), onReasoning(rea) {}
 
     bool headOk = false;
     bool headDone = false;
@@ -354,10 +356,10 @@ struct SseTranslator {
     bool chunkDone = false;
     bool wantChunkHeader = true;
     size_t chunkRemain = 0;
-    bool sawAny = false;   // 至少翻译出一个 delta
-    std::string buf;       // 未消费原始字节
-    std::string ev;        // 当前 SSE 事件（含换行）
-    std::string data;      // 当前事件 data 字段（多行 '\n' 连接）
+    bool sawAny = false;  // 至少翻译出一个 delta
+    std::string buf;      // 未消费原始字节
+    std::string ev;       // 当前 SSE 事件（含换行）
+    std::string data;     // 当前事件 data 字段（多行 '\n' 连接）
     std::string error;
     std::string finish;
     int promptTokens = -1;
@@ -385,8 +387,8 @@ struct SseTranslator {
             const size_t sp = head.find(' ');
             const int status = sp == std::string::npos ? 0 : std::atoi(head.c_str() + sp + 1);
             headOk = status >= 200 && status < 300;
-            chunked = core::string_util::toLower(head).find(
-                          "transfer-encoding: chunked") != std::string::npos;
+            chunked = core::string_util::toLower(head).find("transfer-encoding: chunked") !=
+                      std::string::npos;
             headDone = true;
             if (!headOk) {
                 error = "http " + std::to_string(status) + ": " + buf.substr(0, 200);
@@ -408,7 +410,7 @@ struct SseTranslator {
                     chunkRemain = static_cast<size_t>(len);
                     wantChunkHeader = false;
                 }
-                if (buf.size() < chunkRemain + 2) break; // 等整块到齐（含尾 \r\n）
+                if (buf.size() < chunkRemain + 2) break;  // 等整块到齐（含尾 \r\n）
                 plain.append(buf, 0, chunkRemain);
                 buf.erase(0, chunkRemain + 2);
                 wantChunkHeader = true;
@@ -434,22 +436,21 @@ struct SseTranslator {
         size_t pos = 0;
         while (pos <= ev.size()) {
             const size_t nl = ev.find('\n', pos);
-            std::string line = ev.substr(pos, nl == std::string::npos ? ev.size() - pos
-                                                                      : nl - pos);
+            std::string line = ev.substr(pos, nl == std::string::npos ? ev.size() - pos : nl - pos);
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.compare(0, 5, "data:") == 0) {
                 size_t off = 5;
                 if (off < line.size() && line[off] == ' ') ++off;
                 if (!data.empty()) data.push_back('\n');
                 data.append(line, off, std::string::npos);
-            } // event:/id:/retry:/注释行 —— 方言信息都在 data JSON 里，忽略
+            }  // event:/id:/retry:/注释行 —— 方言信息都在 data JSON 里，忽略
             if (nl == std::string::npos) break;
             pos = nl + 1;
         }
         if (data.empty()) return true;
         if (data == "[DONE]") return true;
         auto v = json::JsonValue::parse(data);
-        if (!v) return true; // 容忍坏帧
+        if (!v) return true;  // 容忍坏帧
         switch (api) {
             case ProviderApi::OpenAiChat: {
                 if (const auto* chs = v.value()["choices"].asArray()) {
@@ -511,7 +512,7 @@ struct SseTranslator {
         return true;
     }
 };
-} // namespace
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // RouterConfig
@@ -531,7 +532,7 @@ core::Result<RouterConfig> RouterConfig::fromJson(const json::JsonValue& v) {
         std::string apiStr = p["api"].asString();
         if (apiStr.empty()) apiStr = "openai-chat";
         auto api = providerApiFrom(apiStr);
-        if (!api) continue; // 容忍跳过
+        if (!api) continue;  // 容忍跳过
         pc.api = api.value();
         pc.baseURL = p["baseURL"].asString();
         pc.apiKey = p["apiKey"].asString();
@@ -547,7 +548,8 @@ core::Result<RouterConfig> RouterConfig::fromJson(const json::JsonValue& v) {
             pc.apiKey = env != nullptr ? env : "";
         }
         if (const auto* ms = p["models"].asArray()) {
-            for (const json::JsonValue& m : *ms) pc.models.push_back(m.asString());
+            for (const json::JsonValue& m : *ms)
+                pc.models.push_back(m.asString());
         }
         if (pc.name.empty() || pc.baseURL.empty()) continue;
         cfg.providers.push_back(std::move(pc));
@@ -575,7 +577,7 @@ bool wildcardMatch(const std::string& pattern, const std::string& text) {
     }
     return pattern == text;
 }
-} // namespace
+}  // namespace
 
 ProviderRouter::ProviderRouter(RouterConfig cfg) : cfg_(std::move(cfg)) {
     for (size_t i = 0; i < cfg_.providers.size(); ++i) {
@@ -595,7 +597,7 @@ struct ProviderRouter::Rt {
         double costUsd = 0.0;
         uint64_t consecutiveFails = 0;
         bool open = false;
-        bool halfOpenProbe = false;      // 冷却后放行的单次试探
+        bool halfOpenProbe = false;  // 冷却后放行的单次试探
         std::chrono::steady_clock::time_point openUntil{};
     };
     std::mutex mtx;
@@ -604,14 +606,13 @@ struct ProviderRouter::Rt {
     explicit Rt(size_t n) : per(n) {}
 
     /// 熔断闸门：false = 拒绝（open 且未到冷却）。半开只放一次试探。
-    bool gate(size_t idx, const ProviderConfig& p,
-              std::chrono::steady_clock::time_point now) {
+    bool gate(size_t idx, const ProviderConfig& p, std::chrono::steady_clock::time_point now) {
         std::lock_guard<std::mutex> lk(mtx);
         Per& s = per[idx];
         if (!s.open) return true;
         if (now < s.openUntil) return false;
-        if (s.halfOpenProbe) return false; // 已有试探在飞
-        s.halfOpenProbe = true;            // 放行一次
+        if (s.halfOpenProbe) return false;  // 已有试探在飞
+        s.halfOpenProbe = true;             // 放行一次
         return true;
     }
     void onSuccess(size_t idx, const ProviderConfig& p, int tokensIn, int tokensOut) {
@@ -624,22 +625,20 @@ struct ProviderRouter::Rt {
         s.tokensIn += static_cast<uint64_t>(tokensIn > 0 ? tokensIn : 0);
         s.tokensOut += static_cast<uint64_t>(tokensOut > 0 ? tokensOut : 0);
         if (p.pricePromptPerM > 0 || p.priceCompletionPerM > 0) {
-            s.costUsd += static_cast<double>(tokensIn > 0 ? tokensIn : 0) / 1e6 *
-                             p.pricePromptPerM +
-                         static_cast<double>(tokensOut > 0 ? tokensOut : 0) / 1e6 *
-                             p.priceCompletionPerM;
+            s.costUsd +=
+                static_cast<double>(tokensIn > 0 ? tokensIn : 0) / 1e6 * p.pricePromptPerM +
+                static_cast<double>(tokensOut > 0 ? tokensOut : 0) / 1e6 * p.priceCompletionPerM;
         }
     }
-    void onFailure(size_t idx, const ProviderConfig& p,
-                   std::chrono::steady_clock::time_point now) {
+    void onFailure(size_t idx, const ProviderConfig& p, std::chrono::steady_clock::time_point now) {
         std::lock_guard<std::mutex> lk(mtx);
         Per& s = per[idx];
         ++s.calls;
         ++s.failures;
         ++s.consecutiveFails;
         s.halfOpenProbe = false;
-        if (p.cbFailThreshold > 0 && s.consecutiveFails >=
-                                         static_cast<uint64_t>(p.cbFailThreshold)) {
+        if (p.cbFailThreshold > 0 &&
+            s.consecutiveFails >= static_cast<uint64_t>(p.cbFailThreshold)) {
             s.open = true;
             s.openUntil = now + std::chrono::milliseconds(p.cbOpenMs);
         }
@@ -715,12 +714,11 @@ EngineState ProviderRouter::engineState() const {
 
 ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onToken,
                                 const TokenCallback& onReasoning) {
-    const std::string model = req.model.empty()
-                                  ? (cfg_.defaultProvider.empty() ? ""
-                                                                  : cfg_.providers.front().models.empty()
-                                                                        ? ""
-                                                                        : cfg_.providers.front().models.front())
-                                  : req.model;
+    const std::string model = req.model.empty() ? (cfg_.defaultProvider.empty() ? ""
+                                                   : cfg_.providers.front().models.empty()
+                                                       ? ""
+                                                       : cfg_.providers.front().models.front())
+                                                : req.model;
     const ProviderConfig* p = route(model);
     if (p == nullptr) {
         ChatResult r;
@@ -737,7 +735,8 @@ ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onT
     for (int hop = 0; hop < 8; ++hop) {
         const ProviderConfig& cur = cfg_.providers[idx];
         bool seen = false;
-        for (size_t v : visited) seen = seen || v == idx;
+        for (size_t v : visited)
+            seen = seen || v == idx;
         if (seen) break;
         visited.push_back(idx);
 
@@ -748,9 +747,15 @@ ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onT
                       std::to_string(cur.cbOpenMs) + "ms)";
         } else {
             switch (cur.api) {
-                case ProviderApi::OpenAiChat: r = chatOpenAi(cur, req, onToken, onReasoning); break;
-                case ProviderApi::Anthropic: r = chatAnthropic(cur, req, onToken, onReasoning); break;
-                case ProviderApi::Gemini: r = chatGemini(cur, req, onToken, onReasoning); break;
+                case ProviderApi::OpenAiChat:
+                    r = chatOpenAi(cur, req, onToken, onReasoning);
+                    break;
+                case ProviderApi::Anthropic:
+                    r = chatAnthropic(cur, req, onToken, onReasoning);
+                    break;
+                case ProviderApi::Gemini:
+                    r = chatGemini(cur, req, onToken, onReasoning);
+                    break;
             }
             if (r.ok) {
                 rt_->onSuccess(idx, cur, r.usage.promptTokens, r.usage.completionTokens);
@@ -793,15 +798,13 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
     SimpleHttpCall call;
     call.url = p.baseURL + "/chat/completions";
     call.body = body.dump();
-    call.headers = {{"Content-Type", "application/json"},
-                    {"Authorization", "Bearer " + p.apiKey}};
+    call.headers = {{"Content-Type", "application/json"}, {"Authorization", "Bearer " + p.apiKey}};
     call.timeoutMs = p.timeoutMs;
     call.insecureTls = p.insecure;
 
     if (onToken) {
         std::string content, reasoning;
-        SseTranslator tr{ProviderApi::OpenAiChat, &content, &reasoning, &onToken,
-                         &onReasoning};
+        SseTranslator tr{ProviderApi::OpenAiChat, &content, &reasoning, &onToken, &onReasoning};
         call.onData = [&](std::string_view sv) { return tr.feed(sv); };
         auto res = simpleHttpRequest(call);
         ChatResult r;
@@ -822,7 +825,8 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
 
     ChatResult r;
     if (!res.ok) {
-        r.error = "[" + p.name + "] " + res.error + (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
+        r.error = "[" + p.name + "] " + res.error +
+                  (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
         return r;
     }
     auto v = json::JsonValue::parse(res.body);
@@ -835,8 +839,7 @@ ChatResult ProviderRouter::chatOpenAi(const ProviderConfig& p, const ChatRequest
     r.finishReason = v.value()["choices"].at(size_t{0})["finish_reason"].asString();
     if (r.finishReason.empty()) r.finishReason = "stop";
     r.usage.promptTokens = static_cast<int>(v.value()["usage"]["prompt_tokens"].asInt());
-    r.usage.completionTokens =
-        static_cast<int>(v.value()["usage"]["completion_tokens"].asInt());
+    r.usage.completionTokens = static_cast<int>(v.value()["usage"]["completion_tokens"].asInt());
     return r;
 }
 
@@ -868,7 +871,8 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
 
     // baseURL 约定到根（https://api.anthropic.com）→ 拼 /v1/messages
     std::string base = p.baseURL;
-    while (!base.empty() && base.back() == '/') base.pop_back();
+    while (!base.empty() && base.back() == '/')
+        base.pop_back();
     SimpleHttpCall call;
     call.url = base + "/v1/messages";
     call.body = body.dump();
@@ -880,8 +884,7 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
 
     if (onToken) {
         std::string content, reasoning;
-        SseTranslator tr{ProviderApi::Anthropic, &content, &reasoning, &onToken,
-                         &onReasoning};
+        SseTranslator tr{ProviderApi::Anthropic, &content, &reasoning, &onToken, &onReasoning};
         call.onData = [&](std::string_view sv) { return tr.feed(sv); };
         auto res = simpleHttpRequest(call);
         ChatResult r;
@@ -901,7 +904,8 @@ ChatResult ProviderRouter::chatAnthropic(const ProviderConfig& p, const ChatRequ
 
     ChatResult r;
     if (!res.ok) {
-        r.error = "[" + p.name + "] " + res.error + (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
+        r.error = "[" + p.name + "] " + res.error +
+                  (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
         return r;
     }
     auto v = json::JsonValue::parse(res.body);
@@ -963,20 +967,19 @@ ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest
     body["generationConfig"] = std::move(gen);
 
     std::string base = p.baseURL;
-    while (!base.empty() && base.back() == '/') base.pop_back();
+    while (!base.empty() && base.back() == '/')
+        base.pop_back();
     SimpleHttpCall call;
     call.url = base + "/models/" + req.model +
                (onToken ? ":streamGenerateContent?alt=sse" : ":generateContent");
     call.body = body.dump();
-    call.headers = {{"Content-Type", "application/json"},
-                    {"x-goog-api-key", p.apiKey}};
+    call.headers = {{"Content-Type", "application/json"}, {"x-goog-api-key", p.apiKey}};
     call.timeoutMs = p.timeoutMs;
     call.insecureTls = p.insecure;
 
     if (onToken) {
         std::string content, reasoning;
-        SseTranslator tr{ProviderApi::Gemini, &content, &reasoning, &onToken,
-                         &onReasoning};
+        SseTranslator tr{ProviderApi::Gemini, &content, &reasoning, &onToken, &onReasoning};
         call.onData = [&](std::string_view sv) { return tr.feed(sv); };
         auto res = simpleHttpRequest(call);
         ChatResult r;
@@ -994,7 +997,8 @@ ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest
 
     ChatResult r;
     if (!res.ok) {
-        r.error = "[" + p.name + "] " + res.error + (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
+        r.error = "[" + p.name + "] " + res.error +
+                  (res.body.empty() ? "" : ": " + res.body.substr(0, 200));
         return r;
     }
     auto v = json::JsonValue::parse(res.body);
@@ -1014,15 +1018,13 @@ ChatResult ProviderRouter::chatGemini(const ProviderConfig& p, const ChatRequest
     r.content = std::move(text);
     r.finishReason = cands->at(size_t{0})["finishReason"].asString();
     if (r.finishReason.empty()) r.finishReason = "STOP";
-    r.usage.promptTokens =
-        static_cast<int>(v.value()["usageMetadata"]["promptTokenCount"].asInt());
+    r.usage.promptTokens = static_cast<int>(v.value()["usageMetadata"]["promptTokenCount"].asInt());
     r.usage.completionTokens =
         static_cast<int>(v.value()["usageMetadata"]["candidatesTokenCount"].asInt());
     return r;
 }
 
-EmbeddingResult ProviderRouter::embeddings(const std::string& model,
-                                           const std::string& input) {
+EmbeddingResult ProviderRouter::embeddings(const std::string& model, const std::string& input) {
     EmbeddingResult r;
     const ProviderConfig* p = route(model);
     if (p == nullptr || p->api != ProviderApi::OpenAiChat) {
@@ -1035,8 +1037,7 @@ EmbeddingResult ProviderRouter::embeddings(const std::string& model,
     SimpleHttpCall call;
     call.url = p->baseURL + "/embeddings";
     call.body = body.dump();
-    call.headers = {{"Content-Type", "application/json"},
-                    {"Authorization", "Bearer " + p->apiKey}};
+    call.headers = {{"Content-Type", "application/json"}, {"Authorization", "Bearer " + p->apiKey}};
     call.timeoutMs = p->timeoutMs;
     call.insecureTls = p->insecure;
     auto res = simpleHttpRequest(call);
@@ -1065,8 +1066,7 @@ core::Result<std::vector<std::string>> ProviderRouter::discoverModels(
     const std::string& providerName) {
     auto it = byName_.find(providerName);
     if (it == byName_.end()) {
-        return core::Result<std::vector<std::string>>::Err(
-            core::Error(404, "no such provider"));
+        return core::Result<std::vector<std::string>>::Err(core::Error(404, "no such provider"));
     }
     const ProviderConfig& p = cfg_.providers[it->second];
     if (p.api != ProviderApi::OpenAiChat) {
@@ -1092,8 +1092,9 @@ core::Result<std::vector<std::string>> ProviderRouter::discoverModels(
             core::Error(406, "malformed /models response"));
     }
     std::vector<std::string> out;
-    for (const json::JsonValue& m : *data) out.push_back(m["id"].asString());
+    for (const json::JsonValue& m : *data)
+        out.push_back(m["id"].asString());
     return core::Result<std::vector<std::string>>::Ok(std::move(out));
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

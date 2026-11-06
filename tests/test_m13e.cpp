@@ -24,8 +24,7 @@ public:
     std::vector<ai::ModelInfo> models() override { return {}; }
     int chatSleepMs = 0;
     bool alwaysRevise = false;
-    ai::ChatResult chat(const ai::ChatRequest& req,
-                        const ai::TokenCallback& = nullptr,
+    ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
@@ -36,22 +35,26 @@ public:
         if (sys.find("VOTE:") != std::string::npos) {
             if (user.find("acceptance criteria") != std::string::npos) {
                 r.content = (alwaysRevise || !rev_)
-                    ? (rev_ = true, R"({"choice":"revise","reason":"v"})")
-                    : R"({"choice":"approve","reason":"ok"})";
+                                ? (rev_ = true, R"({"choice":"revise","reason":"v"})")
+                                : R"({"choice":"approve","reason":"ok"})";
             } else {
                 r.content = R"({"choice":"sqlite","reason":"z"})";
             }
         } else if (sys.find("ROLE: PM") != std::string::npos) {
-            r.content = R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"},{"id":"S2","title":"b","given":"e","when":"v","then":"n"}]}})";
+            r.content =
+                R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"},{"id":"S2","title":"b","given":"e","when":"v","then":"n"}]}})";
         } else if (sys.find("ROLE: ARCHITECT") != std::string::npos) {
-            r.content = R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
+            r.content =
+                R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
         } else if (sys.find("ROLE: BACKEND") != std::string::npos ||
                    sys.find("ROLE: FRONTEND") != std::string::npos) {
             r.content = R"({"files":[{"path":"x","content":"y"}],"notes":"n"})";
         } else if (sys.find("ROLE: TESTER") != std::string::npos) {
-            r.content = (user.find("RETEST") == std::string::npos && !ret_)
-                ? (ret_ = true, R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})")
-                : R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
+            r.content =
+                (user.find("RETEST") == std::string::npos && !ret_)
+                    ? (ret_ = true,
+                       R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})")
+                    : R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
         } else if (sys.find("ROLE: DEVOPS") != std::string::npos) {
             r.content = R"({"files":[{"path":"D","content":"x"}],"deploy":{"strategy":"d"}})";
         } else if (sys.find("ROLE: DELIVERY") != std::string::npos) {
@@ -68,8 +71,7 @@ public:
     bool rev_ = false, ret_ = false;
 };
 
-crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
-                                int maxSec = 30) {
+crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id, int maxSec = 30) {
     for (int i = 0; i < maxSec * 20; ++i) {
         auto info = eng.taskInfo(id);
         if (info && !info.value().running) return info.value();
@@ -78,7 +80,7 @@ crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
     auto info = eng.taskInfo(id);
     return info ? info.value() : crew::CrewTaskInfo{};
 }
-} // namespace
+}  // namespace
 
 /* ---------------- persona 映射 ---------------- */
 
@@ -115,14 +117,15 @@ ZTEST(Desk, RosterWithPersonasAndTaskModels) {
     const auto* roles = roster.value()["roles"].asArray();
     ZEXPECT_EQ(roles->size(), size_t{7});
     std::map<std::string, json::JsonValue> byRole;
-    for (const auto& r : *roles) byRole[r["role"].asString()] = r;
+    for (const auto& r : *roles)
+        byRole[r["role"].asString()] = r;
     ZEXPECT_EQ(byRole["architect"]["vote_weight"].asInt(0), int64_t{2});
     ZEXPECT_EQ(byRole["architect"]["persona"].asString(), std::string("deepseek"));
     ZEXPECT_EQ(byRole["architect"]["model"].asString(), std::string("deepseek-chat"));
-    ZEXPECT_EQ(byRole["pm"]["persona"].asString(), std::string("glm"));       // 覆盖生效
-    ZEXPECT_EQ(byRole["backend"]["persona"].asString(), std::string("kimi")); // 覆盖生效
-    ZEXPECT_EQ(byRole["tester"]["persona"].asString(), std::string(""));      // 无模型→默认
-    ZEXPECT_FALSE(byRole["pm"]["display"].asString().empty());                // 工位牌名
+    ZEXPECT_EQ(byRole["pm"]["persona"].asString(), std::string("glm"));        // 覆盖生效
+    ZEXPECT_EQ(byRole["backend"]["persona"].asString(), std::string("kimi"));  // 覆盖生效
+    ZEXPECT_EQ(byRole["tester"]["persona"].asString(), std::string(""));       // 无模型→默认
+    ZEXPECT_FALSE(byRole["pm"]["display"].asString().empty());                 // 工位牌名
 }
 
 ZTEST(Desk, MetaInfoFeatures) {
@@ -153,7 +156,7 @@ ZTEST(Desk, VoteCastPerBallotEvents) {
             ++architectWeighted;
         }
     }
-    ZEXPECT_TRUE(casts >= 14);         // 2 轮投票 × 7 选民，逐票即时
+    ZEXPECT_TRUE(casts >= 14);  // 2 轮投票 × 7 选民，逐票即时
     ZEXPECT_TRUE(architectWeighted >= 2);
 }
 
@@ -175,7 +178,7 @@ ZTEST(Desk, HandoffChainEvents) {
     ZEXPECT_TRUE(pairs.count("frontend>tester") > 0);
     ZEXPECT_TRUE(pairs.count("architect>devops") > 0);
     ZEXPECT_TRUE(pairs.count("tester>delivery") > 0);
-    ZEXPECT_TRUE(pairs.count("tester>backend") > 0); // 缺陷环派单交接
+    ZEXPECT_TRUE(pairs.count("tester>backend") > 0);  // 缺陷环派单交接
 }
 
 ZTEST(Desk, BugAssignedAndTestResultStructured) {
@@ -218,8 +221,7 @@ ZTEST(Desk, StoryEvents) {
     for (const crew::CrewEvent& e : eng.events(id)) {
         if (e.type != "story_started" && e.type != "story_done") continue;
         auto d = json::JsonValue::parse(e.dataJson);
-        (e.type == "story_started" ? started : done)
-            .insert(d.value()["story"].asString());
+        (e.type == "story_started" ? started : done).insert(d.value()["story"].asString());
     }
     ZEXPECT_TRUE(started.count("S1") > 0);
     ZEXPECT_TRUE(started.count("S2") > 0);
@@ -264,11 +266,8 @@ struct Http {
         io.start();
         eng.setInference(std::make_shared<Rec>());
         crew::mountCrewApi(srv.router(),
-                           std::shared_ptr<crew::CrewEngine>(std::shared_ptr<void>(),
-                                                             &eng),
-                           token);
-        crew::mountCrewWs(srv, std::shared_ptr<crew::CrewEngine>(std::shared_ptr<void>(),
-                                                                 &eng),
+                           std::shared_ptr<crew::CrewEngine>(std::shared_ptr<void>(), &eng), token);
+        crew::mountCrewWs(srv, std::shared_ptr<crew::CrewEngine>(std::shared_ptr<void>(), &eng),
                           token);
         (void)srv.listen("127.0.0.1", 0);
         baseUrl = "http://127.0.0.1:" + std::to_string(srv.port());
@@ -287,7 +286,7 @@ struct Http {
         return ai::simpleHttpRequest(call);
     }
 };
-} // namespace
+}  // namespace
 
 ZTEST(Desk, HttpRosterMetaAndCors) {
     Http h;
@@ -306,8 +305,7 @@ ZTEST(Desk, HttpRosterMetaAndCors) {
     ai::SimpleHttpCall pre;
     pre.method = "OPTIONS";
     pre.url = h.baseUrl + "/crew/tasks";
-    pre.headers = {{"Origin", "http://localhost:5173"},
-                   {"Access-Control-Request-Method", "POST"}};
+    pre.headers = {{"Origin", "http://localhost:5173"}, {"Access-Control-Request-Method", "POST"}};
     auto preRes = ai::simpleHttpRequest(pre);
     ZEXPECT_EQ(preRes.status, 204);
     ZEXPECT_TRUE(preRes.body.empty() || preRes.body.find("204") == std::string::npos);
@@ -323,7 +321,7 @@ ZTEST(Desk, HttpAggregateBoardAndEnrichedFields) {
     h.eng.setInference(slow);
     const std::string id1 = h.eng.createTask("agg one", cfg);
     const std::string id2 = h.eng.createTask("agg two");
-    std::this_thread::sleep_for(300ms); // 两个都在跑
+    std::this_thread::sleep_for(300ms);  // 两个都在跑
 
     auto agg = h.get("/crew/board");
     ZEXPECT_TRUE(agg.ok);
@@ -387,34 +385,31 @@ ZTEST(Desk, WebSocketWatchAndEvents) {
         [&](const net::WebSocketSession::Ptr& s0) {
             auto s = s0;
             // s 按值捕获：open 回调返回后其栈帧销毁，按引用捕获会悬垂（CI UAF）
-            s->setMessageCallback(
-                [&, s](const net::WebSocketSession::Ptr&, std::string m, bool) {
-                    const int n = ++frames;
-                    auto v = json::JsonValue::parse(m);
-                    const std::string type =
-                        v ? v.value()["type"].asString() : std::string();
-                    if (type == "hello") gotHello.store(true);
-                    if (type == "phase" || type == "agent_start" || type == "vote_cast" ||
-                        type == "artifact") {
-                        gotCrewEvent.store(true);
-                    }
-                    if (type == "pong") gotPong.store(true);
-                    if (n == 3) s->sendText(R"({"type":"ping"})");
-                    if (gotCrewEvent.load() && n > 5) {
-                        s->close();
-                        done.store(true);
-                    }
-                });
-            s->setCloseCallback([&](const net::WebSocketSession::Ptr&) {
-                done.store(true);
+            s->setMessageCallback([&, s](const net::WebSocketSession::Ptr&, std::string m, bool) {
+                const int n = ++frames;
+                auto v = json::JsonValue::parse(m);
+                const std::string type = v ? v.value()["type"].asString() : std::string();
+                if (type == "hello") gotHello.store(true);
+                if (type == "phase" || type == "agent_start" || type == "vote_cast" ||
+                    type == "artifact") {
+                    gotCrewEvent.store(true);
+                }
+                if (type == "pong") gotPong.store(true);
+                if (n == 3) s->sendText(R"({"type":"ping"})");
+                if (gotCrewEvent.load() && n > 5) {
+                    s->close();
+                    done.store(true);
+                }
             });
+            s->setCloseCallback([&](const net::WebSocketSession::Ptr&) { done.store(true); });
             s->sendText(R"({"type":"watch","task":")" + id + R"("})");
         },
         [](const std::string& reason) {
             ztest::reportFail(__FILE__, __LINE__, "ws connect failed: " + reason);
         });
 
-    for (int i = 0; i < 800 && !done.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 800 && !done.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     cloop.stop();
     if (ct.joinable()) ct.join();
     ZEXPECT_TRUE(gotHello.load());

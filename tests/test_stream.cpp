@@ -86,7 +86,7 @@ struct StreamFixture {
 
         ZEXPECT_TRUE(static_cast<bool>(server.listen("127.0.0.1", 0)));
         runner = std::thread([this] { loop.loop(); });
-        std::this_thread::sleep_for(100ms); // 监听生效
+        std::this_thread::sleep_for(100ms);  // 监听生效
     }
 
     ~StreamFixture() {
@@ -104,7 +104,7 @@ struct StreamFixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(Stream, SseEventsAndFraming) {
     StreamFixture f;
@@ -136,8 +136,8 @@ ZTEST(Stream, SseEventsAndFraming) {
 ZTEST(Stream, SseCrossThreadPush) {
     StreamFixture f;
 
-    core::Result<http::HttpResponse> res = core::Result<http::HttpResponse>::Err(
-        core::Error(1, "not run"));
+    core::Result<http::HttpResponse> res =
+        core::Result<http::HttpResponse>::Err(core::Error(1, "not run"));
     std::thread client([&] { res = f.fetch("/sse-thread"); });
 
     // 等 handler 把写端交出来（最多 2s）
@@ -159,8 +159,7 @@ ZTEST(Stream, SseCrossThreadPush) {
 
     ZEXPECT_TRUE(res.isOk());
     if (res.isOk()) {
-        ZEXPECT_EQ(res.value().body,
-                   std::string("data: from-test-1\n\ndata: from-test-2\n\n"));
+        ZEXPECT_EQ(res.value().body, std::string("data: from-test-1\n\ndata: from-test-2\n\n"));
     }
     ZEXPECT_TRUE(f.handlerOk.load());
 }
@@ -178,7 +177,7 @@ ZTEST(Stream, ChunkedWriterBody) {
 ZTEST(Stream, ChunkedFlagWithoutStreamStillTerminates) {
     StreamFixture f;
     auto res = f.fetch("/chunked-flag-only");
-    ZEXPECT_TRUE(res.isOk()); // 关键：客户端不被挂住（能读到终止块）
+    ZEXPECT_TRUE(res.isOk());  // 关键：客户端不被挂住（能读到终止块）
     if (res.isErr()) return;
     ZEXPECT_EQ(res.value().status, 200);
     ZEXPECT_TRUE(res.value().body.empty());

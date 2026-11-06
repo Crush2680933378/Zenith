@@ -33,11 +33,11 @@ private:
     void storePlatformError(const char* context);
 
     std::string path_;
-    void*       handle_    = nullptr;
+    void* handle_ = nullptr;
     std::string lastError_;
 };
 
 /// 插件动态库在当前平台的扩展名（含点），如 ".dll" / ".so" / ".dylib"。
 ZENITH_API const char* pluginFileExtension() noexcept;
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

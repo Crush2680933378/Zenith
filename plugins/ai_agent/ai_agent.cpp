@@ -6,14 +6,14 @@
 // ============================================================================
 #include <map>
 #include <memory>
-#include <new>
 #include <mutex>
+#include <new>
 
 #include "zenith/abi/zenith_abi.h"
 
 #include "zenith/agent/agent.hpp"
-#include "zenith/vector/vector_service.hpp"
 #include "zenith/plugin/service_registry.hpp"
+#include "zenith/vector/vector_service.hpp"
 
 namespace {
 
@@ -30,7 +30,7 @@ public:
     void setInference(std::shared_ptr<zenith::ai::IInferenceService> inf) {
         std::lock_guard<std::mutex> lk(mtx_);
         inference_ = std::move(inf);
-        agents_.clear(); // 引擎换实例 → Agent 重建
+        agents_.clear();  // 引擎换实例 → Agent 重建
     }
     void setVector(void* vecRaw) {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -45,7 +45,7 @@ public:
             zenith::agent::AgentConfig cfg;
             auto a = std::make_unique<zenith::agent::Agent>(inference_, cfg);
             if (vectorRaw_ != nullptr) {
-                a->remember(vectorRaw_, "", 0); // 注入向量服务（记忆钩子由宿主配）
+                a->remember(vectorRaw_, "", 0);  // 注入向量服务（记忆钩子由宿主配）
             }
             it = agents_.emplace(key, std::move(a)).first;
         }
@@ -78,9 +78,9 @@ zenith_status pluginInit(const zenith_host_api* host) {
     auto* svc = new (std::nothrow) AgentService();
     if (svc == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
     g_svc = svc;  // 所有权归宿主（destroy 回调删除）
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  AgentService::kName, AgentService::kVersion,
-                                  static_cast<void*>(svc), &destroyAgentService);
+    return host->register_service(host->registry_ctx, host->plugin_token, AgentService::kName,
+                                  AgentService::kVersion, static_cast<void*>(svc),
+                                  &destroyAgentService);
 }
 
 zenith_status pluginStart(void) {
@@ -100,7 +100,9 @@ zenith_status pluginStart(void) {
     return ZENITH_OK;
 }
 
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
     g_svc = nullptr;  // 宿主 destroyAgentService 负责删除
     g_host = nullptr;
@@ -120,6 +122,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

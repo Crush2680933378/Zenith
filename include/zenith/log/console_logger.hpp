@@ -23,4 +23,4 @@ private:
     bool color_;
 };
 
-} // namespace zenith::log
+}  // namespace zenith::log

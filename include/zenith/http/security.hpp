@@ -22,12 +22,12 @@ namespace zenith::http {
 // SecurityLimits：协议层防护统一配置（M5.2 遗留收口 / M6.4 补齐）
 // ---------------------------------------------------------------------------
 struct SecurityLimits {
-    size_t maxBodyBytes = 10 * 1024 * 1024;   // 请求体上限
-    size_t maxHeaderBytes = 64 * 1024;        // 头部区上限（parser 内建同值）
-    size_t maxRequestLine = 8 * 1024;         // 请求行上限（parser 内建同值）
-    size_t maxConcurrentConns = 10000;        // 最大并发连接（超出新连接 503）
-    int keepAliveIdleSec = 60;                // keep-alive 空闲超时（slowloris 防线）
-    int headerReadTimeoutMs = 15000;          // 请求头读取超时
+    size_t maxBodyBytes = 10 * 1024 * 1024;  // 请求体上限
+    size_t maxHeaderBytes = 64 * 1024;       // 头部区上限（parser 内建同值）
+    size_t maxRequestLine = 8 * 1024;        // 请求行上限（parser 内建同值）
+    size_t maxConcurrentConns = 10000;       // 最大并发连接（超出新连接 503）
+    int keepAliveIdleSec = 60;               // keep-alive 空闲超时（slowloris 防线）
+    int headerReadTimeoutMs = 15000;         // 请求头读取超时
 
     static const SecurityLimits& defaults() {
         static SecurityLimits d;
@@ -39,7 +39,7 @@ struct SecurityLimits {
 // CORS
 // ---------------------------------------------------------------------------
 struct CorsOptions {
-    std::string allowOrigin = "*";           // 或逗号分隔白名单精确匹配
+    std::string allowOrigin = "*";  // 或逗号分隔白名单精确匹配
     bool allowCredentials = false;
     std::string allowMethods = "GET, POST, PUT, DELETE, OPTIONS";
     std::string allowHeaders = "Content-Type, Authorization, X-Request-Id";
@@ -53,9 +53,9 @@ ZENITH_API Middleware corsMiddleware(CorsOptions opt = {});
 // 令牌桶限流
 // ---------------------------------------------------------------------------
 struct RateLimitOptions {
-    double ratePerSec = 100;      // 令牌生成速率
-    double burst = 100;           // 桶容量
-    int64_t retryAfterSec = 1;    // 429 附带 Retry-After
+    double ratePerSec = 100;    // 令牌生成速率
+    double burst = 100;         // 桶容量
+    int64_t retryAfterSec = 1;  // 429 附带 Retry-After
     /// 键提取（默认 IP）
     std::function<std::string(Context&)> keyOf = [](Context& c) {
         const size_t colon = c.peer().rfind(':');
@@ -107,4 +107,4 @@ struct JwtAuthOptions {
 /// （contextAs<std::string>() 取 payload JSON）；失败 401 + WWW-Authenticate
 ZENITH_API Middleware jwtAuthMiddleware(JwtAuthOptions opt);
 
-} // namespace zenith::http
+}  // namespace zenith::http

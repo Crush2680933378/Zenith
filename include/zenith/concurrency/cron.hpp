@@ -39,7 +39,7 @@ public:
 
 private:
     struct Field {
-        uint64_t bits = 0; // 位图：bit i 置位 = 值 i 匹配（周字段 bit7 冗余 7=0）
+        uint64_t bits = 0;  // 位图：bit i 置位 = 值 i 匹配（周字段 bit7 冗余 7=0）
         int lo = 0, hi = 0;
     };
     static bool fieldParse(const std::string& s, int lo, int hi, Field& out);
@@ -82,7 +82,7 @@ private:
     std::atomic<uint64_t> triggered_{0};
     std::atomic<uint64_t> nextId_{1};
     std::thread thread_;
-    std::condition_variable cv_; // add/remove 唤醒重算睡眠
+    std::condition_variable cv_;  // add/remove 唤醒重算睡眠
 };
 
-} // namespace zenith::concurrency
+}  // namespace zenith::concurrency

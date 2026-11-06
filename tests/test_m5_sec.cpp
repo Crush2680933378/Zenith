@@ -51,14 +51,15 @@ ZTEST(Hmac, RfcVectorsAndOpenSSLCross) {
     uint8_t out[32];
     // RFC 4231 Test Case 2：key="Jefe", data="what do ya want for nothing?"
     crypto::hmacSha256("Jefe", "what do ya want for nothing?", out);
-    crypto::Sha256 formatter; // 仅用 hex 逻辑 → 手工转
+    crypto::Sha256 formatter;  // 仅用 hex 逻辑 → 手工转
     static const char* kH = "0123456789abcdef";
     std::string hex;
     for (uint8_t b : std::vector<uint8_t>(out, out + 32)) {
         hex.push_back(kH[b >> 4]);
         hex.push_back(kH[b & 0xF]);
     }
-    ZEXPECT_EQ(hex, std::string("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"));
+    ZEXPECT_EQ(hex,
+               std::string("5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"));
 
     // OpenSSL 交叉：2000 组随机样本
     std::mt19937 rng{std::random_device{}()};
@@ -66,8 +67,10 @@ ZTEST(Hmac, RfcVectorsAndOpenSSLCross) {
     for (int i = 0; i < 2000; ++i) {
         std::string key, msg;
         const size_t kl = rng() % 128, ml = rng() % 512;
-        for (size_t j = 0; j < kl; ++j) key.push_back(static_cast<char>(rng() & 0xFF));
-        for (size_t j = 0; j < ml; ++j) msg.push_back(static_cast<char>(rng() & 0xFF));
+        for (size_t j = 0; j < kl; ++j)
+            key.push_back(static_cast<char>(rng() & 0xFF));
+        for (size_t j = 0; j < ml; ++j)
+            msg.push_back(static_cast<char>(rng() & 0xFF));
 
         uint8_t mine[32], ref[32];
         crypto::hmacSha256(key, msg, mine);
@@ -129,19 +132,20 @@ ZTEST(SecurityE2E, FullChain) {
     auto& r = server.router();
 
     r.use(http::securityHeadersMiddleware());
-    r.use(http::corsMiddleware(http::CorsOptions{.allowOrigin = "https://app.example.com,https://web.example.com",
-                                                 .allowCredentials = true}));
+    r.use(http::corsMiddleware(
+        http::CorsOptions{.allowOrigin = "https://app.example.com,https://web.example.com",
+                          .allowCredentials = true}));
     // 限流只挂在 /login
-    auto limiter = std::make_shared<http::TokenBucketLimiter>(2.0, 3.0); // 2/s，桶 3
+    auto limiter = std::make_shared<http::TokenBucketLimiter>(2.0, 3.0);  // 2/s，桶 3
     r.post("/login", http::Handler{[](http::Context& c) {
                const auto body = c.bodyJson();
                if (body["user"].asString() == "tom" && body["pass"].asString() == "pw") {
                    http::json::JsonValue v = http::json::JsonValue::object();
-                   v["token"] = http::jwt::sign("e2e-secret", R"({"sub":"tom"})", 600,
-                                                std::chrono::duration_cast<std::chrono::seconds>(
-                                                    std::chrono::system_clock::now()
-                                                        .time_since_epoch())
-                                                    .count());
+                   v["token"] =
+                       http::jwt::sign("e2e-secret", R"({"sub":"tom"})", 600,
+                                       std::chrono::duration_cast<std::chrono::seconds>(
+                                           std::chrono::system_clock::now().time_since_epoch())
+                                           .count());
                    c.json(200, v);
                } else {
                    c.status(401).text(401, "bad credentials");
@@ -152,12 +156,11 @@ ZTEST(SecurityE2E, FullChain) {
     r.use(http::jwtAuthMiddleware(http::JwtAuthOptions{secret, .exemptPrefixes = "/login"}));
     r.options("/protected", [](http::Context&) { /* 占位：cors 中间件在链中先行短路 */ });
     r.get("/protected", [](http::Context& c) {
-        c.text(200, "hello " +
-                        (c.contextAs<std::string>() != nullptr
-                             ? http::json::JsonValue::parse(*c.contextAs<std::string>())
-                                   .value()["sub"]
-                                   .asString()
-                             : std::string("?")));
+        c.text(200, "hello " + (c.contextAs<std::string>() != nullptr
+                                    ? http::json::JsonValue::parse(*c.contextAs<std::string>())
+                                          .value()["sub"]
+                                          .asString()
+                                    : std::string("?")));
     });
 
     (void)server.listen("127.0.0.1", 0);
@@ -188,8 +191,7 @@ ZTEST(SecurityE2E, FullChain) {
     // 3) 受保护路由：无 token / 带 token
     auto anon = http::HttpClient::fetchBlockingUrl(url("/protected"));
     ZEXPECT_EQ(anon.value().status, 401);
-    ZEXPECT_TRUE(anon.value().headers.get("WWW-Authenticate").find("Bearer") !=
-                 std::string::npos);
+    ZEXPECT_TRUE(anon.value().headers.get("WWW-Authenticate").find("Bearer") != std::string::npos);
     http::ClientRequest auth;
     auth.url = url("/protected");
     auth.headers.set("Authorization", "Bearer " + token);
@@ -206,7 +208,7 @@ ZTEST(SecurityE2E, FullChain) {
             ++saw429;
             ZEXPECT_FALSE(rl.value().headers.get("Retry-After").empty());
         } else if (rl.value().status == 401) {
-            ++saw200; // 正常拒绝（未超限）
+            ++saw200;  // 正常拒绝（未超限）
         }
     }
     ZEXPECT_TRUE(saw429 >= 1);
@@ -246,12 +248,12 @@ ZTEST(SecurityE2E, FullChain) {
 }
 
 ZTEST(TokenBucket, BurstAndRate) {
-    http::TokenBucketLimiter lim(10.0, 5.0); // 10/s，桶 5
+    http::TokenBucketLimiter lim(10.0, 5.0);  // 10/s，桶 5
     int ok = 0;
     for (int i = 0; i < 10; ++i) {
         if (lim.allow("k")) ++ok;
     }
-    ZEXPECT_EQ(ok, 5); // 突发 5 枚，随后即时空窗
+    ZEXPECT_EQ(ok, 5);  // 突发 5 枚，随后即时空窗
     ZEXPECT_EQ(lim.trackedKeys(), size_t{1});
     // 不同键独立
     ZEXPECT_TRUE(lim.allow("other"));

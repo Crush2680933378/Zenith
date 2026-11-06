@@ -46,4 +46,4 @@ ZENITH_API std::string mimeTypeFor(const std::string& path);
 ///    旧壳引用新哈希资源会加载失败。
 ZENITH_API Handler spaHandler(std::string rootDir);
 
-} // namespace zenith::http
+}  // namespace zenith::http

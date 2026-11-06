@@ -23,14 +23,14 @@ typedef struct ssl_st SSL;
 namespace zenith::tls {
 
 struct TlsServerConfig {
-    std::string certFile;     // PEM 证书链（含中间证书）
-    std::string keyFile;      // PEM 私钥
-    std::string alpn = "";    // 空格分隔，如 "http/1.1"（可空）
+    std::string certFile;   // PEM 证书链（含中间证书）
+    std::string keyFile;    // PEM 私钥
+    std::string alpn = "";  // 空格分隔，如 "http/1.1"（可空）
 };
 
 struct TlsClientConfig {
-    bool useSystemTrust = true; // SSL_CTX_set_default_verify_paths
-    std::string caFile;         // 额外 CA 包（PEM）；空则仅系统信任
+    bool useSystemTrust = true;  // SSL_CTX_set_default_verify_paths
+    std::string caFile;          // 额外 CA 包（PEM）；空则仅系统信任
     bool verifyPeer = true;
 };
 
@@ -63,7 +63,7 @@ private:
 
     explicit OpenSslContext(SSL_CTX* ctx) : ctx_(ctx) {}
     SSL_CTX* ctx_ = nullptr;
-    std::shared_ptr<std::string> alpnHolder_; // ALPN 回调 arg 保活
+    std::shared_ptr<std::string> alpnHolder_;  // ALPN 回调 arg 保活
 };
 
 /// TLS 握手/运行状态
@@ -86,8 +86,7 @@ public:
     /// 密文入站：喂入后推进握手/解密。
     /// 返回明文（可能为空）——追加到调用方缓冲。
     /// outWire：需要写出到 socket 的密文（握手记录 / 密文响应）。
-    void feedCipher(const char* data, size_t n, std::string& outPlain,
-                    std::string& outWire);
+    void feedCipher(const char* data, size_t n, std::string& outPlain, std::string& outWire);
 
     /// 明文出站：加密。密文追加到 outWire；握手未完成时自动暂存并在完成后flush。
     void encrypt(const char* data, size_t n, std::string& outWire);
@@ -112,14 +111,14 @@ private:
     [[nodiscard]] bool established() const noexcept { return state_ == TlsState::Established; }
 
     SSL* ssl_ = nullptr;
-    void* rbio_ = nullptr; // BIO*（公共头不泄漏类型）
+    void* rbio_ = nullptr;  // BIO*（公共头不泄漏类型）
     void* wbio_ = nullptr;
     TlsState state_ = TlsState::Handshaking;
     bool handshakeDone_ = false;
     bool shutdownSent_ = false;
-    std::string pendingPlain_;          // 握手期间暂存的明文
-    std::string pendingWireAtConstruct_; // 客户端构造时产生的 ClientHello
+    std::string pendingPlain_;            // 握手期间暂存的明文
+    std::string pendingWireAtConstruct_;  // 客户端构造时产生的 ClientHello
     std::string error_;
 };
 
-} // namespace zenith::tls
+}  // namespace zenith::tls

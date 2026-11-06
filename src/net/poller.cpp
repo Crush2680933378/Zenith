@@ -9,18 +9,18 @@
 #include "zenith/core/platform.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0601
-  #endif
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
 #else
-  #include <sys/select.h>
+#include <sys/select.h>
 #endif
 
 namespace zenith::net {
@@ -54,10 +54,10 @@ std::unique_ptr<Poller> createPoller() {
 //       生产环境 Linux/macOS/Windows 分别走 epoll/kqueue/WSAPoll。
 // ---------------------------------------------------------------------------
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #if !defined(ZENITH_POLLER_CUSTOM_FD_SETSIZE)
-    #undef FD_SETSIZE
-    #define FD_SETSIZE 4096
-  #endif
+#if !defined(ZENITH_POLLER_CUSTOM_FD_SETSIZE)
+#undef FD_SETSIZE
+#define FD_SETSIZE 4096
+#endif
 #endif
 
 class SelectPoller final : public Poller {
@@ -94,7 +94,7 @@ public:
         }
         if (!wantRead && !wantWrite) {
             // 无关注 fd：纯定时休眠
-            if (timeoutMs < 0) timeoutMs = 100; // 防永久休死
+            if (timeoutMs < 0) timeoutMs = 100;  // 防永久休死
             std::this_thread::sleep_for(std::chrono::milliseconds(timeoutMs));
             return 0;
         }
@@ -131,6 +131,8 @@ private:
     std::map<fd_t, uint16_t> interested_;
 };
 
-std::unique_ptr<Poller> createSelectPoller() { return std::make_unique<SelectPoller>(); }
+std::unique_ptr<Poller> createSelectPoller() {
+    return std::make_unique<SelectPoller>();
+}
 
-} // namespace zenith::net
+}  // namespace zenith::net

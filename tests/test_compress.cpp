@@ -20,17 +20,18 @@ namespace {
 bool zlibAvailable() {
     const auto probe = http::gzipCompress("zenith-gzip-probe");
     return probe.has_value() && probe->size() > 2 && probe->data()[0] == '\x1f' &&
-           probe->data()[1] == '\x8b'; // gzip magic
+           probe->data()[1] == '\x8b';  // gzip magic
 }
 
 std::string bigBody(size_t n) {
     std::string s;
     s.reserve(n);
-    while (s.size() < n) s += "zenith-streaming-compression|";
+    while (s.size() < n)
+        s += "zenith-streaming-compression|";
     return s;
 }
 
-} // namespace
+}  // namespace
 
 ZTEST(Compress, GzipRoundTrip) {
     if (!zlibAvailable()) {
@@ -41,7 +42,7 @@ ZTEST(Compress, GzipRoundTrip) {
     auto packed = http::gzipCompress(original, 6);
     ZEXPECT_TRUE(packed.has_value());
     if (!packed.has_value()) return;
-    ZEXPECT_TRUE(packed->size() < original.size() / 2); // 高度重复文本应显著变小
+    ZEXPECT_TRUE(packed->size() < original.size() / 2);  // 高度重复文本应显著变小
 
     auto back = http::gzipDecompress(*packed);
     ZEXPECT_TRUE(back.has_value());
@@ -133,7 +134,7 @@ struct CompressFixture {
         return "http://127.0.0.1:" + std::to_string(server.port());
     }
 };
-} // namespace
+}  // namespace
 
 ZTEST(Compress, EndToEndGzipResponse) {
     if (!zlibAvailable()) {

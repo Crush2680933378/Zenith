@@ -24,7 +24,7 @@ public:
     [[nodiscard]] virtual uint32_t serviceInterfaceVersion() const noexcept = 0;
 };
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin
 
 /// 声明服务的静态接口信息（配合 ServiceRegistry 的模板 API）。
 /// 用法：
@@ -33,14 +33,16 @@ public:
 ///     ZENITH_SERVICE_DECL(IGreeter, "zenith.example.IGreeter", 1)
 ///     virtual std::string greet(const std::string& name) const = 0;
 ///   };
-#define ZENITH_SERVICE_DECL(Iface, if_name, if_version)                             \
-    static constexpr const char* service_name() noexcept { return if_name; }         \
-    static constexpr uint32_t service_version() noexcept { return if_version; }      \
-    [[nodiscard]] const char* serviceInterfaceName() const noexcept override         \
-    {                                                                                \
-        return service_name();                                                       \
-    }                                                                                \
-    [[nodiscard]] uint32_t serviceInterfaceVersion() const noexcept override         \
-    {                                                                                \
-        return service_version();                                                    \
+#define ZENITH_SERVICE_DECL(Iface, if_name, if_version)                        \
+    static constexpr const char* service_name() noexcept {                     \
+        return if_name;                                                        \
+    }                                                                          \
+    static constexpr uint32_t service_version() noexcept {                     \
+        return if_version;                                                     \
+    }                                                                          \
+    [[nodiscard]] const char* serviceInterfaceName() const noexcept override { \
+        return service_name();                                                 \
+    }                                                                          \
+    [[nodiscard]] uint32_t serviceInterfaceVersion() const noexcept override { \
+        return service_version();                                              \
     }

@@ -17,7 +17,8 @@ void McpServer::registerTool(ToolDef def, ToolHandler handler) {
 std::vector<ToolDef> McpServer::tools() const {
     std::vector<ToolDef> out;
     out.reserve(tools_.size());
-    for (const auto& [_, t] : tools_) out.push_back(t);
+    for (const auto& [_, t] : tools_)
+        out.push_back(t);
     return out;
 }
 
@@ -45,11 +46,10 @@ json::JsonValue McpServer::handle(const json::JsonValue& req) {
         return errorResp(R(), static_cast<int>(RpcError::InvalidRequest),
                          "request must be an object");
     }
-    const json::JsonValue& id = req["id"]; // 缺失 = 通知
+    const json::JsonValue& id = req["id"];  // 缺失 = 通知
     const std::string method = req["method"].asString();
     if (method.empty()) {
-        return errorResp(id, static_cast<int>(RpcError::InvalidRequest),
-                         "method required");
+        return errorResp(id, static_cast<int>(RpcError::InvalidRequest), "method required");
     }
     const json::JsonValue& params = req["params"];
 
@@ -67,7 +67,7 @@ json::JsonValue McpServer::handle(const json::JsonValue& req) {
         r["resources"] = R::array();
         result = std::move(r);
     } else if (method.rfind("notifications/", 0) == 0) {
-        return R(); // 通知：无响应
+        return R();  // 通知：无响应
     } else {
         return errorResp(id, static_cast<int>(RpcError::MethodNotFound),
                          "unknown method: " + method);
@@ -181,7 +181,7 @@ void McpServer::bridgeVector(void* vectorServiceRaw) {
     auto* svc = static_cast<vector::IVectorStoreService*>(vectorServiceRaw);
     if (svc == nullptr) return;
 
-    { // vector_search
+    {  // vector_search
         ToolDef d;
         d.name = "vector_search";
         d.description =
@@ -233,7 +233,7 @@ void McpServer::bridgeVector(void* vectorServiceRaw) {
             return ToolResult{false, hits.dump()};
         });
     }
-    { // vector_upsert
+    {  // vector_upsert
         ToolDef d;
         d.name = "vector_upsert";
         d.description = "Store a document into the vector database (RAG long-term memory).";
@@ -296,4 +296,4 @@ void McpServer::bridgeInference(void* inferenceServiceRaw) {
     });
 }
 
-} // namespace zenith::mcp
+}  // namespace zenith::mcp

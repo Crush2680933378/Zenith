@@ -33,7 +33,7 @@ int64_t nowMs() {
         .count();
 }
 
-} // namespace
+}  // namespace
 
 OtelExporter::OtelExporter(OtelConfig cfg) : cfg_(std::move(cfg)) {
     if (cfg_.flushIntervalMs > 0) {
@@ -42,10 +42,11 @@ OtelExporter::OtelExporter(OtelConfig cfg) : cfg_(std::move(cfg)) {
     }
 }
 
-OtelExporter::~OtelExporter() { stop(); }
+OtelExporter::~OtelExporter() {
+    stop();
+}
 
-OtelSpan OtelExporter::beginSpan(const std::string& name,
-                                 const std::string& parentTraceId,
+OtelSpan OtelExporter::beginSpan(const std::string& name, const std::string& parentTraceId,
                                  const std::string& parentSpanId) const {
     OtelSpan s;
     s.traceId = parentTraceId.empty() ? hexRandom(rng(), 32) : parentTraceId;
@@ -56,10 +57,10 @@ OtelSpan OtelExporter::beginSpan(const std::string& name,
     return s;
 }
 
-void OtelExporter::endSpan(OtelSpan& s,
-                           std::vector<std::pair<std::string, std::string>> attrs) {
+void OtelExporter::endSpan(OtelSpan& s, std::vector<std::pair<std::string, std::string>> attrs) {
     if (s.endMs == 0) s.endMs = nowMs();
-    for (auto& a : attrs) s.attributes.push_back(std::move(a));
+    for (auto& a : attrs)
+        s.attributes.push_back(std::move(a));
     std::lock_guard<std::mutex> lk(mtx_);
     queue_.push_back(std::move(s));
 }
@@ -81,7 +82,7 @@ size_t OtelExporter::sendBatch(const std::vector<OtelSpan>& batch) {
         j["spanId"] = s.spanId;
         if (!s.parentSpanId.empty()) j["parentSpanId"] = s.parentSpanId;
         j["name"] = s.name;
-        j["kind"] = int64_t{1}; // INTERNAL
+        j["kind"] = int64_t{1};  // INTERNAL
         j["startTimeUnixNano"] = std::to_string(s.startMs * 1000000);
         j["endTimeUnixNano"] = std::to_string(s.endMs * 1000000);
         JsonValue attrs = JsonValue::array();
@@ -121,7 +122,8 @@ size_t OtelExporter::sendBatch(const std::vector<OtelSpan>& batch) {
     call.url = cfg_.endpoint;
     call.body = root.dump();
     call.headers = {{"Content-Type", "application/json"}};
-    for (const auto& [k, v] : cfg_.headers) call.headers.emplace_back(k, v);
+    for (const auto& [k, v] : cfg_.headers)
+        call.headers.emplace_back(k, v);
     auto r = ai::simpleHttpRequest(call);
     if (r.ok) {
         exported_.fetch_add(batch.size());
@@ -133,7 +135,7 @@ size_t OtelExporter::sendBatch(const std::vector<OtelSpan>& batch) {
 
 size_t OtelExporter::flushNow() {
     std::vector<OtelSpan> batch;
-    { // 锁内只做出队（HTTP 上传移出锁外——慢 collector 不再卡收队线程）
+    {  // 锁内只做出队（HTTP 上传移出锁外——慢 collector 不再卡收队线程）
         std::lock_guard<std::mutex> lk(mtx_);
         if (queue_.empty()) return 0;
         const size_t n = std::min(queue_.size(), cfg_.maxBatch);
@@ -141,7 +143,7 @@ size_t OtelExporter::flushNow() {
         queue_.erase(queue_.end() - static_cast<long>(n), queue_.end());
     }
     const size_t sent = sendBatch(batch);
-    if (sent == 0) { // 失败回队（保序无所谓，顺序只影响展示）
+    if (sent == 0) {  // 失败回队（保序无所谓，顺序只影响展示）
         std::lock_guard<std::mutex> lk(mtx_);
         queue_.insert(queue_.end(), batch.begin(), batch.end());
     }
@@ -152,7 +154,7 @@ void OtelExporter::run() {
     while (running_.load()) {
         std::this_thread::sleep_for(
             std::chrono::milliseconds(cfg_.flushIntervalMs > 0 ? cfg_.flushIntervalMs : 1000));
-        flushNow(); // 锁外上传；失败回队下轮再试
+        flushNow();  // 锁外上传；失败回队下轮再试
     }
 }
 
@@ -160,7 +162,7 @@ void OtelExporter::stop() {
     if (running_.exchange(false)) {
         if (thread_.joinable()) thread_.join();
     }
-    flushNow(); // 端点不可达则回队后丢弃（进程退出）
+    flushNow();  // 端点不可达则回队后丢弃（进程退出）
 }
 
-} // namespace zenith::obs
+}  // namespace zenith::obs

@@ -32,7 +32,7 @@ Middleware corsMiddleware(CorsOptions opt) {
             c.setHeader("Access-Control-Allow-Methods", o.allowMethods);
             c.setHeader("Access-Control-Allow-Headers", o.allowHeaders);
             c.setHeader("Access-Control-Max-Age", std::to_string(o.maxAgeSec));
-            c.status(204).noContent(); // 预检直接答复
+            c.status(204).noContent();  // 预检直接答复
             return;
         }
         c.next();
@@ -77,11 +77,9 @@ void TokenBucketLimiter::sweepLocked() {
     buckets_.clear();
 }
 
-Middleware rateLimitMiddleware(RateLimitOptions opt,
-                                std::shared_ptr<TokenBucketLimiter> limiter) {
-    auto lim = limiter != nullptr
-                   ? std::move(limiter)
-                   : std::make_shared<TokenBucketLimiter>(opt.ratePerSec, opt.burst);
+Middleware rateLimitMiddleware(RateLimitOptions opt, std::shared_ptr<TokenBucketLimiter> limiter) {
+    auto lim = limiter != nullptr ? std::move(limiter)
+                                  : std::make_shared<TokenBucketLimiter>(opt.ratePerSec, opt.burst);
     auto retry = opt.retryAfterSec;
     return [lim, retry, keyOf = std::move(opt.keyOf)](Context& c) {
         if (lim->allow(keyOf(c))) {
@@ -126,7 +124,8 @@ Middleware jwtAuthMiddleware(JwtAuthOptions opt) {
                                 .count();
         auto v = jwt::verify(o.secret, auth.substr(7), now);
         if (!v.ok) {
-            c.setHeader("WWW-Authenticate", "Bearer realm=\"" + o.realm + "\", error=\"invalid_token\"");
+            c.setHeader("WWW-Authenticate",
+                        "Bearer realm=\"" + o.realm + "\", error=\"invalid_token\"");
             c.status(401).text(401, "401 " + v.error);
             return;
         }
@@ -135,4 +134,4 @@ Middleware jwtAuthMiddleware(JwtAuthOptions opt) {
     };
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

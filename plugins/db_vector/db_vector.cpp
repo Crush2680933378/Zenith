@@ -27,7 +27,7 @@ std::string g_persistDir;
 std::atomic<bool> g_persistStop{false};
 std::thread g_persistThread;
 
-class VectorStoreImpl; // 前置（快照线程引用）
+class VectorStoreImpl;  // 前置（快照线程引用）
 VectorStoreImpl* g_store = nullptr;
 
 class VectorStoreImpl final : public zenith::vector::IVectorStoreService {
@@ -35,19 +35,18 @@ public:
     struct Collection {
         zenith::vector::CollectionConfig cfg;
         std::unique_ptr<zenith::vector::HnswIndex> index;
-        std::unordered_map<uint64_t, std::string> payloads; // id → payload JSON
+        std::unordered_map<uint64_t, std::string> payloads;  // id → payload JSON
     };
 
-    zenith::core::Result<void> createCollection(const std::string& name,
-                                                const zenith::vector::CollectionConfig& cfg) override {
+    zenith::core::Result<void> createCollection(
+        const std::string& name, const zenith::vector::CollectionConfig& cfg) override {
         std::unique_lock<std::shared_mutex> lk(mtx_);
         if (cols_.count(name) > 0) {
             return zenith::core::Result<void>::Err(
                 zenith::core::Error(210, "collection exists: " + name));
         }
         if (cfg.dim <= 0) {
-            return zenith::core::Result<void>::Err(
-                zenith::core::Error(211, "dim must be > 0"));
+            return zenith::core::Result<void>::Err(zenith::core::Error(211, "dim must be > 0"));
         }
         zenith::vector::HnswConfig hc;
         hc.dim = cfg.dim;
@@ -60,20 +59,18 @@ public:
         c.index = std::make_unique<zenith::vector::HnswIndex>(std::move(hc));
         cols_[name] = std::move(c);
         if (g_host != nullptr) {
-            g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, "db_vector", 0,
-                              ("collection created: " + name + " dim=" +
-                               std::to_string(cfg.dim))
-                                  .c_str());
+            g_host->log_write(
+                g_host->log_ctx, ZENITH_LOG_INFO, "db_vector", 0,
+                ("collection created: " + name + " dim=" + std::to_string(cfg.dim)).c_str());
         }
         return zenith::core::Result<void>::Ok();
     }
 
     zenith::core::Result<void> deleteCollection(const std::string& name) override {
         std::unique_lock<std::shared_mutex> lk(mtx_);
-        return cols_.erase(name) > 0
-                   ? zenith::core::Result<void>::Ok()
-                   : zenith::core::Result<void>::Err(
-                         zenith::core::Error(212, "no such collection: " + name));
+        return cols_.erase(name) > 0 ? zenith::core::Result<void>::Ok()
+                                     : zenith::core::Result<void>::Err(
+                                           zenith::core::Error(212, "no such collection: " + name));
     }
 
     std::vector<zenith::vector::CollectionInfo> collections() override {
@@ -91,8 +88,8 @@ public:
         return out;
     }
 
-    zenith::core::Result<zenith::vector::CollectionInfo>
-    collectionInfo(const std::string& name) override {
+    zenith::core::Result<zenith::vector::CollectionInfo> collectionInfo(
+        const std::string& name) override {
         std::shared_lock<std::shared_mutex> lk(mtx_);
         auto it = cols_.find(name);
         if (it == cols_.end()) {
@@ -108,8 +105,7 @@ public:
     }
 
     zenith::core::Result<void> upsert(
-        const std::string& name,
-        const std::vector<zenith::vector::VectorPoint>& points) override {
+        const std::string& name, const std::vector<zenith::vector::VectorPoint>& points) override {
         std::shared_lock<std::shared_mutex> lk(mtx_);
         auto it = cols_.find(name);
         if (it == cols_.end()) {
@@ -120,8 +116,7 @@ public:
         for (const auto& p : points) {
             if (static_cast<int>(p.vec.size()) != it->second.cfg.dim) {
                 return zenith::core::Result<void>::Err(
-                    zenith::core::Error(213, "vector dim mismatch on id " +
-                                                 std::to_string(p.id)));
+                    zenith::core::Error(213, "vector dim mismatch on id " + std::to_string(p.id)));
             }
         }
         for (const auto& p : points) {
@@ -165,9 +160,9 @@ public:
         return zenith::core::Result<zenith::vector::VectorPoint>::Ok(std::move(p));
     }
 
-    zenith::core::Result<std::vector<zenith::vector::ScoredPoint>>
-    search(const std::string& name, const std::vector<float>& query, int k,
-           float scoreThreshold) override {
+    zenith::core::Result<std::vector<zenith::vector::ScoredPoint>> search(
+        const std::string& name, const std::vector<float>& query, int k,
+        float scoreThreshold) override {
         std::shared_lock<std::shared_mutex> lk(mtx_);
         auto it = cols_.find(name);
         if (it == cols_.end()) {
@@ -190,14 +185,14 @@ public:
             if (pit != it->second.payloads.end()) sp.payloadJson = pit->second;
             out.push_back(std::move(sp));
         }
-        return zenith::core::Result<std::vector<zenith::vector::ScoredPoint>>::Ok(
-            std::move(out));
+        return zenith::core::Result<std::vector<zenith::vector::ScoredPoint>>::Ok(std::move(out));
     }
 
     size_t totalPoints() override {
         std::shared_lock<std::shared_mutex> lk(mtx_);
         size_t n = 0;
-        for (const auto& [_, c] : cols_) n += c.index->size();
+        for (const auto& [_, c] : cols_)
+            n += c.index->size();
         return n;
     }
 
@@ -207,9 +202,9 @@ public:
         for (const auto& [name, c] : cols_) {
             auto r = zenith::vector::saveCollection(dir, name, *c.index);
             if (!r && g_host != nullptr) {
-                g_host->log_write(g_host->log_ctx, ZENITH_LOG_WARN, "db_vector", 0,
-                                  ("snapshot failed for '" + name + "': " +
-                                   r.error().message).c_str());
+                g_host->log_write(
+                    g_host->log_ctx, ZENITH_LOG_WARN, "db_vector", 0,
+                    ("snapshot failed for '" + name + "': " + r.error().message).c_str());
             }
         }
     }
@@ -254,13 +249,13 @@ zenith_status pluginInit(const zenith_host_api* host) {
         pv != nullptr && pv[0] != ' ') {
         g_persistDir = pv;
         const size_t loaded = svc->loadFrom(g_persistDir);
-        host->log_write(host->log_ctx, ZENITH_LOG_INFO, "db_vector", 0,
-                        ("db_vector: loaded " + std::to_string(loaded) +
-                         " snapshot(s) from " + g_persistDir).c_str());
+        host->log_write(
+            host->log_ctx, ZENITH_LOG_INFO, "db_vector", 0,
+            ("db_vector: loaded " + std::to_string(loaded) + " snapshot(s) from " + g_persistDir)
+                .c_str());
         int intervalMs = 30000;
         const char* iv = nullptr;
-        if (host->config_get(host->config_ctx, "vector.persist.intervalMs", "", &iv) ==
-                ZENITH_OK &&
+        if (host->config_get(host->config_ctx, "vector.persist.intervalMs", "", &iv) == ZENITH_OK &&
             iv != nullptr && iv[0] != ' ') {
             intervalMs = std::atoi(iv);
         }
@@ -284,9 +279,15 @@ zenith_status pluginInit(const zenith_host_api* host) {
                                   static_cast<void*>(svc), &destroyVectorStore);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -302,6 +303,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

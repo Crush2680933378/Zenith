@@ -5,15 +5,15 @@
 #include "zenith/core/platform.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <windows.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
-  #include <dlfcn.h>
+#include <dlfcn.h>
 #endif
 
 namespace zenith::plugin {
@@ -44,8 +44,8 @@ core::Result<void> DynLib::load() {
     // LOAD_WITH_ALTERED_SEARCH_PATH：让 Windows 解析**该 DLL 自身的依赖**时，
     // 先去它所在目录找。默认搜索顺序只看 exe 目录/系统目录/PATH——插件把私有
     // 依赖 DLL 放在自己旁边（例如 CUDA/FFmpeg 运行时）时会一律 126 加载失败。
-    handle_ = static_cast<void*>(LoadLibraryExA(path_.c_str(), nullptr,
-                                                LOAD_WITH_ALTERED_SEARCH_PATH));
+    handle_ =
+        static_cast<void*>(LoadLibraryExA(path_.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
 #else
     handle_ = dlopen(path_.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
@@ -85,18 +85,18 @@ void DynLib::unload() {
 void DynLib::storePlatformError(const char* context) {
 #if defined(ZENITH_PLATFORM_WINDOWS)
     const DWORD code = GetLastError();
-    LPSTR buf   = nullptr;
-    const DWORD len = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                                         FORMAT_MESSAGE_IGNORE_INSERTS,
-                                     nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                     reinterpret_cast<LPSTR>(&buf), 0, nullptr);
-    lastError_ = std::string("DynLib ") + context + " failed (code " + std::to_string(code) + "): " +
-                 (buf != nullptr && len > 0 ? std::string(buf, len) : "unknown error");
+    LPSTR buf = nullptr;
+    const DWORD len = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPSTR>(&buf), 0,
+        nullptr);
+    lastError_ = std::string("DynLib ") + context + " failed (code " + std::to_string(code) +
+                 "): " + (buf != nullptr && len > 0 ? std::string(buf, len) : "unknown error");
     if (buf != nullptr) LocalFree(buf);
 #else
     const char* err = dlerror();
-    lastError_       = std::string("DynLib ") + context + " failed: " + (err ? err : "unknown error");
+    lastError_ = std::string("DynLib ") + context + " failed: " + (err ? err : "unknown error");
 #endif
 }
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

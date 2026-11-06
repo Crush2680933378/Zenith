@@ -35,12 +35,12 @@ using IoCallback = int32_t (*)(void* ioCtx, uint8_t* buf, size_t cap);
 
 /// TLS 配置（与后端无关的最小公共集；后端特有项经 ITlsContext::setOption 扩展）。
 struct TlsConfig {
-    TlsRole     role       = TlsRole::Client;
-    bool        verifyPeer = true;   // 客户端校验服务端证书
-    const char* caFile     = nullptr;
-    const char* certFile   = nullptr;
-    const char* keyFile    = nullptr;
-    const char* serverName = nullptr; // SNI
+    TlsRole role = TlsRole::Client;
+    bool verifyPeer = true;  // 客户端校验服务端证书
+    const char* caFile = nullptr;
+    const char* certFile = nullptr;
+    const char* keyFile = nullptr;
+    const char* serverName = nullptr;  // SNI
 };
 
 class ITlsSession {
@@ -67,12 +67,13 @@ public:
     ZENITH_SERVICE_DECL(ITlsContext, "zenith.tls.ITlsContext", 1)
 
     /// 应用配置并创建会话。ioRead/ioWrite 由传输层提供（TCP / 管道 / 串口桥）。
-    virtual core::Result<std::unique_ptr<ITlsSession>>
-    createSession(const TlsConfig& cfg, IoCallback ioRead, IoCallback ioWrite,
-                  void* ioCtx) = 0;
+    virtual core::Result<std::unique_ptr<ITlsSession>> createSession(const TlsConfig& cfg,
+                                                                     IoCallback ioRead,
+                                                                     IoCallback ioWrite,
+                                                                     void* ioCtx) = 0;
 
     /// 后端特有选项（透传 key/value，如 OpenSSL 的 "min_proto=TLS1.2"）。
     virtual core::Result<void> setOption(const char* key, const char* value) = 0;
 };
 
-} // namespace zenith::tls
+}  // namespace zenith::tls

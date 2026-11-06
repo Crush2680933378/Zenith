@@ -1,7 +1,7 @@
 // M11 测试：多 Agent 集群——全流程/投票/缺陷环/人工门禁/SSE/事件流
 #include <atomic>
-#include <set>
 #include <chrono>
+#include <set>
 #include <thread>
 
 #include "ztest.hpp"
@@ -21,13 +21,10 @@ namespace {
 class CrewScripted final : public ai::IInferenceService {
 public:
     std::vector<ai::ModelInfo> models() override { return {}; }
-    ai::ChatResult chat(const ai::ChatRequest& req,
-                        const ai::TokenCallback& = nullptr,
+    ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {
-        const std::string& sys =
-            req.messages.empty() ? "" : req.messages.front().content;
-        const std::string& user =
-            req.messages.size() < 2 ? "" : req.messages.back().content;
+        const std::string& sys = req.messages.empty() ? "" : req.messages.front().content;
+        const std::string& user = req.messages.size() < 2 ? "" : req.messages.back().content;
         ai::ChatResult r;
         r.ok = true;
         r.model = "crew-scripted";
@@ -48,11 +45,13 @@ public:
             return r;
         }
         if (sys.find("ROLE: PM") != std::string::npos) {
-            r.content = R"({"prd":{"summary":"demo","stories":[{"id":"S1","title":"create","given":"empty","when":"post","then":"created"}]}})";
+            r.content =
+                R"({"prd":{"summary":"demo","stories":[{"id":"S1","title":"create","given":"empty","when":"post","then":"created"}]}})";
             return r;
         }
         if (sys.find("ROLE: ARCHITECT") != std::string::npos) {
-            r.content = R"({"architecture":{"style":"rest","storage":"sqlite","components":["api"],"api":[{"method":"GET","path":"/api/items","desc":"list"}],"notes":"n"}})";
+            r.content =
+                R"({"architecture":{"style":"rest","storage":"sqlite","components":["api"],"api":[{"method":"GET","path":"/api/items","desc":"list"}],"notes":"n"}})";
             return r;
         }
         if (sys.find("ROLE: BACKEND") != std::string::npos) {
@@ -60,20 +59,24 @@ public:
             return r;
         }
         if (sys.find("ROLE: FRONTEND") != std::string::npos) {
-            r.content = R"({"files":[{"path":"web/index.html","content":"<b>ui</b>"}],"notes":"done"})";
+            r.content =
+                R"({"files":[{"path":"web/index.html","content":"<b>ui</b>"}],"notes":"done"})";
             return r;
         }
         if (sys.find("ROLE: TESTER") != std::string::npos) {
             if (user.find("RETEST") == std::string::npos && !retested_) {
                 retested_ = true;
-                r.content = R"({"cases":[{"id":"T1","story":"S1","given":"e","when":"p","then":"c"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})";
+                r.content =
+                    R"({"cases":[{"id":"T1","story":"S1","given":"e","when":"p","then":"c"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})";
             } else {
-                r.content = R"({"cases":[{"id":"T1","story":"S1","given":"e","when":"p","then":"c"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
+                r.content =
+                    R"({"cases":[{"id":"T1","story":"S1","given":"e","when":"p","then":"c"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
             }
             return r;
         }
         if (sys.find("ROLE: DEVOPS") != std::string::npos) {
-            r.content = R"({"files":[{"path":"Dockerfile","content":"FROM scratch"}],"deploy":{"strategy":"docker","smoke":"GET /api/items"}})";
+            r.content =
+                R"({"files":[{"path":"Dockerfile","content":"FROM scratch"}],"deploy":{"strategy":"docker","smoke":"GET /api/items"}})";
             return r;
         }
         if (sys.find("ROLE: DELIVERY") != std::string::npos) {
@@ -109,7 +112,7 @@ CrewTaskInfo waitDone(crew::CrewEngine& eng, const std::string& id, int maxSec =
     return info ? info.value() : CrewTaskInfo{};
 }
 
-} // namespace
+}  // namespace
 
 ZTEST(Crew, FullLifecycleWithVotingAndBugLoop) {
     crew::CrewEngine eng;
@@ -118,9 +121,7 @@ ZTEST(Crew, FullLifecycleWithVotingAndBugLoop) {
     // 订阅实时事件（SSE 底层同路径）
     std::atomic<int> received{0};
     const std::string id = eng.createTask("team voting app");
-    const uint64_t sub = eng.subscribe(id, [&](const crew::CrewEvent&) {
-        received.fetch_add(1);
-    });
+    const uint64_t sub = eng.subscribe(id, [&](const crew::CrewEvent&) { received.fetch_add(1); });
 
     const CrewTaskInfo final = waitDone(eng, id);
     ZEXPECT_EQ(phaseName(final.phase), std::string("done"));
@@ -129,10 +130,10 @@ ZTEST(Crew, FullLifecycleWithVotingAndBugLoop) {
     // 7 类产物齐备（prd 可能 v2 因 revise、bugs 因缺陷环）
     auto arts = eng.artifacts(id);
     std::set<std::string> types;
-    for (const auto& a : arts) types.insert(a.type);
-    for (const char* need :
-         {"prd", "architecture", "contract", "backend", "frontend", "tests", "bugs",
-          "devops", "release"}) {
+    for (const auto& a : arts)
+        types.insert(a.type);
+    for (const char* need : {"prd", "architecture", "contract", "backend", "frontend", "tests",
+                             "bugs", "devops", "release"}) {
         ZEXPECT_TRUE(types.count(need) > 0);
     }
 
@@ -143,7 +144,7 @@ ZTEST(Crew, FullLifecycleWithVotingAndBugLoop) {
     for (const auto& v : vs) {
         if (v.question.find("storage") != std::string::npos && v.winner == "sqlite") {
             storageVote = true;
-            ZEXPECT_TRUE(v.votes.size() == 7); // 全员投票
+            ZEXPECT_TRUE(v.votes.size() == 7);  // 全员投票
         }
     }
     ZEXPECT_TRUE(storageVote);
@@ -160,7 +161,7 @@ ZTEST(Crew, FullLifecycleWithVotingAndBugLoop) {
         if (e.type == "vote") sawVote = true;
         if (e.type == "artifact") sawArtifact = true;
     }
-    ZEXPECT_TRUE(sawBugfix); // 缺陷环走过（首轮 fail → 后端修复 → 重测过）
+    ZEXPECT_TRUE(sawBugfix);  // 缺陷环走过（首轮 fail → 后端修复 → 重测过）
     ZEXPECT_TRUE(sawVote);
     ZEXPECT_TRUE(sawArtifact);
 
@@ -182,7 +183,7 @@ ZTEST(Crew, ApprovalGateBlocksAndResumes) {
     const std::string id = eng.createTask("gated task", cfg);
 
     CrewTaskInfo st = waitDone(eng, id);
-    ZEXPECT_EQ(phaseName(st.phase), std::string("awaiting_approval")); // 设计后停住
+    ZEXPECT_EQ(phaseName(st.phase), std::string("awaiting_approval"));  // 设计后停住
 
     // 事件里有 approval_required
     bool sawGate = false;
@@ -201,7 +202,7 @@ ZTEST(Crew, VoteMechanismWeightedMajority) {
     eng.setInference(std::make_shared<CrewScripted>());
 
     const std::string id = eng.createTask("vote demo");
-    waitDone(eng, id); // 等任务完（投票表建立）
+    waitDone(eng, id);  // 等任务完（投票表建立）
 
     // 直接单次投票：全员对 sqlite/postgres——剧本恒投 sqlite
     crew::CrewEngine::VoteSpec spec;
@@ -237,19 +238,14 @@ ZTEST(Crew, HttpRestAndBoard) {
             return e_.taskInfo(i);
         }
         std::vector<crew::CrewTaskInfo> listTasks() override { return e_.listTasks(); }
-        std::vector<crew::CrewEvent> events(const std::string& i,
-                                            uint64_t s) override {
+        std::vector<crew::CrewEvent> events(const std::string& i, uint64_t s) override {
             return e_.events(i, s);
         }
         std::vector<crew::Artifact> artifacts(const std::string& i) override {
             return e_.artifacts(i);
         }
-        std::vector<crew::VoteRecord> votes(const std::string& i) override {
-            return e_.votes(i);
-        }
-        core::Result<void> approve(const std::string& i) override {
-            return e_.approve(i);
-        }
+        std::vector<crew::VoteRecord> votes(const std::string& i) override { return e_.votes(i); }
+        core::Result<void> approve(const std::string& i) override { return e_.approve(i); }
         uint64_t subscribe(const std::string& t, EventCallback cb) override {
             return e_.subscribe(t, std::move(cb));
         }
@@ -293,7 +289,7 @@ ZTEST(Crew, HttpRestAndBoard) {
     auto ev2 = http::HttpClient::fetchBlockingUrl(
         url("/crew/tasks/" + id + "/events?since=" + std::to_string(lastSeq)));
     auto e2 = http::json::JsonValue::parse(ev2.value().body);
-    ZEXPECT_EQ(e2.value()["events"].size(), size_t{0}); // 增量为空
+    ZEXPECT_EQ(e2.value()["events"].size(), size_t{0});  // 增量为空
 
     // 产物 + 投票
     auto arts = http::HttpClient::fetchBlockingUrl(url("/crew/tasks/" + id + "/artifacts"));

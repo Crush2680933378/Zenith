@@ -23,7 +23,7 @@ inline void mountMcpApi(http::Router& r, std::shared_ptr<McpServer> server) {
     r.post("/mcp", [server](Context& c) {
         const std::string body = server->handleRaw(c.body());
         if (body.empty()) {
-            c.status(202).noContent(); // 全通知（含 notifications/initialized）
+            c.status(202).noContent();  // 全通知（含 notifications/initialized）
             return;
         }
         c.setHeader("Content-Type", "application/json");
@@ -36,10 +36,11 @@ inline void mountMcpApi(http::Router& r, std::shared_ptr<McpServer> server) {
         v["server"] = "zenith-mcp";
         v["protocol"] = "2026-07-28";
         json::JsonValue names = json::JsonValue::array();
-        for (const ToolDef& t : server->tools()) names.push_back(t.name);
+        for (const ToolDef& t : server->tools())
+            names.push_back(t.name);
         v["tools"] = std::move(names);
         c.json(200, v);
     });
 }
 
-} // namespace zenith::mcp
+}  // namespace zenith::mcp

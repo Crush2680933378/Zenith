@@ -42,14 +42,15 @@ struct GatewayFixture {
     ai::IInferenceService* service = nullptr;
     std::thread runner;
 
-    explicit GatewayFixture(bool usePool,
-                            const std::vector<std::pair<std::string, std::string>>& overrides = {}) {
-        io.start(); // 连接分发线程组（漏掉它 → 请求只会在 backlog 里躺着超时）
+    explicit GatewayFixture(
+        bool usePool, const std::vector<std::pair<std::string, std::string>>& overrides = {}) {
+        io.start();  // 连接分发线程组（漏掉它 → 请求只会在 backlog 里躺着超时）
 
         cfg.set("ai.inference.backend", "mock");
         cfg.set("ai.inference.default_model", "zenith-test-model");
         cfg.set("ai.inference.embedding_dim", "64");
-        for (const auto& [k, v] : overrides) cfg.set(k, v);
+        for (const auto& [k, v] : overrides)
+            cfg.set(k, v);
 
         mgr = std::make_unique<plugin::PluginManager>(registry, &pool, &cfg);
         auto loaded = mgr->loadDirectory(ZENITH_TEST_PLUGIN_DIR);
@@ -91,8 +92,7 @@ struct GatewayFixture {
         rq.headers.set("Content-Type", "application/json");
         auto res = http::HttpClient::fetchBlocking(rq);
         if (res.isErr()) {
-            std::printf("[debug] POST %s failed: %s\n", path.c_str(),
-                        res.error().message.c_str());
+            std::printf("[debug] POST %s failed: %s\n", path.c_str(), res.error().message.c_str());
         }
         return res;
     }
@@ -103,8 +103,7 @@ struct GatewayFixture {
         rq.method = http::HttpMethod::Get;
         auto res = http::HttpClient::fetchBlocking(rq);
         if (res.isErr()) {
-            std::printf("[debug] GET %s failed: %s\n", path.c_str(),
-                        res.error().message.c_str());
+            std::printf("[debug] GET %s failed: %s\n", path.c_str(), res.error().message.c_str());
         }
         return res;
     }
@@ -125,7 +124,7 @@ std::vector<std::string> ssePayloads(const std::string& body) {
     return out;
 }
 
-} // namespace
+}  // namespace
 
 ZTEST(OpenAi, ModelsList) {
     GatewayFixture f(false);
@@ -192,7 +191,7 @@ ZTEST(OpenAi, ChatStreamSse) {
     ZEXPECT_TRUE(res.value().headers.get("Content-Type").find("text/event-stream") == 0);
 
     const std::vector<std::string> payloads = ssePayloads(res.value().body);
-    ZEXPECT_TRUE(payloads.size() >= 3); // 至少：若干 delta + finish + usage + [DONE]
+    ZEXPECT_TRUE(payloads.size() >= 3);  // 至少：若干 delta + finish + usage + [DONE]
     if (payloads.empty()) return;
     ZEXPECT_EQ(payloads.back(), std::string("[DONE]"));
 
@@ -204,7 +203,7 @@ ZTEST(OpenAi, ChatStreamSse) {
         ZEXPECT_TRUE(chunk.isOk());
         if (chunk.isErr()) continue;
         const auto* choices = chunk.value()["choices"].asArray();
-        if (choices == nullptr || choices->empty()) continue; // usage 片
+        if (choices == nullptr || choices->empty()) continue;  // usage 片
         const Json& delta = (*choices)[0]["delta"]["content"];
         if (delta.isString()) assembled += delta.asString();
         const Json& fr = (*choices)[0]["finish_reason"];
@@ -215,7 +214,7 @@ ZTEST(OpenAi, ChatStreamSse) {
 }
 
 ZTEST(OpenAi, ChatNonStreamWithThreadPool) {
-    GatewayFixture f(true); // 推理出 EventLoop → 走 chunked 延迟响应
+    GatewayFixture f(true);  // 推理出 EventLoop → 走 chunked 延迟响应
     if (f.service == nullptr) return;
     const std::string body = R"({"messages":[{"role":"user","content":"pooled"}]})";
     auto res = f.post("/v1/chat/completions", body);
@@ -268,8 +267,9 @@ ZTEST(OpenAi, EmbeddingsAreUnitVectors) {
     ZEXPECT_TRUE(vec != nullptr && vec->size() == 64);
     if (vec == nullptr) return;
     double norm = 0.0;
-    for (const auto& v : *vec) norm += v.asDouble() * v.asDouble();
-    ZEXPECT_TRUE(std::fabs(std::sqrt(norm) - 1.0) < 1e-3); // 单位向量
+    for (const auto& v : *vec)
+        norm += v.asDouble() * v.asDouble();
+    ZEXPECT_TRUE(std::fabs(std::sqrt(norm) - 1.0) < 1e-3);  // 单位向量
 
     // 确定性：同一输入两次结果一致
     auto again = f.post("/v1/embeddings", R"({"input":["alpha","beta"]})");
@@ -357,12 +357,11 @@ ZTEST(OpenAi, LiveUpstreamOpenAiCompat) {
     const char* modelEnv = std::getenv("ZENITH_TEST_UPSTREAM_MODEL");
     const std::string model = modelEnv != nullptr ? modelEnv : "Ternary-Bonsai-2-27B";
 
-    GatewayFixture f(false,
-                     {{"ai.inference.backend", "openai"},
-                      {"ai.inference.upstream_url", url},
-                      {"ai.inference.upstream_api_key", keyEnv != nullptr ? keyEnv : ""},
-                      {"ai.inference.upstream_timeout_ms", "600000"},
-                      {"ai.inference.default_model", model}});
+    GatewayFixture f(false, {{"ai.inference.backend", "openai"},
+                             {"ai.inference.upstream_url", url},
+                             {"ai.inference.upstream_api_key", keyEnv != nullptr ? keyEnv : ""},
+                             {"ai.inference.upstream_timeout_ms", "600000"},
+                             {"ai.inference.default_model", model}});
     if (f.service == nullptr) return;
     ZEXPECT_EQ(f.service->backend(), std::string("openai-upstream"));
 
@@ -456,7 +455,7 @@ std::string countingPrompt() {
          "the same space-separated format, and keep going until the length limit.";
     return p;
 }
-} // namespace
+}  // namespace
 
 ZTEST(OpenAi, LiveSupervisedEngine) {
     const char* exe = std::getenv("ZENITH_TEST_ENGINE_EXE");
@@ -478,10 +477,10 @@ ZTEST(OpenAi, LiveSupervisedEngine) {
                   " --prefill-chunk 1024 --spec mtp --draft-tokens 4 --default-max-tokens 32768"
                   " --default-reasoning-effort none --max-concurrency 1 --max-shared-prefixes 0"
                   " --presence-penalty 0 --temperature 0.7 --top-p 0.9 --top-k 20");
-    const std::string engineEnv = envOr(
-        "ZENITH_TEST_ENGINE_ENV",
-        "NINFER_KV_WINDOW=16384;NINFER_KV_RETRIEVE=8192;NINFER_KV_RING=1;"
-        "NINFER_HOST_PAGEABLE=1;NINFER_KV_REUSE_HOSTBACKED=1");
+    const std::string engineEnv =
+        envOr("ZENITH_TEST_ENGINE_ENV",
+              "NINFER_KV_WINDOW=16384;NINFER_KV_RETRIEVE=8192;NINFER_KV_RING=1;"
+              "NINFER_HOST_PAGEABLE=1;NINFER_KV_REUSE_HOSTBACKED=1");
 
     GatewayFixture f(false, {{"ai.inference.backend", "engine"},
                              {"ai.inference.engine.exe", exe},
@@ -495,8 +494,8 @@ ZTEST(OpenAi, LiveSupervisedEngine) {
     // 1) 引擎被拉起且就绪
     const ai::EngineState st = f.service->engineState();
     std::fprintf(stderr, "[ engine ] pid=%s running=%s supervised=%s last=%s\n",
-                 std::to_string(st.pid).c_str(), st.running ? "1" : "0",
-                 st.supervised ? "1" : "0", st.lastLine.c_str());
+                 std::to_string(st.pid).c_str(), st.running ? "1" : "0", st.supervised ? "1" : "0",
+                 st.lastLine.c_str());
     ZEXPECT_TRUE(st.supervised);
     ZEXPECT_TRUE(st.running);
 
@@ -528,9 +527,9 @@ ZTEST(OpenAi, LiveSupervisedEngine) {
 
     const auto t0 = std::chrono::steady_clock::now();
     auto res = f.post("/v1/chat/completions", body.dump());
-    const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               std::chrono::steady_clock::now() - t0)
-                               .count();
+    const auto elapsedMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
     ZEXPECT_TRUE(res.isOk());
     if (res.isOk()) {
         ZEXPECT_EQ(res.value().status, 200);
@@ -557,11 +556,10 @@ ZTEST(OpenAi, LiveSupervisedEngine) {
 
     // 4) 引擎控制台解析出的运行态（TTFT/速率/投机接受）
     const ai::EngineState after = f.service->engineState();
-    std::printf(
-        "[ engine ] 控制台：reqs=%lld ttft=%.0fms prefill=%.0f decode=%.1f acc=%lld/%lld\n",
-        static_cast<long long>(after.requests), after.lastTtftMs, after.lastPrefillTps,
-        after.lastDecodeTps, static_cast<long long>(after.draftAccepted),
-        static_cast<long long>(after.draftTotal));
+    std::printf("[ engine ] 控制台：reqs=%lld ttft=%.0fms prefill=%.0f decode=%.1f acc=%lld/%lld\n",
+                static_cast<long long>(after.requests), after.lastTtftMs, after.lastPrefillTps,
+                after.lastDecodeTps, static_cast<long long>(after.draftAccepted),
+                static_cast<long long>(after.draftTotal));
     ZEXPECT_TRUE(after.requests >= 1);
 
     // 5) 流式通道可用（功能性验证，非性能矩阵）

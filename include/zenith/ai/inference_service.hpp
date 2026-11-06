@@ -22,12 +22,12 @@ namespace zenith::ai {
 struct ChatMessage {
     std::string role = "user";
     std::string content;
-    std::string name; // 可选（多角色/工具场景）
+    std::string name;  // 可选（多角色/工具场景）
 };
 
 /// 推理请求（OpenAI 参数子集 + 后端透传位）
 struct ChatRequest {
-    std::string model;              // 空 = 服务端默认模型
+    std::string model;  // 空 = 服务端默认模型
     std::vector<ChatMessage> messages;
     double temperature = 0.7;
     double topP = 1.0;
@@ -47,46 +47,46 @@ struct Usage {
 /// 单次请求的引擎侧测速读数（llama.cpp / NInfer 的 `timings` 字段）
 struct EngineStats {
     bool valid = false;
-    double prefillTps = 0;     // prompt_per_second
-    double decodeTps = 0;      // predicted_per_second
-    int64_t draftTotal = 0;    // draft_n（投机解码候选数）
-    int64_t draftAccepted = 0; // draft_n_accepted
-    int64_t cachedTokens = 0;  // cache_n / prompt cache 命中
-    double firstTokenMs = 0;   // 首 token 延迟（进程内后端才有）
+    double prefillTps = 0;      // prompt_per_second
+    double decodeTps = 0;       // predicted_per_second
+    int64_t draftTotal = 0;     // draft_n（投机解码候选数）
+    int64_t draftAccepted = 0;  // draft_n_accepted
+    int64_t cachedTokens = 0;   // cache_n / prompt cache 命中
+    double firstTokenMs = 0;    // 首 token 延迟（进程内后端才有）
 };
 
 /// 引擎进程运行态（仅「本地引擎」形态有内容）
 struct EngineState {
-    bool supervised = false; // 是否由本插件拉起并监管
+    bool supervised = false;  // 是否由本插件拉起并监管
     bool running = false;
     int64_t pid = 0;
     int restarts = 0;
-    int64_t requests = 0; // 引擎控制台累计请求数
+    int64_t requests = 0;  // 引擎控制台累计请求数
     double lastTtftMs = 0;
     // KV / 上下文占用（进程内后端由 C ABI v3 的 runtime() 提供）
     int64_t kvUsedTokens = 0;
     int64_t kvCapacityTokens = 0;
     int64_t kvHostUsedBytes = 0;
     int64_t kvHostCapacityBytes = 0;
-    int64_t reusedTokens = 0;      // 前缀缓存复用（累计）
-    int64_t lastContextTokens = 0; // 最近一次请求占用（prompt + completion）
+    int64_t reusedTokens = 0;       // 前缀缓存复用（累计）
+    int64_t lastContextTokens = 0;  // 最近一次请求占用（prompt + completion）
     double lastPrefillTps = 0;
     double lastDecodeTps = 0;
     int64_t draftAccepted = 0;
     int64_t draftTotal = 0;
-    std::string lastLine; // 引擎最近一行日志（诊断用）
+    std::string lastLine;  // 引擎最近一行日志（诊断用）
 };
 
 struct ChatResult {
     bool ok = false;
-    std::string id;           // chatcmpl-xxx
+    std::string id;  // chatcmpl-xxx
     std::string model;
-    std::string content;      // 完整回复（流式时同样回填，便于审计/日志）
-    std::string reasoning;    // 思考模型的推理过程（reasoning_content）
+    std::string content;    // 完整回复（流式时同样回填，便于审计/日志）
+    std::string reasoning;  // 思考模型的推理过程（reasoning_content）
     Usage usage;
-    std::string finishReason = "stop"; // stop / length / aborted
+    std::string finishReason = "stop";  // stop / length / aborted
     std::string error;
-    EngineStats stats;        // 引擎测速读数（后端不支持时 valid=false）
+    EngineStats stats;  // 引擎测速读数（后端不支持时 valid=false）
 };
 
 struct EmbeddingResult {
@@ -101,8 +101,8 @@ struct ModelInfo {
     std::string id;
     std::string ownedBy = "zenith";
     int64_t createdAt = 0;
-    int contextSize = 0;   // 0 = 未知
-    std::string backend;   // ninfer / llama.cpp / mock
+    int contextSize = 0;  // 0 = 未知
+    std::string backend;  // ninfer / llama.cpp / mock
 };
 
 /// 逐 token 回调：返回 false 表示调用方要求提前中止（客户端断开等）
@@ -132,4 +132,4 @@ public:
     [[nodiscard]] virtual EngineState engineState() const { return EngineState{}; }
 };
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

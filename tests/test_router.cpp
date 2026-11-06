@@ -18,7 +18,7 @@ Context makeCtx(HttpMethod m, std::string path) {
     rq.path = std::move(path);
     return Context(std::move(rq));
 }
-} // namespace
+}  // namespace
 
 ZTEST(Router, StaticMatch) {
     Router r;
@@ -33,9 +33,8 @@ ZTEST(Router, StaticMatch) {
 ZTEST(Router, ParamAndCatchAll) {
     Router r;
     r.get("/users/:id", echoParam("id"));
-    r.get("/users/:id/posts/:pid", [](Context& c) {
-        c.text(200, c.param("id") + "-" + c.param("pid"));
-    });
+    r.get("/users/:id/posts/:pid",
+          [](Context& c) { c.text(200, c.param("id") + "-" + c.param("pid")); });
     r.get("/files/*path", echoParam("path"));
 
     auto c1 = makeCtx(HttpMethod::Get, "/users/42");
@@ -95,12 +94,11 @@ ZTEST(Router, MiddlewareChainOrder) {
         c.next();
         order.push_back("global-post");
     });
-    r.get("/x", [](Context& c) { c.text(200, "x"); },
-          {[&](Context& c) {
-               order.push_back("route-pre");
-               c.next();
-               order.push_back("route-post");
-           }});
+    r.get("/x", [](Context& c) { c.text(200, "x"); }, {[&](Context& c) {
+              order.push_back("route-pre");
+              c.next();
+              order.push_back("route-post");
+          }});
 
     Context ctx = makeCtx(HttpMethod::Get, "/x");
     r.dispatch(ctx);
@@ -113,7 +111,9 @@ ZTEST(Router, MiddlewareChainOrder) {
 
 ZTEST(Router, MiddlewareShortCircuit) {
     Router r;
-    r.use([](Context& c) { c.text(401, "denied"); /* 不调 next */ });
+    r.use([](Context& c) {
+        c.text(401, "denied"); /* 不调 next */
+    });
     r.get("/secret", [](Context& c) { c.text(200, "should not run"); });
 
     Context ctx = makeCtx(HttpMethod::Get, "/secret");
@@ -135,7 +135,10 @@ ZTEST(Router, HandlerNotWritingBodyYields200Empty) {
 ZTEST(Router, Group) {
     Router r;
     auto api = r.group("/api/v1");
-    api.use([](Context& c) { c.setHeader("X-Group", "v1"); c.next(); });
+    api.use([](Context& c) {
+        c.setHeader("X-Group", "v1");
+        c.next();
+    });
     api.get("/users/:id", echoParam("id"));
 
     Context ok = makeCtx(HttpMethod::Get, "/api/v1/users/5");

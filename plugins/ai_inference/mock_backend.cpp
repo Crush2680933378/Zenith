@@ -34,7 +34,8 @@ std::vector<std::string> sliceTokens(const std::string& text, size_t width) {
     while (i < text.size()) {
         size_t end = std::min(text.size(), i + width);
         // 0b10xxxxxx 是续字节：往后推到下一个字符起始，避免切断多字节序列
-        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) ++end;
+        while (end < text.size() && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80)
+            ++end;
         out.push_back(text.substr(i, end - i));
         i = end;
     }
@@ -52,7 +53,7 @@ public:
         ModelInfo m;
         m.id = modelId_;
         m.ownedBy = "zenith";
-        m.createdAt = 1790000000; // 固定时间，便于断言
+        m.createdAt = 1790000000;  // 固定时间，便于断言
         m.contextSize = 4096;
         m.backend = "mock";
         return {m};
@@ -60,13 +61,13 @@ public:
 
     ChatResult chat(const ChatRequest& req, const TokenCallback& onToken,
                     const TokenCallback& onReasoning) override {
-        (void)onReasoning; // mock 不产生推理过程
+        (void)onReasoning;  // mock 不产生推理过程
         ChatResult r;
         r.model = req.model.empty() ? modelId_ : req.model;
 
         std::string lastUser;
         for (const auto& m : req.messages) {
-            r.usage.promptTokens += countWords(m.content) + 1; // +1 ≈ 角色标记
+            r.usage.promptTokens += countWords(m.content) + 1;  // +1 ≈ 角色标记
             if (m.role == "user") lastUser = m.content;
         }
 
@@ -112,7 +113,8 @@ public:
         // FNV-1a 逐维散列 → [-1, 1]，再单位化；同一输入恒定同一向量
         double norm = 0.0;
         for (int i = 0; i < embeddingDim_; ++i) {
-            uint64_t h = 1469598103934665603ull ^ (static_cast<uint64_t>(i) * 0x9E3779B97F4A7C15ull);
+            uint64_t h =
+                1469598103934665603ull ^ (static_cast<uint64_t>(i) * 0x9E3779B97F4A7C15ull);
             for (unsigned char ch : input) {
                 h ^= ch;
                 h *= 1099511628211ull;
@@ -123,7 +125,8 @@ public:
         }
         norm = std::sqrt(norm);
         if (norm > 0.0) {
-            for (auto& f : r.vector) f = static_cast<float>(f / norm);
+            for (auto& f : r.vector)
+                f = static_cast<float>(f / norm);
         }
         r.ok = true;
         return r;
@@ -134,11 +137,11 @@ private:
     int embeddingDim_;
 };
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<Backend> makeMockBackend(std::string modelId, int embeddingDim) {
     if (modelId.empty()) modelId = "zenith-mock-1";
     return std::make_unique<MockBackend>(std::move(modelId), embeddingDim);
 }
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

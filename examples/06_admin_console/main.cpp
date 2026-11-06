@@ -29,7 +29,7 @@ struct User {
     int age = 0;
     std::string city;
 };
-} // namespace
+}  // namespace
 UORM_REFLECTION(User, id, name, age, city)
 
 // 内嵌控制台（单文件 HTML；用原始字符串避免转义地狱）
@@ -126,7 +126,7 @@ int main() {
         ZLOG_ERROR("syncTable<User> failed");
         return 1;
     }
-    if (db.find<User>("age >= ?", 0).empty()) { // 首启种子数据
+    if (db.find<User>("age >= ?", 0).empty()) {  // 首启种子数据
         std::vector<User> seed{
             {0, "alice", 30, "Shanghai"}, {0, "bob", 22, "Beijing"}, {0, "carol", 27, "Shenzhen"}};
         db.saveRange(seed);
@@ -154,8 +154,8 @@ int main() {
         http::json::JsonValue v = http::json::JsonValue::object();
         http::json::JsonValue arr = http::json::JsonValue::array();
         const std::string q = c.query("q");
-        std::vector<User> rows = q.empty() ? db.find<User>("age >= ?", 0)
-                                           : db.find<User>("name LIKE ?", "%" + q + "%");
+        std::vector<User> rows =
+            q.empty() ? db.find<User>("age >= ?", 0) : db.find<User>("name LIKE ?", "%" + q + "%");
         for (const User& u : rows) {
             http::json::JsonValue o = http::json::JsonValue::object();
             o["id"] = u.id;

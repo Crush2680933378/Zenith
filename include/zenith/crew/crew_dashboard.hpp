@@ -243,9 +243,7 @@ route();
 
 /// 挂载内嵌仪表盘：GET /crew/dashboard（与 mountCrewApi 同一 Router）
 inline void mountCrewDashboard(http::Router& r) {
-    r.get("/crew/dashboard", [](http::Context& c) {
-        c.html(200, crewDashboardHtml());
-    });
+    r.get("/crew/dashboard", [](http::Context& c) { c.html(200, crewDashboardHtml()); });
 }
 
-} // namespace zenith::crew
+}  // namespace zenith::crew

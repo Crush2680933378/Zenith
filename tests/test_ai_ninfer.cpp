@@ -71,8 +71,8 @@ struct NinferFixture {
         if (loaded.isErr()) {
             std::fprintf(stderr, "[debug] loadDirectory: %s\n", loaded.error().message.c_str());
         }
-        service = static_cast<ai::IInferenceService*>(
-            registry.queryRaw("zenith.ai.INinferInference", 1));
+        service =
+            static_cast<ai::IInferenceService*>(registry.queryRaw("zenith.ai.INinferInference", 1));
         if (service == nullptr) return;
 
         ai::OpenAiApiOptions opt;
@@ -111,7 +111,7 @@ struct NinferFixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(AiNinfer, SupervisesEngineAndServes) {
     const std::string exe = envOr("ZENITH_TEST_NINFER_EXE", "");
@@ -148,8 +148,9 @@ ZTEST(AiNinfer, SupervisesEngineAndServes) {
     }
 
     // 一条短请求（引擎 --default-reasoning-effort none，直接出正文）
-    auto res = f.post("/v1/chat/completions",
-                      R"({"messages":[{"role":"user","content":"用一句话介绍你自己"}],"max_tokens":64})");
+    auto res =
+        f.post("/v1/chat/completions",
+               R"({"messages":[{"role":"user","content":"用一句话介绍你自己"}],"max_tokens":64})");
     ZEXPECT_TRUE(res.isOk());
     if (res.isErr()) {
         std::printf("[ ninfer ] 请求失败：%s\n", res.error().message.c_str());

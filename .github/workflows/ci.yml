@@ -201,6 +201,52 @@ jobs:
           LD_LIBRARY_PATH="$GITHUB_WORKSPACE/sdk/lib" ./build/consumer_static
           LD_LIBRARY_PATH="$GITHUB_WORKSPACE/sdk/lib" ./build/consumer_shared
 
+  # 格式门禁：全仓 clang-format 检查。版本钉死（pip 包）保证本地/CI 结果一致——
+  # 用发行版自带的 clang-format 会因版本差异产生不同结果，门禁会变成噪音。
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 clang-format（钉版本）
+        run: python3 -m pip install --quiet clang-format==23.1.5
+      - name: clang-format 检查
+        run: |
+          set -euo pipefail
+          CF="$(python3 -c 'import clang_format, os; print(os.path.join(os.path.dirname(clang_format.__file__), "data", "bin", "clang-format"))')"
+          "$CF" --version
+          FILES=$(git ls-files '*.cpp' '*.hpp' '*.h' '*.c' | grep -v '^thirdparty/' || true)
+          [ -z "$FILES" ] && exit 0
+          "$CF" --dry-run --Werror $FILES
+
+  # 容器镜像：构建 + 起服务 + 打接口，验证 Dockerfile 不是摆设
+  docker-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: 构建镜像
+        run: docker build -t zenith:ci .
+      - name: 起容器并打接口
+        run: |
+          set -euo pipefail
+          docker run -d --name zenith-ci -p 18080:8080 zenith:ci
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18080/hello -o /tmp/hello.txt 2>/dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::容器 40s 内没有响应 /hello"
+            docker logs --tail 50 zenith-ci || true
+            exit 1
+          fi
+          cat /tmp/hello.txt
+          grep -q "Hello, Zenith!" /tmp/hello.txt
+          docker rm -f zenith-ci
+
   linux-gcc:
     runs-on: ubuntu-latest
     steps:

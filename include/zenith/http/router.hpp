@@ -69,8 +69,7 @@ private:
     };
 
     Node* insertNode(const std::string& pattern);
-    const Node* walk(const std::string& path,
-                     std::unordered_map<std::string, std::string>& params,
+    const Node* walk(const std::string& path, std::unordered_map<std::string, std::string>& params,
                      bool& pathExists) const;
 
     std::unique_ptr<Node> root_;
@@ -109,4 +108,4 @@ private:
     std::vector<Middleware> mw_;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

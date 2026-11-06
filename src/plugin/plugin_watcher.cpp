@@ -16,7 +16,9 @@ namespace fs = std::filesystem;
 PluginWatcher::PluginWatcher(PluginManager& mgr, std::string dir, unsigned intervalMs)
     : mgr_(mgr), dir_(std::move(dir)), intervalMs_(intervalMs) {}
 
-PluginWatcher::~PluginWatcher() { stop(); }
+PluginWatcher::~PluginWatcher() {
+    stop();
+}
 
 void PluginWatcher::start() {
     if (worker_.joinable()) return;
@@ -74,7 +76,7 @@ bool PluginWatcher::swapAndReload(const std::string& newFile, Event& ev) {
         fs::rename(target + ".old", target, ec2);
         return false;
     }
-    fs::remove(target + ".old", ec); // 尽力清理
+    fs::remove(target + ".old", ec);  // 尽力清理
 
     // 3) 重新加载并 start
     auto r = mgr_.reload(target);
@@ -117,4 +119,4 @@ size_t PluginWatcher::pollOnce() {
     return ok;
 }
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

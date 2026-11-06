@@ -14,4 +14,4 @@ protected:
     NonCopyable& operator=(const NonCopyable&) = delete;
 };
 
-} // namespace zenith::core
+}  // namespace zenith::core

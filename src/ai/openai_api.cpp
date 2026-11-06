@@ -93,7 +93,7 @@ bool readContent(const JsonValue& node, std::string& out, std::string& err) {
         return true;
     }
     if (node.isNull()) {
-        out.clear(); // 允许 assistant 消息仅含 tool_calls 时内容为空
+        out.clear();  // 允许 assistant 消息仅含 tool_calls 时内容为空
         return true;
     }
     const auto* parts = node.asArray();
@@ -118,7 +118,6 @@ bool readContent(const JsonValue& node, std::string& out, std::string& err) {
     }
     return true;
 }
-
 
 bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std::string& err) {
     const JsonValue& messages = body["messages"];
@@ -184,7 +183,7 @@ bool buildChatRequest(const JsonValue& body, ChatRequest& req, bool& stream, std
     if (req.topP > 1.0) req.topP = 1.0;
     // kUnlimited：足够大的上限。真正的终止条件是 EOS / 停止串 / 上下文满，
     // 不是这个数字——所以"不限制"就是把它设得远超上下文。
-    constexpr int kUnlimitedTokens = 1 << 20; // 1,048,576
+    constexpr int kUnlimitedTokens = 1 << 20;  // 1,048,576
     if (req.maxTokens <= 0) req.maxTokens = kUnlimitedTokens;
     if (req.maxTokens > kUnlimitedTokens) req.maxTokens = kUnlimitedTokens;
     return true;
@@ -228,7 +227,8 @@ void recordEngineState(bool enabled, const EngineState& st) {
         reg.gauge("zenith_ai_kv_used_tokens").set(st.kvUsedTokens);
         reg.gauge("zenith_ai_kv_capacity_tokens").set(st.kvCapacityTokens);
     }
-    if (st.lastContextTokens > 0) reg.gauge("zenith_ai_last_context_tokens").set(st.lastContextTokens);
+    if (st.lastContextTokens > 0)
+        reg.gauge("zenith_ai_last_context_tokens").set(st.lastContextTokens);
     if (st.lastPrefillTps > 0) {
         reg.gauge("zenith_ai_prefill_tps").set(st.lastPrefillTps);
     }
@@ -264,7 +264,7 @@ void handleModels(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
         caps["vision"] = false;  // 当前引擎管线只吃文本
         caps["tools"] = false;
         meta["capabilities"] = std::move(caps);
-        item["zenith_meta"] = meta; // 扩展字段（OpenAI 客户端会忽略）
+        item["zenith_meta"] = meta;  // 扩展字段（OpenAI 客户端会忽略）
         data.push_back(std::move(item));
     }
     JsonValue root = JsonValue::object();
@@ -307,8 +307,8 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
 
     const std::string id = "chatcmpl-" + randomHex(12);
     const int64_t created = nowSec();
-    const std::string model = req.model.empty() && !svc.models().empty() ? svc.models().front().id
-                                                                        : req.model;
+    const std::string model =
+        req.model.empty() && !svc.models().empty() ? svc.models().front().id : req.model;
     req.model = model;
 
     if (stream) {
@@ -443,15 +443,15 @@ void handleChat(http::Context& c, IInferenceService& svc, const OpenAiApiOptions
                     message["content"] = r.content;
                     if (!r.reasoning.empty()) message["reasoning_content"] = r.reasoning;
                     choice["message"] = std::move(message);
-                    choice["finish_reason"] =
-                        r.finishReason.empty() ? "stop" : r.finishReason;
+                    choice["finish_reason"] = r.finishReason.empty() ? "stop" : r.finishReason;
                     choices.push_back(std::move(choice));
                     root["choices"] = std::move(choices);
                     root["usage"] = usageObject(r.usage);
                     countTokens(metricsOn, r.usage);
-            recordEngineStats(metricsOn, r.stats);
+                    recordEngineStats(metricsOn, r.stats);
                     g_lastRequest.promptTokens.store(static_cast<int64_t>(r.usage.promptTokens));
-                    g_lastRequest.completionTokens.store(static_cast<int64_t>(r.usage.completionTokens));
+                    g_lastRequest.completionTokens.store(
+                        static_cast<int64_t>(r.usage.completionTokens));
                 }
                 writer->write(root.dump());
                 writer->close();
@@ -521,8 +521,8 @@ void handleCompletions(http::Context& c, IInferenceService& svc, const OpenAiApi
     const bool stream = body["stream"].asBool(false);
     const std::string id = "cmpl-" + randomHex(12);
     const int64_t created = nowSec();
-    const std::string model = req.model.empty() && !svc.models().empty() ? svc.models().front().id
-                                                                        : req.model;
+    const std::string model =
+        req.model.empty() && !svc.models().empty() ? svc.models().front().id : req.model;
     req.model = model;
 
     if (stream) {
@@ -568,7 +568,7 @@ void handleCompletions(http::Context& c, IInferenceService& svc, const OpenAiApi
                 sse->send("[DONE]");
                 sse->close();
                 countTokens(metricsOn, r.usage);
-            recordEngineStats(metricsOn, r.stats);
+                recordEngineStats(metricsOn, r.stats);
             } else {
                 sse->close();
             }
@@ -640,13 +640,13 @@ void handleEmbeddings(http::Context& c, IInferenceService& svc, const OpenAiApiO
         item["object"] = "embedding";
         item["index"] = static_cast<int64_t>(i);
         JsonValue vec = JsonValue::array();
-        for (float f : er.vector) vec.push_back(static_cast<double>(f));
+        for (float f : er.vector)
+            vec.push_back(static_cast<double>(f));
         item["embedding"] = std::move(vec);
         data.push_back(std::move(item));
     }
     if (data.empty()) {
-        sendError(c, 500, "server_error",
-                  firstError.empty() ? "embedding failed" : firstError);
+        sendError(c, 500, "server_error", firstError.empty() ? "embedding failed" : firstError);
         return;
     }
     countTokens(opt.metricsEnabled, total);
@@ -670,7 +670,8 @@ void handleStatus(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
     root["backend"] = svc.backend();
 
     JsonValue models = JsonValue::array();
-    for (const auto& m : svc.models()) models.push_back(m.id);
+    for (const auto& m : svc.models())
+        models.push_back(m.id);
     root["models"] = std::move(models);
 
     JsonValue engine = JsonValue::object();
@@ -691,10 +692,9 @@ void handleStatus(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
     engine["kv_host_capacity_bytes"] = st.kvHostCapacityBytes;
     engine["reused_tokens"] = st.reusedTokens;
     engine["last_context_tokens"] = st.lastContextTokens;
-    engine["kv_percent"] =
-        st.kvCapacityTokens > 0
-            ? static_cast<double>(st.kvUsedTokens) * 100.0 / static_cast<double>(st.kvCapacityTokens)
-            : 0.0;
+    engine["kv_percent"] = st.kvCapacityTokens > 0 ? static_cast<double>(st.kvUsedTokens) * 100.0 /
+                                                         static_cast<double>(st.kvCapacityTokens)
+                                                   : 0.0;
     root["engine"] = std::move(engine);
 
     // 最近一次请求的上下文构成（桌面端上下文胶囊的悬停明细）
@@ -719,28 +719,23 @@ void handleStatus(http::Context& c, IInferenceService& svc, const OpenAiApiOptio
     c.json(200, root);
 }
 
-} // namespace
+}  // namespace
 
 void mountOpenAiApi(http::Router& router, IInferenceService& service,
                     const OpenAiApiOptions& options) {
     const std::string p = options.prefix.empty() ? std::string("/v1") : options.prefix;
 
-    router.get(p + "/models", [&service, options](http::Context& c) {
-        handleModels(c, service, options);
-    });
-    router.post(p + "/chat/completions", [&service, options](http::Context& c) {
-        handleChat(c, service, options);
-    });
-    router.post(p + "/completions", [&service, options](http::Context& c) {
-        handleCompletions(c, service, options);
-    });
-    router.post(p + "/embeddings", [&service, options](http::Context& c) {
-        handleEmbeddings(c, service, options);
-    });
+    router.get(p + "/models",
+               [&service, options](http::Context& c) { handleModels(c, service, options); });
+    router.post(p + "/chat/completions",
+                [&service, options](http::Context& c) { handleChat(c, service, options); });
+    router.post(p + "/completions",
+                [&service, options](http::Context& c) { handleCompletions(c, service, options); });
+    router.post(p + "/embeddings",
+                [&service, options](http::Context& c) { handleEmbeddings(c, service, options); });
     // 网关/引擎运行态（放在 /v1 之外，避免污染 OpenAI 兼容面）
-    router.get("/zenith/ai/status", [&service, options](http::Context& c) {
-        handleStatus(c, service, options);
-    });
+    router.get("/zenith/ai/status",
+               [&service, options](http::Context& c) { handleStatus(c, service, options); });
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

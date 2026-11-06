@@ -6,11 +6,13 @@ namespace zenith::net {
 
 TcpClient::TcpClient(EventLoop* loop) : loop_(loop) {}
 
-TcpClient::~TcpClient() { cancel(); }
+TcpClient::~TcpClient() {
+    cancel();
+}
 
 void TcpClient::connect(const ConnectOptions& opt, ConnectedCallback onOk, FailedCallback onFail) {
     if (pending_) return;
-    onOk_   = std::move(onOk);
+    onOk_ = std::move(onOk);
     onFail_ = std::move(onFail);
 
     auto sock = Socket::createTcp();
@@ -37,7 +39,7 @@ void TcpClient::connect(const ConnectOptions& opt, ConnectedCallback onOk, Faile
     });
 
     if (cr.value()) {
-        loop_->runInLoop([self] { self->succeed(); }); // 立即连上（如 loopback）
+        loop_->runInLoop([self] { self->succeed(); });  // 立即连上（如 loopback）
         return;
     }
 
@@ -84,7 +86,7 @@ void TcpClient::succeed() {
     const Endpoint peer = sock_.peerEndpoint();
     auto conn = TcpConnection::create(loop_, sock_.releaseFd(),
                                       peer.host + ":" + std::to_string(peer.port));
-    conn->establish(); // fd 所有权移交连接对象
+    conn->establish();  // fd 所有权移交连接对象
 
     ConnectedCallback cb = std::move(onOk_);
     onFail_ = nullptr;
@@ -113,4 +115,4 @@ void TcpClient::cancel() {
     onFail_ = nullptr;
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

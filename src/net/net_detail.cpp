@@ -5,25 +5,25 @@
 #include "zenith/core/platform.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0601
-  #endif
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  using NativeSocket = SOCKET;
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using NativeSocket = SOCKET;
 #else
-  #include <arpa/inet.h>
-  #include <fcntl.h>
-  #include <netinet/in.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
-  using NativeSocket = int;
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using NativeSocket = int;
 #endif
 
 namespace zenith::net::detail {
@@ -87,8 +87,8 @@ void closeRaw(fd_t fd) {
 
 int rawRead(fd_t fd, void* buf, size_t n) {
 #if defined(ZENITH_PLATFORM_WINDOWS)
-    const int r = ::recv(static_cast<NativeSocket>(fd), static_cast<char*>(buf),
-                         static_cast<int>(n), 0);
+    const int r =
+        ::recv(static_cast<NativeSocket>(fd), static_cast<char*>(buf), static_cast<int>(n), 0);
 #else
     const int r = ::read(static_cast<int>(fd), buf, n);
 #endif
@@ -97,8 +97,8 @@ int rawRead(fd_t fd, void* buf, size_t n) {
 
 int rawWrite(fd_t fd, const void* buf, size_t n) {
 #if defined(ZENITH_PLATFORM_WINDOWS)
-    return static_cast<int>(::send(static_cast<NativeSocket>(fd),
-                                   static_cast<const char*>(buf), static_cast<int>(n), 0));
+    return static_cast<int>(::send(static_cast<NativeSocket>(fd), static_cast<const char*>(buf),
+                                   static_cast<int>(n), 0));
 #else
     return static_cast<int>(::write(static_cast<int>(fd), buf, n));
 #endif
@@ -135,4 +135,4 @@ int getSocketError(fd_t fd) {
     return err;
 }
 
-} // namespace zenith::net::detail
+}  // namespace zenith::net::detail

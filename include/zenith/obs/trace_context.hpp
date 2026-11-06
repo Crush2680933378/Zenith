@@ -24,8 +24,8 @@
 namespace zenith::obs {
 
 struct ZENITH_API TraceContext {
-    std::string traceId; // 32 位小写十六进制
-    std::string spanId;  // 16 位小写十六进制
+    std::string traceId;  // 32 位小写十六进制
+    std::string spanId;   // 16 位小写十六进制
     bool sampled = true;
 
     [[nodiscard]] bool valid() const noexcept;
@@ -65,4 +65,4 @@ private:
     std::optional<TraceContext> saved_;
 };
 
-} // namespace zenith::obs
+}  // namespace zenith::obs

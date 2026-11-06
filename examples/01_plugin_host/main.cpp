@@ -33,8 +33,8 @@ int main() {
 
     /* ---- 2. 基础设施 ---- */
     concurrency::ThreadPool pool(4);
-    plugin::ServiceRegistry  registry;
-    core::KeyValueConfig     config;
+    plugin::ServiceRegistry registry;
+    core::KeyValueConfig config;
     config.set("hello_c.greeting_prefix", "Bonjour");
 
     /* ---- 3. 加载插件 ---- */
@@ -83,6 +83,6 @@ int main() {
     pool.shutdown();
     facade.flush();
     ZLOG_INFO("=== bye ===");
-    facade.shutdown(); // main 返回前销毁异步 sink（避免 DLL 卸载期 join 死锁）
+    facade.shutdown();  // main 返回前销毁异步 sink（避免 DLL 卸载期 join 死锁）
     return 0;
 }

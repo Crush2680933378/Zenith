@@ -29,10 +29,10 @@ namespace zenith::plugin {
 
 enum class PluginState {
     Unloaded,
-    Loaded,      // dlopen 成功、desc 已校验
-    Initialized, // init(host) 成功
-    Started,     // start() 成功
-    Stopped,     // stop() 已调用
+    Loaded,       // dlopen 成功、desc 已校验
+    Initialized,  // init(host) 成功
+    Started,      // start() 成功
+    Stopped,      // stop() 已调用
 };
 
 struct PluginInfo {
@@ -43,14 +43,13 @@ struct PluginInfo {
     std::string author;
     PluginState state = PluginState::Unloaded;
     zenith_plugin_desc desc{};
-    zenith_host_api hostApi{}; // 注入给插件的宿主能力表（生命周期随本对象）
+    zenith_host_api hostApi{};  // 注入给插件的宿主能力表（生命周期随本对象）
     std::unique_ptr<DynLib> lib;
 };
 
 class ZENITH_API PluginManager : private core::NonCopyable {
 public:
-    PluginManager(ServiceRegistry& registry,
-                  concurrency::ThreadPool* pool = nullptr,
+    PluginManager(ServiceRegistry& registry, concurrency::ThreadPool* pool = nullptr,
                   core::KeyValueConfig* config = nullptr);
     ~PluginManager();
 
@@ -88,10 +87,10 @@ private:
     /// 卸载单个插件对象（已从 plugins_ 摘除或未摘除都可用）
     void doUnload(PluginInfo& p);
 
-    ServiceRegistry&         registry_;
+    ServiceRegistry& registry_;
     concurrency::ThreadPool* pool_;
-    core::KeyValueConfig*    config_;
+    core::KeyValueConfig* config_;
     std::vector<std::unique_ptr<PluginInfo>> plugins_;
 };
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

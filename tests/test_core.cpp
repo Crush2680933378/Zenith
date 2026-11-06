@@ -129,7 +129,7 @@ ZTEST(StringUtil, ReplaceAll) {
 
 ZTEST(TimeUtil, FormatTimestampShape) {
     const std::string s = formatTimestamp(1760000000123LL);
-    ZEXPECT_EQ(s.size(), size_t{23}); // "YYYY-MM-DD HH:MM:SS.mmm"
+    ZEXPECT_EQ(s.size(), size_t{23});  // "YYYY-MM-DD HH:MM:SS.mmm"
     ZEXPECT_EQ(s[4], '-');
     ZEXPECT_EQ(s[10], ' ');
     ZEXPECT_EQ(s[19], '.');
@@ -153,7 +153,7 @@ ZTEST(Config, ParseAndCaseInsensitive) {
         "novalue\n");
     ZEXPECT_EQ(n, size_t{2});
     ZEXPECT_EQ(cfg.get("SERVER.PORT"), std::string("8080"));
-    ZEXPECT_EQ(cfg.get("log.level"), std::string("debug")); // 值保留原样，key 归一
+    ZEXPECT_EQ(cfg.get("log.level"), std::string("debug"));  // 值保留原样，key 归一
     ZEXPECT_EQ(cfg.get("missing", "fallback"), std::string("fallback"));
     ZEXPECT_TRUE(cfg.contains("server.port"));
     ZEXPECT_FALSE(cfg.contains("nope"));

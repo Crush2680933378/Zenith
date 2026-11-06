@@ -58,9 +58,11 @@ public:
         uint8_t pad = 0x80;
         update(&pad, 1);
         pad = 0x00;
-        while (bufLen_ != 56) update(&pad, 1);
+        while (bufLen_ != 56)
+            update(&pad, 1);
         uint8_t lenBytes[8];
-        for (int i = 0; i < 8; ++i) lenBytes[i] = static_cast<uint8_t>(bitLen >> (56 - 8 * i));
+        for (int i = 0; i < 8; ++i)
+            lenBytes[i] = static_cast<uint8_t>(bitLen >> (56 - 8 * i));
         update(lenBytes, 8);
 
         for (int i = 0; i < 5; ++i) {
@@ -88,17 +90,14 @@ public:
     }
 
 private:
-    static uint32_t rol(uint32_t v, int s) noexcept {
-        return (v << s) | (v >> (32 - s));
-    }
+    static uint32_t rol(uint32_t v, int s) noexcept { return (v << s) | (v >> (32 - s)); }
 
     void block(const uint8_t* p) {
         uint32_t w[80];
         for (int i = 0; i < 16; ++i) {
             w[i] = (static_cast<uint32_t>(p[i * 4]) << 24) |
                    (static_cast<uint32_t>(p[i * 4 + 1]) << 16) |
-                   (static_cast<uint32_t>(p[i * 4 + 2]) << 8) |
-                   static_cast<uint32_t>(p[i * 4 + 3]);
+                   (static_cast<uint32_t>(p[i * 4 + 2]) << 8) | static_cast<uint32_t>(p[i * 4 + 3]);
         }
         for (int i = 16; i < 80; ++i) {
             w[i] = rol(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
@@ -139,4 +138,4 @@ private:
     size_t bufLen_ = 0;
 };
 
-} // namespace zenith::crypto
+}  // namespace zenith::crypto

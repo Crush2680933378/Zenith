@@ -7,10 +7,10 @@
  * 依赖：仅 ESP-IDF 自带组件（lwip / FreeRTOS），无三方库。
  * =========================================================================== */
 #include <string.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lwip/sockets.h"
 
 #define WIFI_SSID "your-ssid"
@@ -23,14 +23,15 @@
 static const char* TAG = "zenith-dev";
 
 /* ---- WiFi 连接（精简 station 模式；完整版用 esp_wifi + event loop） ---- */
-extern void app_wifi_init(const char* ssid, const char* pass); // 用户侧实现
+extern void app_wifi_init(const char* ssid, const char* pass);  // 用户侧实现
 
 /* ---- CRC32（与 zenith::io::crc32 相同：反射 0xEDB88320） ---- */
 static uint32_t crc32_calc(const uint8_t* d, size_t n) {
     uint32_t c = 0xFFFFFFFFu;
     for (size_t i = 0; i < n; ++i) {
         c ^= d[i];
-        for (int b = 0; b < 8; ++b) c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+        for (int b = 0; b < 8; ++b)
+            c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
     }
     return ~c;
 }
@@ -92,13 +93,15 @@ static void handle_rpc(int sock, const char* json) {
         const bool on = strstr(json, "\"on\":true") != NULL;
         gpio_set_level(LED_GPIO, on ? 1 : 0);
         snprintf(resp, sizeof(resp),
-                 "{\"t\":\"resp\",\"rid\":%d,\"ok\":true,\"data\":{\"led\":%s}}",
-                 rid, on ? "true" : "false");
+                 "{\"t\":\"resp\",\"rid\":%d,\"ok\":true,\"data\":{\"led\":%s}}", rid,
+                 on ? "true" : "false");
     } else if (strcmp(method, "ping") == 0) {
-        snprintf(resp, sizeof(resp), "{\"t\":\"resp\",\"rid\":%d,\"ok\":true,\"data\":{\"ms\":%lld}}",
-                 rid, (long long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
+        snprintf(resp, sizeof(resp),
+                 "{\"t\":\"resp\",\"rid\":%d,\"ok\":true,\"data\":{\"ms\":%lld}}", rid,
+                 (long long)(xTaskGetTickCount() * portTICK_PERIOD_MS));
     } else {
-        snprintf(resp, sizeof(resp), "{\"t\":\"resp\",\"rid\":%d,\"ok\":false,\"data\":{\"error\":\"unknown\"}}", rid);
+        snprintf(resp, sizeof(resp),
+                 "{\"t\":\"resp\",\"rid\":%d,\"ok\":false,\"data\":{\"error\":\"unknown\"}}", rid);
     }
     send_frame(sock, resp);
 }
@@ -150,8 +153,7 @@ static void device_task(void* arg) {
         for (;;) {
             /* 心跳（5s） */
             char hb[128];
-            snprintf(hb, sizeof(hb),
-                     "{\"t\":\"hb\",\"id\":\"" DEVICE_ID "\",\"ms\":%u,\"c\":%u}",
+            snprintf(hb, sizeof(hb), "{\"t\":\"hb\",\"id\":\"" DEVICE_ID "\",\"ms\":%u,\"c\":%u}",
                      (unsigned)(xTaskGetTickCount() * portTICK_PERIOD_MS), ++hbCount);
             send_frame(sock, hb);
 
@@ -164,8 +166,8 @@ static void device_task(void* arg) {
                     for (size_t i = 0; i < rxlen; ++i) {
                         if (rxbuf[i] == 0) {
                             if (i > start) {
-                                const size_t dlen =
-                                    cobs_decode((const uint8_t*)(rxbuf + start), i - start, decoded);
+                                const size_t dlen = cobs_decode((const uint8_t*)(rxbuf + start),
+                                                                i - start, decoded);
                                 if (dlen >= 5) {
                                     const size_t pl = dlen - 4;
                                     uint32_t crc = 0;

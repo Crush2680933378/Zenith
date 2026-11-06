@@ -15,7 +15,7 @@
 #include <thread>
 
 #include "zenith/ai/guard_service.hpp"
-#include "zenith/ai/provider_router.hpp" // simpleHttpRequest（webhook）
+#include "zenith/ai/provider_router.hpp"  // simpleHttpRequest（webhook）
 #include "zenith/http/otel.hpp"
 
 namespace zenith::crew {
@@ -41,38 +41,52 @@ struct RoleDefSeed {
 };
 const std::vector<RoleDefSeed>& defaultRoles() {
     static const std::vector<RoleDefSeed> kRoles = {
-        {"pm", "ROLE: PM. You are the product manager. Given a brief, produce ONLY one JSON "
-               "object: {\"prd\":{\"summary\":\"...\",\"stories\":[{\"id\":\"S1\",\"title\":"
-               "\"...\",\"given\":\"...\",\"when\":\"...\",\"then\":\"...\"}]}}. Every story "
-               "must have executable Given/When/Then acceptance criteria.", 1, "产品经理"},
-        {"architect", "ROLE: ARCHITECT. You are the software architect. Given the PRD, "
-                      "produce ONLY one JSON object: {\"architecture\":{\"style\":\"...\","
-                      "\"storage\":\"sqlite|postgres|none\",\"components\":[\"...\"],"
-                      "\"api\":[{\"method\":\"GET\",\"path\":\"/api/...\",\"desc\":\"...\"}],"
-                      "\"notes\":\"...\"}}. Contract-first: api entries are the single "
-                      "source of truth for backend and frontend.", 2, "架构师"},
-        {"backend", "ROLE: BACKEND. You are the backend developer. Given the API contract, "
-                    "produce ONLY one JSON object: {\"files\":[{\"path\":\"src/main.cpp\","
-                    "\"content\":\"// implementation\"}],\"notes\":\"...\"}. Implement every "
-                    "contracted endpoint.", 1, "后端工程师"},
-        {"frontend", "ROLE: FRONTEND. You are the frontend developer. Given the API "
-                     "contract, produce ONLY one JSON object: {\"files\":[{\"path\":"
-                     "\"web/index.html\",\"content\":\"<!-- UI -->\"}],\"notes\":\"...\"}. "
-                     "Develop against the contract (mock-friendly), never block on backend.", 1, "前端工程师"},
-        {"tester", "ROLE: TESTER. You are the QA engineer. Given the PRD acceptance "
-                   "criteria and API contract, produce ONLY one JSON object: {\"cases\":"
-                   "[{\"id\":\"T1\",\"story\":\"S1\",\"given\":\"...\",\"when\":\"...\","
-                   "\"then\":\"...\"}],\"results\":[{\"case\":\"T1\",\"status\":"
-                   "\"pass|fail\",\"detail\":\"...\",\"component\":\"backend|frontend\"}]}. "
-                   "Every story needs at least one case. When asked to RETEST after fixes, "
-                   "report all cases pass unless the fix note says otherwise.", 1, "测试工程师"},
-        {"devops", "ROLE: DEVOPS. You are the release engineer. Given the architecture, "
-                   "produce ONLY one JSON object: {\"files\":[{\"path\":\"Dockerfile\","
-                   "\"content\":\"...\"},{\"path\":\".ci/pipeline.yml\",\"content\":\"...\"}],"
-                   "\"deploy\":{\"strategy\":\"...\",\"smoke\":\"...\"}}.", 1, "运维工程师"},
-        {"delivery", "ROLE: DELIVERY. You are the release manager. Given the PRD and test "
-                     "outcomes, produce ONLY one JSON object: {\"changelog\":\"...\","
-                     "\"release_notes\":\"...\",\"version\":\"0.1.0\"}.", 1, "交付经理"},
+        {"pm",
+         "ROLE: PM. You are the product manager. Given a brief, produce ONLY one JSON "
+         "object: {\"prd\":{\"summary\":\"...\",\"stories\":[{\"id\":\"S1\",\"title\":"
+         "\"...\",\"given\":\"...\",\"when\":\"...\",\"then\":\"...\"}]}}. Every story "
+         "must have executable Given/When/Then acceptance criteria.",
+         1, "产品经理"},
+        {"architect",
+         "ROLE: ARCHITECT. You are the software architect. Given the PRD, "
+         "produce ONLY one JSON object: {\"architecture\":{\"style\":\"...\","
+         "\"storage\":\"sqlite|postgres|none\",\"components\":[\"...\"],"
+         "\"api\":[{\"method\":\"GET\",\"path\":\"/api/...\",\"desc\":\"...\"}],"
+         "\"notes\":\"...\"}}. Contract-first: api entries are the single "
+         "source of truth for backend and frontend.",
+         2, "架构师"},
+        {"backend",
+         "ROLE: BACKEND. You are the backend developer. Given the API contract, "
+         "produce ONLY one JSON object: {\"files\":[{\"path\":\"src/main.cpp\","
+         "\"content\":\"// implementation\"}],\"notes\":\"...\"}. Implement every "
+         "contracted endpoint.",
+         1, "后端工程师"},
+        {"frontend",
+         "ROLE: FRONTEND. You are the frontend developer. Given the API "
+         "contract, produce ONLY one JSON object: {\"files\":[{\"path\":"
+         "\"web/index.html\",\"content\":\"<!-- UI -->\"}],\"notes\":\"...\"}. "
+         "Develop against the contract (mock-friendly), never block on backend.",
+         1, "前端工程师"},
+        {"tester",
+         "ROLE: TESTER. You are the QA engineer. Given the PRD acceptance "
+         "criteria and API contract, produce ONLY one JSON object: {\"cases\":"
+         "[{\"id\":\"T1\",\"story\":\"S1\",\"given\":\"...\",\"when\":\"...\","
+         "\"then\":\"...\"}],\"results\":[{\"case\":\"T1\",\"status\":"
+         "\"pass|fail\",\"detail\":\"...\",\"component\":\"backend|frontend\"}]}. "
+         "Every story needs at least one case. When asked to RETEST after fixes, "
+         "report all cases pass unless the fix note says otherwise.",
+         1, "测试工程师"},
+        {"devops",
+         "ROLE: DEVOPS. You are the release engineer. Given the architecture, "
+         "produce ONLY one JSON object: {\"files\":[{\"path\":\"Dockerfile\","
+         "\"content\":\"...\"},{\"path\":\".ci/pipeline.yml\",\"content\":\"...\"}],"
+         "\"deploy\":{\"strategy\":\"...\",\"smoke\":\"...\"}}.",
+         1, "运维工程师"},
+        {"delivery",
+         "ROLE: DELIVERY. You are the release manager. Given the PRD and test "
+         "outcomes, produce ONLY one JSON object: {\"changelog\":\"...\","
+         "\"release_notes\":\"...\",\"version\":\"0.1.0\"}.",
+         1, "交付经理"},
     };
     return kRoles;
 }
@@ -84,38 +98,40 @@ std::vector<double> hashVec(const std::string& text) {
     auto flush = [&] {
         if (word.empty()) return;
         size_t h = 1469598103934665603ULL;
-        for (char wc : word) h = (h ^ static_cast<unsigned char>(wc)) * 1099511628211ULL;
+        for (char wc : word)
+            h = (h ^ static_cast<unsigned char>(wc)) * 1099511628211ULL;
         v[h % 64] += 1.0;
         word.clear();
     };
     for (char c : text) {
         if (std::isalnum(static_cast<unsigned char>(c))) {
-            word.push_back(
-                static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            word.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
         } else {
             flush();
         }
     }
     flush();
     double norm = 0;
-    for (double d : v) norm += d * d;
+    for (double d : v)
+        norm += d * d;
     norm = std::sqrt(norm);
     if (norm > 0) {
-        for (double& d : v) d /= norm;
+        for (double& d : v)
+            d /= norm;
     }
     return v;
 }
 
 double cosine(const std::vector<double>& a, const std::vector<double>& b) {
     double s = 0;
-    for (size_t i = 0; i < a.size() && i < b.size(); ++i) s += a[i] * b[i];
+    for (size_t i = 0; i < a.size() && i < b.size(); ++i)
+        s += a[i] * b[i];
     return s;
 }
 
 /// execVerify 命令闸门：首 token 精确匹配白名单 + 全串禁 shell 元字符。
 /// 返回空串=允许；非空=拒绝原因（LLM 生成的命令不可信——注入防线）
-std::string execRejectReason(const std::string& cmd,
-                             const std::vector<std::string>& allowlist) {
+std::string execRejectReason(const std::string& cmd, const std::vector<std::string>& allowlist) {
     const size_t sp = cmd.find_first_of(" 	");
     const std::string exe = cmd.substr(0, sp);
     bool allowed = false;
@@ -127,9 +143,8 @@ std::string execRejectReason(const std::string& cmd,
     }
     if (!allowed) return "executable not in allowlist: " + exe;
     // shell/cmd 元字符与控制字符全禁（含引号/反斜杠/反引号/换行）
-    static const char kMeta[] = {'&', '|', ';', '>', '<', '`', '$', '(', ')',
-                                 '{', '}', '[', ']', '!', '"', '\'',
-                                 '\\', '\r', '\n', '\0'};
+    static const char kMeta[] = {'&', '|', ';', '>', '<', '`',  '$',  '(',  ')',  '{',
+                                 '}', '[', ']', '!', '"', '\'', '\\', '\r', '\n', '\0'};
     if (cmd.find_first_of(kMeta, 0, sizeof(kMeta) - 1) != std::string::npos) {
         return "shell metacharacters rejected";
     }
@@ -146,7 +161,8 @@ bool runCommand(const std::string& cmd, std::string& output) {
 #endif
     if (p == nullptr) return false;
     char buf[4096];
-    while (fgets(buf, sizeof(buf), p) != nullptr) output += buf;
+    while (fgets(buf, sizeof(buf), p) != nullptr)
+        output += buf;
 #if defined(_WIN32)
     const int rc = _pclose(p);
 #else
@@ -167,18 +183,21 @@ json::JsonValue usageToJson(const RoleUsage& u) {
 const std::vector<std::pair<const char*, const char*>>& kPersonaRules() {
     // 顺序即优先级；子串小写匹配
     static const std::vector<std::pair<const char*, const char*>> kRules = {
-        {"deepseek", "deepseek"}, {"moonshot", "kimi"},     {"kimi", "kimi"},
-        {"chatglm", "glm"},       {"zhipu", "glm"},          {"glm", "glm"},
-        {"mimo", "mimo"},         {"xiaomi", "mimo"},
-        {"minimax", "minimax"},   {"abab", "minimax"},       {"mini-max", "minimax"},
-        {"llama", "llama"},       {"qwen", "qwen"},          {"qwq", "qwen"},
-        {"gemini", "gemini"},     {"claude", "anthropic"},   {"anthropic", "anthropic"},
-        {"gpt", "openai"},        {"o1", "openai"},          {"o3", "openai"},
+        {"deepseek", "deepseek"},   {"moonshot", "kimi"},
+        {"kimi", "kimi"},           {"chatglm", "glm"},
+        {"zhipu", "glm"},           {"glm", "glm"},
+        {"mimo", "mimo"},           {"xiaomi", "mimo"},
+        {"minimax", "minimax"},     {"abab", "minimax"},
+        {"mini-max", "minimax"},    {"llama", "llama"},
+        {"qwen", "qwen"},           {"qwq", "qwen"},
+        {"gemini", "gemini"},       {"claude", "anthropic"},
+        {"anthropic", "anthropic"}, {"gpt", "openai"},
+        {"o1", "openai"},           {"o3", "openai"},
     };
     return kRules;
 }
 
-} // namespace
+}  // namespace
 
 std::string personaFromModel(const std::string& model) {
     std::string low;
@@ -201,7 +220,7 @@ CrewPhase phaseFromName(const std::string& s) {
     return CrewPhase::Done;
 }
 
-} // namespace
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // JSON 序列化
@@ -240,7 +259,8 @@ json::JsonValue VoteRecord::toJson() const {
     v["task_id"] = taskId;
     v["question"] = question;
     json::JsonValue opts = json::JsonValue::array();
-    for (const std::string& o : options) opts.push_back(o);
+    for (const std::string& o : options)
+        opts.push_back(o);
     v["options"] = std::move(opts);
     json::JsonValue vs = json::JsonValue::array();
     for (const auto& [agent, choice] : votes) {
@@ -275,7 +295,8 @@ json::JsonValue CrewTaskInfo::toJson() const {
     v["resumable"] = resumable;
     v["error"] = error;
     json::JsonValue arr = json::JsonValue::array();
-    for (const AgentStatus& a : agents) arr.push_back(a.toJson());
+    for (const AgentStatus& a : agents)
+        arr.push_back(a.toJson());
     v["agents"] = std::move(arr);
     v["event_count"] = static_cast<int64_t>(eventCount);
     v["artifact_count"] = static_cast<int64_t>(artifactCount);
@@ -286,10 +307,12 @@ json::JsonValue CrewTaskInfo::toJson() const {
     v["tokens_in"] = static_cast<int64_t>(tokensIn);
     v["tokens_out"] = static_cast<int64_t>(tokensOut);
     json::JsonValue ru = json::JsonValue::object();
-    for (const auto& [role, u] : roleUsage) ru[role] = usageToJson(u);
+    for (const auto& [role, u] : roleUsage)
+        ru[role] = usageToJson(u);
     v["role_usage"] = std::move(ru);
     json::JsonValue rm = json::JsonValue::object();
-    for (const auto& [role, m] : roleModels) rm[role] = m;
+    for (const auto& [role, m] : roleModels)
+        rm[role] = m;
     v["role_models"] = std::move(rm);
     v["config"] = cfg.toJson();
     return v;
@@ -299,7 +322,8 @@ json::JsonValue CrewConfig::toJson() const {
     json::JsonValue v = json::JsonValue::object();
     v["model"] = model;
     json::JsonValue rm = json::JsonValue::object();
-    for (const auto& [r, m] : roleModels) rm[r] = m;
+    for (const auto& [r, m] : roleModels)
+        rm[r] = m;
     v["role_models"] = std::move(rm);
     v["max_bug_cycles"] = maxBugCycles;
     v["require_approval"] = requireApproval;
@@ -323,52 +347,61 @@ CrewConfig CrewConfig::fromJson(const json::JsonValue& v) {
     CrewConfig c;
     c.model = v["model"].asString();
     if (const auto* rm = v["role_models"].asObject()) {
-        for (const auto& [r, m] : *rm) c.roleModels[r] = m.asString();
+        for (const auto& [r, m] : *rm)
+            c.roleModels[r] = m.asString();
     }
-    if (const auto* rm2 = v["roleModels"].asObject()) { // camelCase 兼容（HTTP 层）
-        for (const auto& [r, m] : *rm2) c.roleModels[r] = m.asString();
+    if (const auto* rm2 = v["roleModels"].asObject()) {  // camelCase 兼容（HTTP 层）
+        for (const auto& [r, m] : *rm2)
+            c.roleModels[r] = m.asString();
     }
-    c.maxBugCycles = static_cast<int>(
-        v["max_bug_cycles"].asInt(v["maxBugCycles"].asInt(2)));
-    c.requireApproval =
-        v["require_approval"].asBool(v["requireApproval"].asBool(false));
-    c.approvalTimeoutSec = static_cast<int>(
-        v["approval_timeout_sec"].asInt(v["approvalTimeoutSec"].asInt(3600)));
-    c.parallelImplement =
-        v["parallel_implement"].asBool(v["parallelImplement"].asBool(true));
+    c.maxBugCycles = static_cast<int>(v["max_bug_cycles"].asInt(v["maxBugCycles"].asInt(2)));
+    c.requireApproval = v["require_approval"].asBool(v["requireApproval"].asBool(false));
+    c.approvalTimeoutSec =
+        static_cast<int>(v["approval_timeout_sec"].asInt(v["approvalTimeoutSec"].asInt(3600)));
+    c.parallelImplement = v["parallel_implement"].asBool(v["parallelImplement"].asBool(true));
     c.strictRetest = v["strict_retest"].asBool(v["strictRetest"].asBool(true));
-    c.jsonRetryLimit = static_cast<int>(
-        v["json_retry_limit"].asInt(v["jsonRetryLimit"].asInt(2)));
+    c.jsonRetryLimit = static_cast<int>(v["json_retry_limit"].asInt(v["jsonRetryLimit"].asInt(2)));
     c.streamTokens = v["stream_tokens"].asBool(v["streamTokens"].asBool(true));
     c.execVerify = v["exec_verify"].asBool(v["execVerify"].asBool(false));
     c.useMemory = v["use_memory"].asBool(v["useMemory"].asBool(true));
     c.storiesMode = v["stories_mode"].asBool(v["storiesMode"].asBool(false));
-    c.prdVoteRounds = static_cast<int>(
-        v["prd_vote_rounds"].asInt(v["prdVoteRounds"].asInt(1)));
+    c.prdVoteRounds = static_cast<int>(v["prd_vote_rounds"].asInt(v["prdVoteRounds"].asInt(1)));
     c.humanVoter = v["human_voter"].asBool(v["humanVoter"].asBool(false));
-    c.humanVoteTimeoutSec = static_cast<int>(
-        v["human_vote_timeout_sec"].asInt(v["humanVoteTimeoutSec"].asInt(600)));
+    c.humanVoteTimeoutSec =
+        static_cast<int>(v["human_vote_timeout_sec"].asInt(v["humanVoteTimeoutSec"].asInt(600)));
     c.costBudgetUsd = v["cost_budget_usd"].asDouble(v["costBudgetUsd"].asDouble(0.0));
-    c.maxPromptChars = static_cast<int>(
-        v["max_prompt_chars"].asInt(v["maxPromptChars"].asInt(0)));
+    c.maxPromptChars = static_cast<int>(v["max_prompt_chars"].asInt(v["maxPromptChars"].asInt(0)));
     return c;
 }
 
 const char* phaseName(CrewPhase p) noexcept {
     switch (p) {
-        case CrewPhase::Pending: return "pending";
-        case CrewPhase::Requirements: return "requirements";
-        case CrewPhase::ReviewPrd: return "review_prd";
-        case CrewPhase::Design: return "design";
-        case CrewPhase::Implement: return "implement";
-        case CrewPhase::Test: return "test";
-        case CrewPhase::Bugfix: return "bugfix";
-        case CrewPhase::Deploy: return "deploy";
-        case CrewPhase::Release: return "release";
-        case CrewPhase::AwaitingApproval: return "awaiting_approval";
-        case CrewPhase::Done: return "done";
-        case CrewPhase::Failed: return "failed";
-        case CrewPhase::Cancelled: return "cancelled";
+        case CrewPhase::Pending:
+            return "pending";
+        case CrewPhase::Requirements:
+            return "requirements";
+        case CrewPhase::ReviewPrd:
+            return "review_prd";
+        case CrewPhase::Design:
+            return "design";
+        case CrewPhase::Implement:
+            return "implement";
+        case CrewPhase::Test:
+            return "test";
+        case CrewPhase::Bugfix:
+            return "bugfix";
+        case CrewPhase::Deploy:
+            return "deploy";
+        case CrewPhase::Release:
+            return "release";
+        case CrewPhase::AwaitingApproval:
+            return "awaiting_approval";
+        case CrewPhase::Done:
+            return "done";
+        case CrewPhase::Failed:
+            return "failed";
+        case CrewPhase::Cancelled:
+            return "cancelled";
     }
     return "?";
 }
@@ -389,7 +422,7 @@ CrewEngine::~CrewEngine() {
         std::lock_guard<std::mutex> lk(mtx_);
         for (auto& [id, t] : tasks_) {
             if (t->running) {
-                t->interrupted.store(true); // 协作式中断（可恢复，区别于用户取消）
+                t->interrupted.store(true);  // 协作式中断（可恢复，区别于用户取消）
                 t->error = "engine shutdown";
             }
         }
@@ -399,7 +432,7 @@ CrewEngine::~CrewEngine() {
     for (std::thread& w : workers_) {
         if (w.joinable()) w.join();
     }
-    flushDirtyTasks(); // 去抖窗口内未落盘的任务补写终拍
+    flushDirtyTasks();  // 去抖窗口内未落盘的任务补写终拍
 }
 
 void CrewEngine::setOptions(EngineOptions opt) {
@@ -444,7 +477,7 @@ void CrewEngine::setOptions(EngineOptions opt) {
             }
         }
     }
-    if (!opt_.persistDir.empty()) { // 锁外加载（内部自锁）
+    if (!opt_.persistDir.empty()) {  // 锁外加载（内部自锁）
         memoryLoad();
         loadPersisted();
     }
@@ -455,7 +488,7 @@ void CrewEngine::setInference(std::shared_ptr<ai::IInferenceService> inf) {
         std::lock_guard<std::mutex> lk(mtx_);
         inference_ = std::move(inf);
     }
-    startScheduleIfConfigured(); // 推理就位即可开定时（M17）
+    startScheduleIfConfigured();  // 推理就位即可开定时（M17）
 }
 
 void CrewEngine::startScheduleIfConfigured() {
@@ -477,19 +510,18 @@ void CrewEngine::startScheduleIfConfigured() {
             if (v) cfg = CrewConfig::fromJson(v.value());
         }
         try {
-            createTask(brief, cfg); // 无推理/护栏阻断等异常吞掉，下轮再试
+            createTask(brief, cfg);  // 无推理/护栏阻断等异常吞掉，下轮再试
         } catch (const std::exception&) {
         }
     });
-    if (jobId == 0) cron_.reset(); // cron 表达式非法 → 放弃定时
+    if (jobId == 0) cron_.reset();  // cron 表达式非法 → 放弃定时
 }
 
 // ---------------------------------------------------------------------------
 // 事件与产物
 // ---------------------------------------------------------------------------
-void CrewEngine::emit(TaskPtr t, CrewPhase phase, const std::string& agent,
-                      const std::string& type, const std::string& detail,
-                      const std::string& dataJson) {
+void CrewEngine::emit(TaskPtr t, CrewPhase phase, const std::string& agent, const std::string& type,
+                      const std::string& detail, const std::string& dataJson) {
     CrewEvent e;
     e.tsMs = nowMs();
     e.taskId = t->id;
@@ -505,20 +537,20 @@ void CrewEngine::emit(TaskPtr t, CrewPhase phase, const std::string& agent,
         e.seq = t->events.empty() ? 1 : t->events.back().seq + 1;
         t->events.push_back(e);
         if (t->events.size() > 4096) {
-            t->events.erase(
-                t->events.begin(),
-                t->events.begin() + static_cast<long>(t->events.size() - 4096));
+            t->events.erase(t->events.begin(),
+                            t->events.begin() + static_cast<long>(t->events.size() - 4096));
         }
         t->updatedMs = e.tsMs;
         for (auto& [id, sub] : subs_) {
             if (sub.first == t->id) toNotify.push_back(sub.second);
         }
     }
-    for (const EventCallback& cb : toNotify) cb(e); // 锁外触发
+    for (const EventCallback& cb : toNotify)
+        cb(e);  // 锁外触发
 }
 
-void CrewEngine::emitHandoff(const TaskPtr& t, const std::string& from,
-                             const std::string& to, const std::string& item) {
+void CrewEngine::emitHandoff(const TaskPtr& t, const std::string& from, const std::string& to,
+                             const std::string& item) {
     json::JsonValue d = json::JsonValue::object();
     d["from"] = from;
     d["to"] = to;
@@ -536,8 +568,7 @@ json::JsonValue CrewEngine::extractJson(const std::string& text) {
     return v ? std::move(v).value() : json::JsonValue();
 }
 
-void CrewEngine::recordUsage(const TaskPtr& t, const std::string& role,
-                             const ai::ChatResult& r) {
+void CrewEngine::recordUsage(const TaskPtr& t, const std::string& role, const ai::ChatResult& r) {
     std::lock_guard<std::mutex> lk(mtx_);
     RoleUsage& u = t->usage[role];
     ++u.calls;
@@ -547,8 +578,7 @@ void CrewEngine::recordUsage(const TaskPtr& t, const std::string& role,
     u.tokensOut += out > 0 ? static_cast<uint64_t>(out) : 0;
     if (opt_.pricePromptPerM > 0 || opt_.priceCompletionPerM > 0) {
         u.costUsd += static_cast<double>(in > 0 ? in : 0) / 1e6 * opt_.pricePromptPerM +
-                     static_cast<double>(out > 0 ? out : 0) / 1e6 *
-                         opt_.priceCompletionPerM;
+                     static_cast<double>(out > 0 ? out : 0) / 1e6 * opt_.priceCompletionPerM;
     }
 }
 
@@ -559,7 +589,7 @@ void CrewEngine::saveArtifact(TaskPtr t, const std::string& type, const std::str
     a.type = type;
     a.agent = agent;
     a.tsMs = nowMs();
-    if (opt_.guard != nullptr) { // PII 掩码（不改判风险分——产物内容层面的兜底）
+    if (opt_.guard != nullptr) {  // PII 掩码（不改判风险分——产物内容层面的兜底）
         const std::string masked = opt_.guard->redact(content);
         if (masked != content) {
             a.content = masked;
@@ -598,8 +628,7 @@ std::string CrewEngine::latestArtifact(const TaskPtr& t, const std::string& type
 // ---------------------------------------------------------------------------
 // 推理调用（流式 token / 每角色模型 / 重试 / OTel / 成本）
 // ---------------------------------------------------------------------------
-std::string CrewEngine::chat(TaskPtr t, const std::string& role,
-                             const std::string& userPrompt) {
+std::string CrewEngine::chat(TaskPtr t, const std::string& role, const std::string& userPrompt) {
     if (t->interrupted.load()) throw CrewInterrupted{};
     if (t->cancelRequested.load()) throw CrewCancelled{};
 
@@ -617,7 +646,7 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
 
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        t->roleCalls[role]++; // 剧本测试按调用序区分轮次
+        t->roleCalls[role]++;  // 剧本测试按调用序区分轮次
         auto& st = t->agents[role];
         st.role = role;
         st.state = "working";
@@ -633,7 +662,7 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
     ai::ChatRequest req;
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        auto it = t->cfg.roleModels.find(role); // 每角色模型覆盖 → 任务默认
+        auto it = t->cfg.roleModels.find(role);  // 每角色模型覆盖 → 任务默认
         req.model = it != t->cfg.roleModels.end() ? it->second : t->cfg.model;
     }
     ai::ChatMessage sys;
@@ -646,8 +675,7 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
     int charBudget = 0;
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        charBudget = t->cfg.maxPromptChars != 0 ? t->cfg.maxPromptChars
-                                                : opt_.maxPromptChars;
+        charBudget = t->cfg.maxPromptChars != 0 ? t->cfg.maxPromptChars : opt_.maxPromptChars;
     }
     if (charBudget > 0 && userPrompt.size() > static_cast<size_t>(charBudget)) {
         const size_t budget = static_cast<size_t>(charBudget);
@@ -676,8 +704,8 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
             if (tokBuf.size() >= 24) {
                 json::JsonValue d = json::JsonValue::object();
                 d["delta"] = tokBuf;
-                emit(t, t->phase, role, "token",
-                     "+" + std::to_string(tokBuf.size()) + " chars", d.dump());
+                emit(t, t->phase, role, "token", "+" + std::to_string(tokBuf.size()) + " chars",
+                     d.dump());
                 tokBuf.clear();
             }
             return true;
@@ -685,17 +713,16 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
     }
 
     ai::ChatResult r;
-    const int maxAttempts = 3; // 瞬时故障重试（failover 已在路由层）
+    const int maxAttempts = 3;  // 瞬时故障重试（failover 已在路由层）
     for (int attempt = 1; attempt <= maxAttempts; ++attempt) {
         r = inf->chat(req, wantStream ? onTok : ai::TokenCallback{});
         if (r.ok || t->cancelRequested.load() || t->interrupted.load()) break;
         if (attempt == maxAttempts) break;
         emit(t, t->phase, role, "retry",
-             "inference attempt " + std::to_string(attempt) +
-                 " failed: " + r.error.substr(0, 80));
+             "inference attempt " + std::to_string(attempt) + " failed: " + r.error.substr(0, 80));
         std::this_thread::sleep_for(std::chrono::milliseconds(100 * attempt));
     }
-    if (!tokBuf.empty()) { // 尾片
+    if (!tokBuf.empty()) {  // 尾片
         json::JsonValue d = json::JsonValue::object();
         d["delta"] = tokBuf;
         emit(t, t->phase, role, "token", "tail", d.dump());
@@ -708,7 +735,8 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
         {
             std::lock_guard<std::mutex> lk(mtx_);
             approvals = t->budgetApprovals;
-            for (const auto& [r2, u2] : t->usage) total += u2.costUsd;
+            for (const auto& [r2, u2] : t->usage)
+                total += u2.costUsd;
         }
         const double limit = t->cfg.costBudgetUsd * (1 + approvals);
         if (total >= limit) {
@@ -735,8 +763,7 @@ std::string CrewEngine::chat(TaskPtr t, const std::string& role,
     return r.content;
 }
 
-std::string CrewEngine::chatJson(TaskPtr t, const std::string& role,
-                                 const std::string& userPrompt,
+std::string CrewEngine::chatJson(TaskPtr t, const std::string& role, const std::string& userPrompt,
                                  const std::vector<std::string>& requiredFields) {
     const int limit = t->cfg.jsonRetryLimit;
     std::string prompt = userPrompt;
@@ -758,17 +785,15 @@ std::string CrewEngine::chatJson(TaskPtr t, const std::string& role,
         if (valid) return lastText;
         if (attempt == limit) {
             emit(t, t->phase, role, "gate",
-                 "malformed JSON from " + role + " after " +
-                     std::to_string(attempt + 1) + " attempt(s); continuing best-effort");
-            return lastText; // 尽力而为（保持 M11 容错语义）
+                 "malformed JSON from " + role + " after " + std::to_string(attempt + 1) +
+                     " attempt(s); continuing best-effort");
+            return lastText;  // 尽力而为（保持 M11 容错语义）
         }
         emit(t, t->phase, role, "retry",
              "structured output retry " + std::to_string(attempt + 1) +
-                 (missing.empty() ? " (unparseable JSON)"
-                                  : " (missing field: " + missing + ")"));
+                 (missing.empty() ? " (unparseable JSON)" : " (missing field: " + missing + ")"));
         prompt = userPrompt + "\nYour previous reply was INVALID JSON" +
-                 (missing.empty() ? std::string()
-                                  : " (missing field \"" + missing + "\")") +
+                 (missing.empty() ? std::string() : " (missing field \"" + missing + "\")") +
                  ". Reply again with ONLY the corrected JSON object.";
     }
     return lastText;
@@ -783,7 +808,8 @@ void CrewEngine::enqueue(const TaskPtr& t) {
         poolRunning_.store(true);
         const int n = std::max(1, opt_.maxConcurrentTasks);
         workers_.clear();
-        for (int i = 0; i < n; ++i) workers_.emplace_back([this] { workerLoop(); });
+        for (int i = 0; i < n; ++i)
+            workers_.emplace_back([this] { workerLoop(); });
     }
     queue_.push_back(t);
     poolCv_.notify_one();
@@ -795,7 +821,7 @@ void CrewEngine::workerLoop() {
         while (queue_.empty() && poolRunning_.load()) {
             poolCv_.wait_for(lk, std::chrono::milliseconds(200));
         }
-        if (queue_.empty()) return; // 停机且队列空
+        if (queue_.empty()) return;  // 停机且队列空
         TaskPtr t = queue_.front();
         queue_.erase(queue_.begin());
         lk.unlock();
@@ -835,15 +861,14 @@ void CrewEngine::memoryRemember(const std::string& brief, const std::string& sum
     memorySave();
 }
 
-std::vector<CrewEngine::MemoryEntry> CrewEngine::memoryRecall(const std::string& brief,
-                                                              size_t k) {
+std::vector<CrewEngine::MemoryEntry> CrewEngine::memoryRecall(const std::string& brief, size_t k) {
     const std::vector<double> q = memoryVec(brief);
     std::lock_guard<std::mutex> lk(mtx_);
     std::vector<std::pair<double, size_t>> scored;
     for (size_t i = 0; i < memory_.size(); ++i) {
-        if (memory_[i].vec.size() != q.size()) continue; // 混合后端维度不一致 → 跳过
+        if (memory_[i].vec.size() != q.size()) continue;  // 混合后端维度不一致 → 跳过
         const double s = cosine(q, memory_[i].vec);
-        if (s > 0.5) scored.emplace_back(s, i); // 语义向量阈值高于词哈希
+        if (s > 0.5) scored.emplace_back(s, i);  // 语义向量阈值高于词哈希
     }
     std::sort(scored.begin(), scored.end(),
               [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -855,7 +880,7 @@ std::vector<CrewEngine::MemoryEntry> CrewEngine::memoryRecall(const std::string&
 }
 
 void CrewEngine::memorySave() {
-    if (opt_.persistDir.empty()) return; // 调用方持锁
+    if (opt_.persistDir.empty()) return;  // 调用方持锁
     json::JsonValue arr = json::JsonValue::array();
     for (const MemoryEntry& e : memory_) {
         json::JsonValue j = json::JsonValue::object();
@@ -913,16 +938,20 @@ json::JsonValue CrewEngine::taskToJson(const TaskPtr& t) {
     v["created_ms"] = t->createdMs;
     v["updated_ms"] = t->updatedMs;
     json::JsonValue arts = json::JsonValue::array();
-    for (const Artifact& a : t->artifacts) arts.push_back(a.toJson());
+    for (const Artifact& a : t->artifacts)
+        arts.push_back(a.toJson());
     v["artifacts"] = std::move(arts);
     json::JsonValue vs = json::JsonValue::array();
-    for (const VoteRecord& vr : t->votes) vs.push_back(vr.toJson());
+    for (const VoteRecord& vr : t->votes)
+        vs.push_back(vr.toJson());
     v["votes"] = std::move(vs);
     json::JsonValue evs = json::JsonValue::array();
-    for (const CrewEvent& e : t->events) evs.push_back(e.toJson());
+    for (const CrewEvent& e : t->events)
+        evs.push_back(e.toJson());
     v["events"] = std::move(evs);
     json::JsonValue usage = json::JsonValue::object();
-    for (const auto& [role, u] : t->usage) usage[role] = usageToJson(u);
+    for (const auto& [role, u] : t->usage)
+        usage[role] = usageToJson(u);
     v["usage"] = std::move(usage);
     return v;
 }
@@ -931,7 +960,7 @@ void CrewEngine::persistTask(const TaskPtr& t, bool immediate) {
     if (opt_.persistDir.empty()) return;
     constexpr int64_t kDebounceMs = 1500;
     const int64_t now = nowMs();
-    if (!immediate) { // 去抖：风暴期合并写（O(N²) 写放大 → 频率有界）
+    if (!immediate) {  // 去抖：风暴期合并写（O(N²) 写放大 → 频率有界）
         std::lock_guard<std::mutex> lk(mtx_);
         if (now - t->lastPersistMs < kDebounceMs) {
             t->persistDirty = true;
@@ -939,7 +968,7 @@ void CrewEngine::persistTask(const TaskPtr& t, bool immediate) {
         }
     }
     std::string json;
-    { // 锁内取快照（并行实现线程可能同时在追加 artifacts——无锁读会崩）
+    {  // 锁内取快照（并行实现线程可能同时在追加 artifacts——无锁读会崩）
         std::lock_guard<std::mutex> lk(mtx_);
         t->lastPersistMs = now;
         t->persistDirty = false;
@@ -964,21 +993,21 @@ void CrewEngine::flushDirtyTasks() {
             if (t->persistDirty) dirty.push_back(t);
         }
     }
-    for (const TaskPtr& t : dirty) persistTask(t, true);
+    for (const TaskPtr& t : dirty)
+        persistTask(t, true);
 }
 
 void CrewEngine::sweepExpiredTasks() {
     if (opt_.taskTtlSec <= 0 && opt_.maxRetainedTasks <= 0) return;
     const int64_t now = nowMs();
     std::vector<std::string> drop;
-    std::vector<std::pair<int64_t, std::string>> terminal; // updatedMs 升序
+    std::vector<std::pair<int64_t, std::string>> terminal;  // updatedMs 升序
     {
         std::lock_guard<std::mutex> lk(mtx_);
         for (auto& [id, t] : tasks_) {
-            const bool terminalState = !t->running &&
-                                       (t->phase == CrewPhase::Done ||
-                                        t->phase == CrewPhase::Failed ||
-                                        t->phase == CrewPhase::Cancelled);
+            const bool terminalState =
+                !t->running && (t->phase == CrewPhase::Done || t->phase == CrewPhase::Failed ||
+                                t->phase == CrewPhase::Cancelled);
             if (!terminalState) continue;
             if (opt_.taskTtlSec > 0 &&
                 now - t->updatedMs > static_cast<int64_t>(opt_.taskTtlSec) * 1000) {
@@ -990,13 +1019,14 @@ void CrewEngine::sweepExpiredTasks() {
         if (opt_.maxRetainedTasks > 0 &&
             terminal.size() > static_cast<size_t>(opt_.maxRetainedTasks)) {
             std::sort(terminal.begin(), terminal.end());
-            const size_t extra =
-                terminal.size() - static_cast<size_t>(opt_.maxRetainedTasks);
-            for (size_t i = 0; i < extra; ++i) drop.push_back(terminal[i].second);
+            const size_t extra = terminal.size() - static_cast<size_t>(opt_.maxRetainedTasks);
+            for (size_t i = 0; i < extra; ++i)
+                drop.push_back(terminal[i].second);
         }
-        for (const std::string& id : drop) tasks_.erase(id);
+        for (const std::string& id : drop)
+            tasks_.erase(id);
     }
-    for (const std::string& id : drop) { // 同步删持久化文件
+    for (const std::string& id : drop) {  // 同步删持久化文件
         std::remove((opt_.persistDir + "/" + id + ".json").c_str());
     }
 }
@@ -1044,12 +1074,12 @@ void CrewEngine::loadPersisted() {
                 x.taskId = vr["task_id"].asString();
                 x.question = vr["question"].asString();
                 if (const auto* os = vr["options"].asArray()) {
-                    for (const auto& o : *os) x.options.push_back(o.asString());
+                    for (const auto& o : *os)
+                        x.options.push_back(o.asString());
                 }
                 if (const auto* vv = vr["votes"].asArray()) {
                     for (const auto& e2 : *vv) {
-                        x.votes.emplace_back(e2["agent"].asString(),
-                                             e2["choice"].asString());
+                        x.votes.emplace_back(e2["agent"].asString(), e2["choice"].asString());
                     }
                 }
                 x.winner = vr["winner"].asString();
@@ -1086,8 +1116,7 @@ void CrewEngine::loadPersisted() {
         }
         const bool wasRunning = j["running"].asBool(false);
         const bool wasInterrupted = j["interrupted"].asBool(false);
-        const bool terminal = t->phase == CrewPhase::Done ||
-                              t->phase == CrewPhase::Failed ||
+        const bool terminal = t->phase == CrewPhase::Done || t->phase == CrewPhase::Failed ||
                               t->phase == CrewPhase::Cancelled;
         t->running = false;
         t->interrupted.store(false);
@@ -1117,7 +1146,7 @@ void CrewEngine::fireWebhook(const TaskPtr& t, const char* event) {
     call.body = v.dump();
     call.headers = {{"Content-Type", "application/json"}};
     call.timeoutMs = 5000;
-    const bool ok = ai::simpleHttpRequest(call).ok; // 结果忽略（事件可查）
+    const bool ok = ai::simpleHttpRequest(call).ok;  // 结果忽略（事件可查）
     json::JsonValue d = json::JsonValue::object();
     d["target"] = opt_.webhookUrl;
     d["delivered"] = ok;
@@ -1164,10 +1193,10 @@ bool CrewEngine::checkCancel(const TaskPtr& t) {
     if (t->budgetPaused.exchange(false)) {
         std::string reason;
         {
-            std::lock_guard<std::mutex> lk(mtx_); // 只在锁内取数据，锁外等待
+            std::lock_guard<std::mutex> lk(mtx_);  // 只在锁内取数据，锁外等待
             const double limit = t->cfg.costBudgetUsd * (1 + t->budgetApprovals);
-            reason = "cost budget $" + std::to_string(limit) +
-                     " reached; approve to double the budget";
+            reason =
+                "cost budget $" + std::to_string(limit) + " reached; approve to double the budget";
         }
         waitApproval(t, reason);
         int approvals = 0;
@@ -1176,8 +1205,7 @@ bool CrewEngine::checkCancel(const TaskPtr& t) {
             approvals = ++t->budgetApprovals;
         }
         emit(t, t->phase, "orchestrator", "gate",
-             "budget extended to $" +
-                 std::to_string(t->cfg.costBudgetUsd * (1 + approvals)));
+             "budget extended to $" + std::to_string(t->cfg.costBudgetUsd * (1 + approvals)));
     }
     if (!t->cancelRequested.load()) return false;
     t->phase = CrewPhase::Cancelled;
@@ -1189,12 +1217,13 @@ bool CrewEngine::checkCancel(const TaskPtr& t) {
 }
 
 std::string CrewEngine::createTask(const std::string& brief, const CrewConfig& cfg) {
-    sweepExpiredTasks(); // 惰性淘汰（频率=开任务频率，零定时器）
-    if (opt_.guard != nullptr) { // 输入护栏：注入短语阻断（PII 由 redact 兜底）
+    sweepExpiredTasks();          // 惰性淘汰（频率=开任务频率，零定时器）
+    if (opt_.guard != nullptr) {  // 输入护栏：注入短语阻断（PII 由 redact 兜底）
         ai::GuardResult g = opt_.guard->inspect(brief);
         if (g.blocked) {
             std::string why;
-            for (const ai::GuardFinding& f : g.findings) why += f.type + " ";
+            for (const ai::GuardFinding& f : g.findings)
+                why += f.type + " ";
             throw std::runtime_error("brief blocked by guard: " + why);
         }
     }
@@ -1220,19 +1249,18 @@ std::string CrewEngine::createTask(const std::string& brief, const CrewConfig& c
         tasks_[t->id] = t;
     }
     t->running = true;
-    emit(t, CrewPhase::Pending, "orchestrator", "phase",
-         "task created: " + brief.substr(0, 60));
-    if (opt_.guard != nullptr) { // 非阻断发现项（如轻度 PII）→ 观测事件
+    emit(t, CrewPhase::Pending, "orchestrator", "phase", "task created: " + brief.substr(0, 60));
+    if (opt_.guard != nullptr) {  // 非阻断发现项（如轻度 PII）→ 观测事件
         ai::GuardResult g = opt_.guard->inspect(brief);
         if (!g.findings.empty()) {
             json::JsonValue fs = json::JsonValue::array();
-            for (const ai::GuardFinding& f : g.findings) fs.push_back(f.type);
+            for (const ai::GuardFinding& f : g.findings)
+                fs.push_back(f.type);
             json::JsonValue d = json::JsonValue::object();
             d["findings"] = std::move(fs);
             d["score"] = g.score;
             emit(t, CrewPhase::Pending, "orchestrator", "guard",
-                 "brief guard findings (score " + std::to_string(g.score) + ")",
-                 d.dump());
+                 "brief guard findings (score " + std::to_string(g.score) + ")", d.dump());
         }
     }
     enqueue(t);
@@ -1244,13 +1272,19 @@ std::string CrewEngine::followupPrefix(const TaskPtr& t, const std::string& type
     if (!t->followupMode) return {};
     const std::string existing = latestArtifact(t, type);
     if (existing.empty()) return {};
-    return std::string("Existing ") + label + ":" "\n" + existing + "\n" "\n" +
+    return std::string("Existing ") + label +
+           ":"
+           "\n" +
+           existing +
+           "\n"
+           "\n" +
            "Incremental change requested. Produce the UPDATED full JSON "
-           "(complete replacement, not a diff)." "\n" + "\n";
+           "(complete replacement, not a diff)."
+           "\n" +
+           "\n";
 }
 
-std::string CrewEngine::createFollowupTask(const std::string& parent,
-                                           const std::string& brief,
+std::string CrewEngine::createFollowupTask(const std::string& parent, const std::string& brief,
                                            const CrewConfig& cfg) {
     TaskPtr pt;
     {
@@ -1300,7 +1334,7 @@ std::string CrewEngine::createFollowupTask(const std::string& parent,
     for (const auto& [type, content] : inherited) {
         saveArtifact(t, type, "inherited", content);
     }
-    enqueue(t); // 继承产物就位后才开跑
+    enqueue(t);  // 继承产物就位后才开跑
     return t->id;
 }
 
@@ -1318,20 +1352,18 @@ void CrewEngine::runPipeline(TaskPtr t) {
                     if (!lessons.empty()) lessons += "\n";
                     lessons += "- " + m.summary;
                 }
-                pmPrompt = "Past project lessons (from crew memory):\n" + lessons +
-                           "\n\n" + pmPrompt;
+                pmPrompt =
+                    "Past project lessons (from crew memory):\n" + lessons + "\n\n" + pmPrompt;
                 json::JsonValue d = json::JsonValue::object();
                 d["hits"] = static_cast<int64_t>(hits.size());
                 emit(t, t->phase, "orchestrator", "memory",
-                     "recalled " + std::to_string(hits.size()) + " past lesson(s)",
-                     d.dump());
+                     "recalled " + std::to_string(hits.size()) + " past lesson(s)", d.dump());
             }
         }
-        std::string prd = (t->resumeMode && !latestArtifact(t, "prd").empty())
-                              ? latestArtifact(t, "prd")
-                              : chatJson(t, "pm",
-                                         followupPrefix(t, "prd", "PRD") + pmPrompt,
-                                         {"prd"});
+        std::string prd =
+            (t->resumeMode && !latestArtifact(t, "prd").empty())
+                ? latestArtifact(t, "prd")
+                : chatJson(t, "pm", followupPrefix(t, "prd", "PRD") + pmPrompt, {"prd"});
         saveArtifact(t, "prd", "pm", prd);
 
         // ---- PRD 评审（可多轮辩论；prdVoteRounds=修订预算，默认 1 与 M11 一致）----
@@ -1340,12 +1372,11 @@ void CrewEngine::runPipeline(TaskPtr t) {
         {
             for (int round = 1;; ++round) {
                 VoteSpec spec;
-                spec.question =
-                    "Does the PRD meet the brief with executable acceptance criteria?";
+                spec.question = "Does the PRD meet the brief with executable acceptance criteria?";
                 spec.options = {"approve", "revise"};
                 if (t->cfg.humanVoter) spec.voters = voterListWithHuman();
                 auto rec = runVote(t->id, spec);
-                if (rec.winner != "revise") break; // approve → 过
+                if (rec.winner != "revise") break;  // approve → 过
                 json::JsonValue dr = json::JsonValue::object();
                 dr["round"] = round;
                 dr["budget"] = t->cfg.prdVoteRounds;
@@ -1374,23 +1405,23 @@ void CrewEngine::runPipeline(TaskPtr t) {
             spec.options = {"sqlite", "postgres", "none"};
             if (t->cfg.humanVoter) spec.voters = voterListWithHuman();
             auto rec = runVote(t->id, spec);
-            emit(t, t->phase, "orchestrator", "vote",
-                 "storage decision: " + rec.winner, rec.toJson().dump());
+            emit(t, t->phase, "orchestrator", "vote", "storage decision: " + rec.winner,
+                 rec.toJson().dump());
         }
         emitHandoff(t, "pm", "architect", "prd");
         const std::string arch =
             (t->resumeMode && !latestArtifact(t, "architecture").empty())
                 ? latestArtifact(t, "architecture")
                 : chatJson(t, "architect",
-                           "PRD:" "\n" + prd + "\n" +
-                               followupPrefix(t, "architecture", "architecture") +
+                           "PRD:"
+                           "\n" +
+                               prd + "\n" + followupPrefix(t, "architecture", "architecture") +
                                "Produce the architecture JSON now.",
                            {"architecture"});
         saveArtifact(t, "architecture", "architect", arch);
-        const std::string contract =
-            (t->resumeMode && !latestArtifact(t, "contract").empty())
-                ? latestArtifact(t, "contract")
-                : extractJson(arch)["architecture"]["api"].dump();
+        const std::string contract = (t->resumeMode && !latestArtifact(t, "contract").empty())
+                                         ? latestArtifact(t, "contract")
+                                         : extractJson(arch)["architecture"]["api"].dump();
         saveArtifact(t, "contract", "architect", contract);
         if (checkCancel(t)) return;
 
@@ -1404,24 +1435,25 @@ void CrewEngine::runPipeline(TaskPtr t) {
 
         // ---- 实现（story 子环并行 / 后端 ∥ 前端真并行 / 串行）----
         t->phase = CrewPhase::Implement;
-        emit(t, t->phase, "orchestrator", "phase",
-             "enter implement (backend ∥ frontend)");
+        emit(t, t->phase, "orchestrator", "phase", "enter implement (backend ∥ frontend)");
         const bool storiesHandled = t->cfg.storiesMode && phaseImpl(t);
         if (!storiesHandled && t->cfg.parallelImplement) {
             std::string beOut, feOut, beErr, feErr;
             std::thread tb([&] {
                 try {
-                    beOut = (t->resumeMode && !latestArtifact(t, "backend").empty())
-                                ? latestArtifact(t, "backend")
-                                : chatJson(t, "backend",
-                                           "API contract:" "\n" + contract + "\n" +
-                                               followupPrefix(t, "backend",
-                                                              "backend implementation") +
-                                               "Produce backend files JSON.",
-                                           {"files"});
+                    beOut =
+                        (t->resumeMode && !latestArtifact(t, "backend").empty())
+                            ? latestArtifact(t, "backend")
+                            : chatJson(t, "backend",
+                                       "API contract:"
+                                       "\n" +
+                                           contract + "\n" +
+                                           followupPrefix(t, "backend", "backend implementation") +
+                                           "Produce backend files JSON.",
+                                       {"files"});
                 } catch (const CrewCancelled&) {
                     beErr = "cancelled";
-                } catch (const CrewInterrupted&) { // 析构中断：子线程必须接住
+                } catch (const CrewInterrupted&) {  // 析构中断：子线程必须接住
                     beErr = "interrupted";
                 } catch (const std::exception& e) {
                     beErr = e.what();
@@ -1431,12 +1463,14 @@ void CrewEngine::runPipeline(TaskPtr t) {
                 try {
                     feOut = (t->resumeMode && !latestArtifact(t, "frontend").empty())
                                 ? latestArtifact(t, "frontend")
-                                : chatJson(t, "frontend",
-                                           "API contract:" "\n" + contract + "\n" +
-                                               followupPrefix(t, "frontend",
-                                                              "frontend implementation") +
-                                               "Produce frontend files JSON.",
-                                           {"files"});
+                                : chatJson(
+                                      t, "frontend",
+                                      "API contract:"
+                                      "\n" +
+                                          contract + "\n" +
+                                          followupPrefix(t, "frontend", "frontend implementation") +
+                                          "Produce frontend files JSON.",
+                                      {"files"});
                 } catch (const CrewCancelled&) {
                     feErr = "cancelled";
                 } catch (const CrewInterrupted&) {
@@ -1462,16 +1496,14 @@ void CrewEngine::runPipeline(TaskPtr t) {
                 (t->resumeMode && !latestArtifact(t, "backend").empty())
                     ? latestArtifact(t, "backend")
                     : chatJson(t, "backend",
-                               "API contract:\n" + contract +
-                                   "\nProduce backend files JSON.",
+                               "API contract:\n" + contract + "\nProduce backend files JSON.",
                                {"files"});
             saveArtifact(t, "backend", "backend", be);
             const std::string fe =
                 (t->resumeMode && !latestArtifact(t, "frontend").empty())
                     ? latestArtifact(t, "frontend")
                     : chatJson(t, "frontend",
-                               "API contract:\n" + contract +
-                                   "\nProduce frontend files JSON.",
+                               "API contract:\n" + contract + "\nProduce frontend files JSON.",
                                {"files"});
             saveArtifact(t, "frontend", "frontend", fe);
         }
@@ -1493,8 +1525,9 @@ void CrewEngine::runPipeline(TaskPtr t) {
             (t->resumeMode && !latestArtifact(t, "devops").empty())
                 ? latestArtifact(t, "devops")
                 : chatJson(t, "devops",
-                           "Architecture:" "\n" + arch + "\n" +
-                               followupPrefix(t, "devops", "CI/CD files") +
+                           "Architecture:"
+                           "\n" +
+                               arch + "\n" + followupPrefix(t, "devops", "CI/CD files") +
                                "Produce CI/CD files JSON.",
                            {"files"});
         saveArtifact(t, "devops", "devops", ops);
@@ -1507,14 +1540,16 @@ void CrewEngine::runPipeline(TaskPtr t) {
             (t->resumeMode && !latestArtifact(t, "release").empty())
                 ? latestArtifact(t, "release")
                 : chatJson(t, "delivery",
-                           "PRD:" "\n" + prd + "\n" + "Tests:" "\n" +
-                               std::to_string(t->artifacts.size()) +
-                               " artifacts produced." +
-                               (t->followupMode
-                                    ? std::string("\nThis is an incremental release: "
-                                                  "APPEND a new version entry to the "
-                                                  "existing changelog.")
-                                    : std::string()) +
+                           "PRD:"
+                           "\n" +
+                               prd + "\n" +
+                               "Tests:"
+                               "\n" +
+                               std::to_string(t->artifacts.size()) + " artifacts produced." +
+                               (t->followupMode ? std::string("\nThis is an incremental release: "
+                                                              "APPEND a new version entry to the "
+                                                              "existing changelog.")
+                                                : std::string()) +
                                " Produce release JSON.",
                            {"changelog"});
         saveArtifact(t, "release", "delivery", rel);
@@ -1536,8 +1571,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
             m["storage"] = storage;
             m["artifacts"] = static_cast<int64_t>(t->artifacts.size());
             m["verdict"] = "done";
-            memoryRemember(t->brief,
-                           m.dump() + " (brief: " + t->brief.substr(0, 80) + ")");
+            memoryRemember(t->brief, m.dump() + " (brief: " + t->brief.substr(0, 80) + ")");
         }
 
         t->phase = CrewPhase::Done;
@@ -1557,7 +1591,7 @@ void CrewEngine::runPipeline(TaskPtr t) {
     } catch (const CrewInterrupted&) {
         std::lock_guard<std::mutex> lk(mtx_);
         t->running = false;
-        t->resumable = true; // 引擎关停 → 重启后可断点续跑
+        t->resumable = true;  // 引擎关停 → 重启后可断点续跑
         t->error = "interrupted by engine shutdown";
     } catch (const std::exception& e) {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -1566,13 +1600,13 @@ void CrewEngine::runPipeline(TaskPtr t) {
         t->error = e.what();
     }
     if (t->phase == CrewPhase::Failed || t->phase == CrewPhase::Cancelled) {
-        emit(t, t->phase, "orchestrator",
-             t->phase == CrewPhase::Failed ? "error" : "cancelled", t->error);
+        emit(t, t->phase, "orchestrator", t->phase == CrewPhase::Failed ? "error" : "cancelled",
+             t->error);
         persistTask(t, true);
         if (t->phase == CrewPhase::Failed) {
             fireWebhook(t, "failed");
         } else {
-            fireWebhook(t, "cancelled"); // checkCancel 早退路径已发过一次也无妨（幂等事件）
+            fireWebhook(t, "cancelled");  // checkCancel 早退路径已发过一次也无妨（幂等事件）
         }
     } else if (t->interrupted.load()) {
         emit(t, t->phase, "orchestrator", "gate", "interrupted; persist for resume");
@@ -1602,33 +1636,32 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
                     json::JsonValue d = json::JsonValue::object();
                     d["story"] = sid;
                     d["title"] = title;
-                    emit(t, t->phase, "orchestrator", "story_started",
-                         "story " + sid + " started", d.dump());
+                    emit(t, t->phase, "orchestrator", "story_started", "story " + sid + " started",
+                         d.dump());
                 }
                 const std::string storyArt = "story-" + sid + "-backend";
                 const std::string be =
                     (t->resumeMode && !latestArtifact(t, storyArt).empty())
                         ? latestArtifact(t, storyArt)
                         : chatJson(t, "backend",
-                                   "STORY " + sid + ": " + title +
-                                       "\nAPI contract:\n" + contract +
+                                   "STORY " + sid + ": " + title + "\nAPI contract:\n" + contract +
                                        "\nImplement THIS story. Produce files JSON.",
                                    {"files"});
                 saveArtifact(t, storyArt, "backend", be);
                 const std::string testArt = "story-" + sid + "-tests";
-                const std::string tr = chatJson(
-                    t, "tester",
-                    "STORY " + sid + ": " + title +
-                        "\nVerify THIS story against the implementation notes. "
-                        "Produce cases and results JSON (all pass if implemented).",
-                    {"cases", "results"});
+                const std::string tr =
+                    chatJson(t, "tester",
+                             "STORY " + sid + ": " + title +
+                                 "\nVerify THIS story against the implementation notes. "
+                                 "Produce cases and results JSON (all pass if implemented).",
+                             {"cases", "results"});
                 saveArtifact(t, testArt, "tester", tr);
                 {
                     json::JsonValue d = json::JsonValue::object();
                     d["story"] = sid;
                     d["status"] = "done";
-                    emit(t, t->phase, "orchestrator", "story_done",
-                         "story " + sid + " done", d.dump());
+                    emit(t, t->phase, "orchestrator", "story_done", "story " + sid + " done",
+                         d.dump());
                 }
             } catch (const CrewCancelled&) {
                 errs[si] = "cancelled";
@@ -1639,7 +1672,8 @@ bool CrewEngine::phaseImpl(TaskPtr t) {
             }
         });
     }
-    for (std::thread& th : pool) th.join();
+    for (std::thread& th : pool)
+        th.join();
     for (const std::string& e : errs) {
         if (e == "cancelled") throw CrewCancelled{};
         if (e == "interrupted") throw CrewInterrupted{};
@@ -1657,17 +1691,16 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
         if (checkCancel(t)) return;
         t->phase = CrewPhase::Test;
         emit(t, t->phase, "orchestrator", "phase",
-             cycle == 0 ? "enter test"
-                        : "retest after fix (cycle " + std::to_string(cycle) + ")");
+             cycle == 0 ? "enter test" : "retest after fix (cycle " + std::to_string(cycle) + ")");
         std::string testPrompt = "PRD:\n" + prd + "\nAPI contract:\n" + contract;
         if (cycle > 0) {
             testPrompt += t->cfg.strictRetest
-                          ? "\nPreviously failing issues:\n" + t->lastIssues +
-                                "\nThe responsible developer submitted a fix. RETEST "
-                                "now: verify each previously failing case against the "
-                                "fix evidence; do NOT assume pass without verification."
-                          : "\nPrevious bugs were fixed by backend/frontend. RETEST "
-                            "now: mark all previously failing cases as pass.";
+                              ? "\nPreviously failing issues:\n" + t->lastIssues +
+                                    "\nThe responsible developer submitted a fix. RETEST "
+                                    "now: verify each previously failing case against the "
+                                    "fix evidence; do NOT assume pass without verification."
+                              : "\nPrevious bugs were fixed by backend/frontend. RETEST "
+                                "now: mark all previously failing cases as pass.";
         } else {
             testPrompt += "\nProduce test cases and results JSON now.";
         }
@@ -1710,9 +1743,8 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
                     allPass = false;
                     ++failed;
                     if (r["component"].asString() == "frontend") failComponent = "frontend";
-                    issues += "- case " + r["case"].asString() + " [" +
-                              r["component"].asString() + "]: " +
-                              r["detail"].asString() + "\n";
+                    issues += "- case " + r["case"].asString() + " [" + r["component"].asString() +
+                              "]: " + r["detail"].asString() + "\n";
                     json::JsonValue f = json::JsonValue::object();
                     f["case"] = r["case"].asString();
                     f["component"] = r["component"].asString();
@@ -1729,13 +1761,11 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
             tr["passed"] = passed;
             tr["failed"] = failed;
             tr["total"] = passed + failed;
-            tr["pass_ratio"] = passed + failed > 0
-                                   ? static_cast<double>(passed) / (passed + failed)
-                                   : 0.0;
+            tr["pass_ratio"] =
+                passed + failed > 0 ? static_cast<double>(passed) / (passed + failed) : 0.0;
             tr["failures"] = failList;
             emit(t, t->phase, "tester", "test_result",
-                 "tests: " + std::to_string(passed) + " pass / " +
-                     std::to_string(failed) + " fail",
+                 "tests: " + std::to_string(passed) + " pass / " + std::to_string(failed) + " fail",
                  tr.dump());
         }
         if (allPass) break;
@@ -1752,16 +1782,15 @@ void CrewEngine::phaseTestBugfix(TaskPtr t) {
             ba["cycle"] = cycle + 1;
             ba["budget"] = t->cfg.maxBugCycles;
             ba["issues"] = failList;
-            emit(t, t->phase, "orchestrator", "bug_assigned",
-                 "bugfix: routing to " + failComponent, ba.dump());
+            emit(t, t->phase, "orchestrator", "bug_assigned", "bugfix: routing to " + failComponent,
+                 ba.dump());
         }
         emitHandoff(t, "tester", failComponent, "bugs");
         emit(t, t->phase, "orchestrator", "phase", "bugfix: routing to " + failComponent);
-        const std::string fix =
-            chatJson(t, failComponent,
-                     "QA reported the following failing issues:\n" + issues +
-                         "Fix them. Produce updated files JSON.",
-                     {"files"});
+        const std::string fix = chatJson(t, failComponent,
+                                         "QA reported the following failing issues:\n" + issues +
+                                             "Fix them. Produce updated files JSON.",
+                                         {"files"});
         saveArtifact(t, "bugs", failComponent, fix);
         ++cycle;
     }
@@ -1807,7 +1836,7 @@ json::JsonValue CrewEngine::buildScorecard(const TaskPtr& t) {
     card["files"] = static_cast<int64_t>(files);
     card["artifacts"] = static_cast<int64_t>(t->artifacts.size());
     card["docs_present"] = !latestRel.empty();
-    int score = 40; // 基础分：走完全流程
+    int score = 40;  // 基础分：走完全流程
     if (testCases > 0 && testPass == testCases) score += 25;
     if (contractEndpoints > 0) score += 15;
     if (files >= 2) score += 10;
@@ -1822,7 +1851,8 @@ json::JsonValue CrewEngine::buildScorecard(const TaskPtr& t) {
 std::vector<std::string> CrewEngine::voterListWithHuman() {
     std::lock_guard<std::mutex> lk(mtx_);
     std::vector<std::string> out;
-    for (const RoleDef& r : roles_) out.push_back(r.role);
+    for (const RoleDef& r : roles_)
+        out.push_back(r.role);
     out.push_back("human");
     return out;
 }
@@ -1831,7 +1861,8 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
     VoteSpec spec = specIn;
     if (spec.voters.empty()) {
         std::lock_guard<std::mutex> lk(mtx_);
-        for (const RoleDef& r : roles_) spec.voters.push_back(r.role);
+        for (const RoleDef& r : roles_)
+            spec.voters.push_back(r.role);
     }
 
     TaskPtr t;
@@ -1864,7 +1895,8 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
                 json::JsonValue d = json::JsonValue::object();
                 d["question"] = spec.question;
                 json::JsonValue os = json::JsonValue::array();
-                for (const std::string& o : spec.options) os.push_back(o);
+                for (const std::string& o : spec.options)
+                    os.push_back(o);
                 d["options"] = std::move(os);
                 emit(t, t->phase, "human", "human_vote_required",
                      "waiting for human ballot: " + spec.question, d.dump());
@@ -1907,7 +1939,8 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
             ai::ChatMessage user;
             user.role = "user";
             user.content = "Question: " + spec.question + "\nOptions:";
-            for (const std::string& o : spec.options) user.content += "\n- " + o;
+            for (const std::string& o : spec.options)
+                user.content += "\n- " + o;
             req.messages.push_back(std::move(user));
 
             auto r = inf->chat(req);
@@ -1919,9 +1952,8 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
         }
         const bool abstain = spec.allowAbstain && choice == "abstain";
         if (!abstain &&
-            std::find(spec.options.begin(), spec.options.end(), choice) ==
-                spec.options.end()) {
-            choice = spec.options.front(); // 非法票 → 默认首项（记录原始 reason）
+            std::find(spec.options.begin(), spec.options.end(), choice) == spec.options.end()) {
+            choice = spec.options.front();  // 非法票 → 默认首项（记录原始 reason）
             reason = "[invalid vote coerced] " + reason;
         }
         rec.votes.emplace_back(voter, choice);
@@ -1933,7 +1965,7 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
                 if (rd.role == voter) weight = rd.voteWeight;
             }
         }
-        if (!abstain) tally[choice] += weight; // 弃权不计票
+        if (!abstain) tally[choice] += weight;  // 弃权不计票
         // M15：逐票即时事件（会议动画：依次亮牌）
         json::JsonValue d = json::JsonValue::object();
         d["question"] = spec.question;
@@ -1970,8 +2002,7 @@ VoteRecord CrewEngine::runVote(const std::string& taskId, const VoteSpec& specIn
         emit(t, t->phase, "orchestrator", "gate", "vote quorum not met", qd.dump());
     }
     for (const auto& [agent, choice] : rec.votes) {
-        if (agent == "architect" && choice == rec.winner &&
-            !reasons["architect"].empty()) {
+        if (agent == "architect" && choice == rec.winner && !reasons["architect"].empty()) {
             rec.reason = reasons["architect"];
             break;
         }
@@ -2040,7 +2071,8 @@ std::vector<CrewTaskInfo> CrewEngine::listTasks() {
         info.error = t->error;
         info.createdMs = t->createdMs;
         info.updatedMs = t->updatedMs;
-        for (const auto& [role, u] : t->usage) info.costUsd += u.costUsd;
+        for (const auto& [role, u] : t->usage)
+            info.costUsd += u.costUsd;
         out.push_back(std::move(info));
     }
     return out;
@@ -2118,16 +2150,14 @@ core::Result<void> CrewEngine::resume(const std::string& id) {
         t->resumable = false;
         t->running = true;
         t->cancelRequested.store(false);
-        t->error.clear(); // approved 保留：审批是用户意图，跨重启有效
+        t->error.clear();  // approved 保留：审批是用户意图，跨重启有效
     }
-    emit(t, t->phase, "orchestrator", "phase",
-         "resume from " + std::string(phaseName(t->phase)));
+    emit(t, t->phase, "orchestrator", "phase", "resume from " + std::string(phaseName(t->phase)));
     enqueue(t);
     return core::Result<void>::Ok();
 }
 
-core::Result<void> CrewEngine::castHumanVote(const std::string& id,
-                                             const std::string& choice) {
+core::Result<void> CrewEngine::castHumanVote(const std::string& id, const std::string& choice) {
     std::lock_guard<std::mutex> lk(mtx_);
     auto it = tasks_.find(id);
     if (it == tasks_.end()) {
@@ -2162,8 +2192,8 @@ std::string CrewEngine::exportMarkdown(const std::string& id) {
         tokOut += u.tokensOut;
     }
     if (cost > 0 || tokIn > 0) {
-        md += "- **成本**: $" + std::to_string(cost) + "（in " +
-              std::to_string(tokIn) + " / out " + std::to_string(tokOut) + " tok）\n";
+        md += "- **成本**: $" + std::to_string(cost) + "（in " + std::to_string(tokIn) + " / out " +
+              std::to_string(tokOut) + " tok）\n";
     }
     md += "\n## 决策记录\n\n";
     if (t->votes.empty()) md += "_无_\n";
@@ -2172,16 +2202,15 @@ std::string CrewEngine::exportMarkdown(const std::string& id) {
         for (const auto& [agent, choice] : v.votes) {
             md += "- " + agent + " → **" + choice + "**\n";
         }
-        md += "\n结论: **" + (v.winner.empty() ? "(无)" : v.winner) + "** — " + v.reason +
-              "\n\n";
+        md += "\n结论: **" + (v.winner.empty() ? "(无)" : v.winner) + "** — " + v.reason + "\n\n";
     }
     md += "## 事件时间线\n\n| 阶段 | 角色 | 事件 | 说明 |\n|---|---|---|---|\n";
     for (const CrewEvent& e : t->events) {
-        if (e.type == "token") continue; // token 流不入报告
+        if (e.type == "token") continue;  // token 流不入报告
         std::string det = e.detail;
-        det.erase(std::remove(det.begin(), det.end(), '|'), det.end()); // 表格转义
-        md += std::string("| ") + phaseName(e.phase) + " | " + e.agent + " | " + e.type +
-              " | " + det + " |\n";
+        det.erase(std::remove(det.begin(), det.end(), '|'), det.end());  // 表格转义
+        md += std::string("| ") + phaseName(e.phase) + " | " + e.agent + " | " + e.type + " | " +
+              det + " |\n";
     }
     md += "\n## 产物清单\n\n| 产物 | 版本 | 作者 |\n|---|---|---|\n";
     for (const Artifact& a : t->artifacts) {
@@ -2197,10 +2226,95 @@ std::string CrewEngine::exportMarkdown(const std::string& id) {
 }
 
 std::string CrewEngine::exportBundle(const std::string& id) {
-    std::lock_guard<std::mutex> lk(mtx_);
-    auto it = tasks_.find(id);
-    if (it == tasks_.end()) return {};
-    return taskToJson(it->second).dump();
+    std::string out;
+    if (!exportBundleStream(id, [&out](std::string_view s) {
+            out.append(s);
+            return true;
+        })) {
+        return {};
+    }
+    return out;
+}
+
+bool CrewEngine::exportBundleStream(const std::string& id,
+                                    const std::function<bool(std::string_view)>& sink) {
+    // 锁内只做「快照成已序列化的片段」：不构造 JsonValue 树，也不拼整包字符串。
+    // 锁外逐段输出——大任务（成百上千条事件）不会让峰值内存翻倍，也不会长时间持锁。
+    std::string meta;
+    std::string usageJson;
+    std::vector<std::string> artifacts;
+    std::vector<std::string> votes;
+    std::vector<std::string> events;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        auto it = tasks_.find(id);
+        if (it == tasks_.end()) return false;
+        const TaskPtr& t = it->second;
+
+        json::JsonValue head = json::JsonValue::object();
+        head["id"] = t->id;
+        head["brief"] = t->brief;
+        head["phase"] = phaseName(t->phase);
+        head["running"] = t->running;
+        head["interrupted"] = t->interrupted.load();
+        head["parent_task_id"] = t->parentTaskId;
+        head["followup_mode"] = t->followupMode;
+        head["budget_approvals"] = t->budgetApprovals;
+        head["error"] = t->error;
+        head["created_ms"] = t->createdMs;
+        head["updated_ms"] = t->updatedMs;
+        meta = head.dump();
+        if (meta.size() >= 2) meta = meta.substr(1, meta.size() - 2);  // 去掉外层 { }
+
+        artifacts.reserve(t->artifacts.size());
+        for (const Artifact& a : t->artifacts)
+            artifacts.push_back(a.toJson().dump());
+        votes.reserve(t->votes.size());
+        for (const VoteRecord& vr : t->votes)
+            votes.push_back(vr.toJson().dump());
+        events.reserve(t->events.size());
+        for (const CrewEvent& e : t->events)
+            events.push_back(e.toJson().dump());
+
+        json::JsonValue usage = json::JsonValue::object();
+        for (const auto& [role, u] : t->usage)
+            usage[role] = usageToJson(u);
+        usageJson = usage.dump();
+    }
+
+    constexpr size_t kChunk = 64 * 1024;
+    std::string buf;
+    buf.reserve(kChunk + 1024);
+    auto flush = [&]() -> bool {
+        if (buf.empty()) return true;
+        const bool ok = sink(buf);
+        buf.clear();
+        return ok;
+    };
+
+    buf += '{';
+    buf += meta;
+    auto emitArray = [&](const char* key, const std::vector<std::string>& items) -> bool {
+        buf += ",\"";
+        buf += key;
+        buf += "\":[";
+        bool first = true;
+        for (const std::string& s : items) {
+            if (!first) buf += ',';
+            first = false;
+            buf += s;
+            if (buf.size() >= kChunk && !flush()) return false;
+        }
+        buf += ']';
+        return true;
+    };
+    if (!emitArray("artifacts", artifacts)) return false;
+    if (!emitArray("votes", votes)) return false;
+    if (!emitArray("events", events)) return false;
+    buf += ",\"usage\":";
+    buf += usageJson;
+    buf += '}';
+    return flush();
 }
 
 json::JsonValue CrewEngine::roster(const std::string& taskId) {
@@ -2247,7 +2361,7 @@ json::JsonValue CrewEngine::metaInfo() {
     f["memory"] = opt_.memoryEnabled;
     f["otel"] = opt_.otel != nullptr;
     f["webhook"] = !opt_.webhookUrl.empty();
-    f["human_voter"] = true;   // 能力开关（任务级 cfg 决定是否启用）
+    f["human_voter"] = true;  // 能力开关（任务级 cfg 决定是否启用）
     f["exec_verify"] = true;
     f["stories"] = true;
     f["debate"] = true;
@@ -2261,7 +2375,8 @@ json::JsonValue CrewEngine::metaInfo() {
     json::JsonValue names = json::JsonValue::array();
     {
         std::lock_guard<std::mutex> lk(mtx_);
-        for (const RoleDef& r : roles_) names.push_back(r.role);
+        for (const RoleDef& r : roles_)
+            names.push_back(r.role);
     }
     v["roles"] = std::move(names);
     return v;
@@ -2284,4 +2399,4 @@ void CrewEngine::setBusy(const std::string&, const std::string&, const std::stri
     // 预留（状态注入测试钩子）
 }
 
-} // namespace zenith::crew
+}  // namespace zenith::crew

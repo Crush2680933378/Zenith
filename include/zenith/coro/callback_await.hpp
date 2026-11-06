@@ -10,8 +10,8 @@
 #include <stdexcept>
 #include <utility>
 
-#include "zenith/coro/task.hpp"
 #include "zenith/core/result.hpp"
+#include "zenith/coro/task.hpp"
 
 namespace zenith::coro::detail {
 
@@ -26,7 +26,7 @@ Task<T> awaitCallback(Starter starter) {
         void await_suspend(std::coroutine_handle<> h) {
             starter([this, h](core::Result<T> r) {
                 result.emplace(std::move(r));
-                h.resume(); // 通常在 loop 线程；对称转移回协程
+                h.resume();  // 通常在 loop 线程；对称转移回协程
             });
         }
 
@@ -43,4 +43,4 @@ Task<T> awaitCallback(Starter starter) {
     co_return co_await Awaiter{std::move(starter), std::nullopt};
 }
 
-} // namespace zenith::coro::detail
+}  // namespace zenith::coro::detail

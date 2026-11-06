@@ -18,15 +18,14 @@
 namespace zenith::vector {
 
 /// 保存单个集合（原子替换已存在快照）。dir 不存在则创建。
-ZENITH_API core::Result<void> saveCollection(const std::string& dir,
-                                              const std::string& collection,
-                                              const HnswIndex& index);
+ZENITH_API core::Result<void> saveCollection(const std::string& dir, const std::string& collection,
+                                             const HnswIndex& index);
 
 /// 加载单个集合；快照不存在返回 Err。
-ZENITH_API core::Result<std::unique_ptr<HnswIndex>>
-loadCollection(const std::string& dir, const std::string& collection);
+ZENITH_API core::Result<std::unique_ptr<HnswIndex>> loadCollection(const std::string& dir,
+                                                                   const std::string& collection);
 
 /// 列出 dir 下全部快照集合名。
 ZENITH_API std::vector<std::string> listCollections(const std::string& dir);
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

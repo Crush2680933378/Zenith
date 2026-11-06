@@ -35,7 +35,7 @@ struct HttpFixture {
         });
 
         r.post("/echo", [](http::Context& c) {
-            http::json::JsonValue body = c.bodyJson(); // 非 JSON → 400
+            http::json::JsonValue body = c.bodyJson();  // 非 JSON → 400
             http::json::JsonValue v = http::json::JsonValue::object();
             v["got"] = std::move(body);
             c.json(200, v);
@@ -58,7 +58,7 @@ struct HttpFixture {
 
         ZEXPECT_TRUE(static_cast<bool>(server.listen("127.0.0.1", 0)));
         runner = std::thread([this] { loop.loop(); });
-        std::this_thread::sleep_for(100ms); // 监听生效
+        std::this_thread::sleep_for(100ms);  // 监听生效
     }
 
     ~HttpFixture() {
@@ -82,11 +82,12 @@ struct HttpFixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(HttpE2E, GetPlainText) {
     HttpFixture f;
-    auto r = http::HttpClient::fetchBlocking(HttpFixture::makeReq(http::HttpMethod::Get, f.port(), "/hello"));
+    auto r = http::HttpClient::fetchBlocking(
+        HttpFixture::makeReq(http::HttpMethod::Get, f.port(), "/hello"));
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 200);
     ZEXPECT_EQ(r.value().body, std::string("hello world"));
@@ -104,7 +105,8 @@ ZTEST(HttpE2E, GetJsonWithParam) {
     ZEXPECT_EQ(v.value()["id"].asString(), std::string("42"));
     ZEXPECT_EQ(v.value()["name"].asString(), std::string("zenith"));
     ZEXPECT_TRUE(v.value()["verified"].asBool());
-    ZEXPECT_EQ(r.value().headers.get("Content-Type"), std::string("application/json; charset=utf-8"));
+    ZEXPECT_EQ(r.value().headers.get("Content-Type"),
+               std::string("application/json; charset=utf-8"));
 }
 
 ZTEST(HttpE2E, PostEchoJson) {
@@ -145,7 +147,8 @@ ZTEST(HttpE2E, NotFoundAndMethodNotAllowed) {
 
 ZTEST(HttpE2E, HandlerExceptionYields500) {
     HttpFixture f;
-    auto r = http::HttpClient::fetchBlocking(HttpFixture::makeReq(http::HttpMethod::Get, f.port(), "/boom"));
+    auto r = http::HttpClient::fetchBlocking(
+        HttpFixture::makeReq(http::HttpMethod::Get, f.port(), "/boom"));
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 500);
 }
@@ -173,16 +176,17 @@ ZTEST(HttpE2E, QueryParams) {
 
 ZTEST(HttpE2E, HeadRequest) {
     HttpFixture f;
-    auto r = http::HttpClient::fetchBlocking(HttpFixture::makeReq(http::HttpMethod::Head, f.port(), "/hello"));
+    auto r = http::HttpClient::fetchBlocking(
+        HttpFixture::makeReq(http::HttpMethod::Head, f.port(), "/hello"));
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 200);
-    ZEXPECT_TRUE(r.value().body.empty()); // HEAD 无响应体
+    ZEXPECT_TRUE(r.value().body.empty());  // HEAD 无响应体
     // Content-Length 仍标示 GET 语义长度（serialize(false) 写 0，客户端解析为准）
 }
 
 ZTEST(HttpE2E, LargeBodyRoundtrip) {
     HttpFixture f;
-    std::string big(200 * 1024, 'x'); // 200KB
+    std::string big(200 * 1024, 'x');  // 200KB
     big[0] = '"';
     big.back() = '"';
     auto r = http::HttpClient::fetchBlocking(
@@ -191,12 +195,12 @@ ZTEST(HttpE2E, LargeBodyRoundtrip) {
     ZEXPECT_EQ(r.value().status, 200);
     auto v = http::json::JsonValue::parse(r.value().body);
     ZEXPECT_TRUE(static_cast<bool>(v));
-    ZEXPECT_EQ(v.value()["got"].asString().size(), size_t{200 * 1024 - 2}); // 引号是分隔符
+    ZEXPECT_EQ(v.value()["got"].asString().size(), size_t{200 * 1024 - 2});  // 引号是分隔符
 }
 
 ZTEST(HttpE2E, ConnectTimeoutReported) {
     // 连接一个不存在服务的地址：127.0.0.1:1 会被拒收
-    HttpFixture f; // 夹具端口无关紧要，仅复用类型
+    HttpFixture f;  // 夹具端口无关紧要，仅复用类型
     (void)f;
     http::ClientRequest rq;
     rq.host = "127.0.0.1";

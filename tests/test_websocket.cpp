@@ -23,11 +23,11 @@ ZTEST(WsCodec, EncodeDecodeRoundtrip) {
     // 小帧（不掩码，服务端形态）
     const std::string wire = f.encode(false);
     ZEXPECT_EQ(wire.size(), size_t{7});
-    ZEXPECT_EQ((wire[0] & 0xFF), 0x81); // FIN + text
-    ZEXPECT_EQ((wire[1] & 0xFF), 0x05); // 长度 5
+    ZEXPECT_EQ((wire[0] & 0xFF), 0x81);  // FIN + text
+    ZEXPECT_EQ((wire[1] & 0xFF), 0x05);  // 长度 5
 
     auto r = net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), wire.size(),
-                                 /*requireMask=*/false);
+                                /*requireMask=*/false);
     ZEXPECT_TRUE(r.state == net::WsDecodeResult::State::Ok);
     ZEXPECT_EQ(r.frame.payload, std::string("hello"));
     ZEXPECT_TRUE(r.frame.opcode == net::WsOpcode::Text);
@@ -41,14 +41,14 @@ ZTEST(WsCodec, MaskedClientFrame) {
     const std::string wire = f.encode(/*mask=*/true, 0x11223344u);
 
     auto r = net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), wire.size(),
-                                 /*requireMask=*/true);
+                                /*requireMask=*/true);
     ZEXPECT_TRUE(r.state == net::WsDecodeResult::State::Ok);
-    ZEXPECT_EQ(r.frame.payload, f.payload); // 解掩码还原
+    ZEXPECT_EQ(r.frame.payload, f.payload);  // 解掩码还原
     ZEXPECT_EQ(r.consumed, wire.size());
 
     // 服务端要求掩码：未掩码帧应报错
     auto r2 = net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), wire.size(),
-                                  /*requireMask=*/true);
+                                 /*requireMask=*/true);
     (void)r2;
 }
 
@@ -99,24 +99,23 @@ ZTEST(WsCodec, IncompleteAndSplit) {
     for (size_t cut = 1; cut < wire.size(); ++cut) {
         auto r = net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), cut, true);
         if (r.state == net::WsDecodeResult::State::Ok) {
-            ztest::reportFail(__FILE__, __LINE__,
-                              "completed early at cut " + std::to_string(cut));
+            ztest::reportFail(__FILE__, __LINE__, "completed early at cut " + std::to_string(cut));
         }
     }
-    auto rFull = net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), wire.size(), true);
+    auto rFull =
+        net::wsDecodeFrame(reinterpret_cast<const uint8_t*>(wire.data()), wire.size(), true);
     ZEXPECT_TRUE(rFull.state == net::WsDecodeResult::State::Ok);
 }
 
 ZTEST(WsHandshake, AcceptValue) {
     // RFC 6455 示例向量
     const std::string accept = net::wsComputeAccept("dGhlIHNhbXBsZSBub25jZQ==");
-    ZEXPECT_EQ(accept, std::string("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")); // Python hashlib 权威核对
+    ZEXPECT_EQ(accept, std::string("s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));  // Python hashlib 权威核对
 }
 
 ZTEST(Crypto, Sha1AndBase64) {
     // SHA-1("abc") 已知向量
-    ZEXPECT_EQ(crypto::Sha1::hex("abc"),
-               std::string("a9993e364706816aba3e25717850c26c9cd0d89d"));
+    ZEXPECT_EQ(crypto::Sha1::hex("abc"), std::string("a9993e364706816aba3e25717850c26c9cd0d89d"));
     // Base64 回环
     const std::string data = "Man is distinguished, not only by his reason";
     ZEXPECT_EQ(crypto::base64Decode(crypto::base64Encode(data)), data);
@@ -124,7 +123,7 @@ ZTEST(Crypto, Sha1AndBase64) {
     ZEXPECT_EQ(crypto::base64Encode("Ma"), std::string("TWE="));
     ZEXPECT_EQ(crypto::base64Encode("M"), std::string("TQ=="));
     ZEXPECT_EQ(crypto::base64Decode("TQ=="), std::string("M"));
-    ZEXPECT_TRUE(crypto::base64Decode("T Q!").empty()); // 非法字符
+    ZEXPECT_TRUE(crypto::base64Decode("T Q!").empty());  // 非法字符
 }
 
 /* ---------------- 端到端 ---------------- */
@@ -136,7 +135,7 @@ struct WsFixture {
     http::HttpServer server{&loop, &io};
     std::thread runner;
     std::mutex mtx;
-    std::vector<std::string> received;   // 服务端收到的消息
+    std::vector<std::string> received;  // 服务端收到的消息
     std::atomic<int> openCount{0};
     std::atomic<int> closeCount{0};
 
@@ -150,11 +149,10 @@ struct WsFixture {
                         std::lock_guard<std::mutex> lk(mtx);
                         received.push_back(msg);
                     }
-                    sess->sendText("echo:" + msg); // 回显
+                    sess->sendText("echo:" + msg);  // 回显
                 });
-            s->setCloseCallback([this](const net::WebSocketSession::Ptr&) {
-                closeCount.fetch_add(1);
-            });
+            s->setCloseCallback(
+                [this](const net::WebSocketSession::Ptr&) { closeCount.fetch_add(1); });
         });
         (void)server.listen("127.0.0.1", 0);
         runner = std::thread([this] { loop.loop(); });
@@ -167,7 +165,7 @@ struct WsFixture {
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
-} // namespace
+}  // namespace
 
 ZTEST(WsE2E, UpgradeEchoClose) {
     WsFixture f;
@@ -189,25 +187,24 @@ ZTEST(WsE2E, UpgradeEchoClose) {
     client->connect(
         &clientLoop, opt,
         [&](const net::WebSocketSession::Ptr& session) {
-            auto s = session; // 内层回调按值持有（勿引用外层参数）
-            s->setMessageCallback(
-                [s, &echoed, &gotEcho](const net::WebSocketSession::Ptr&, std::string msg,
-                                       bool isText) {
-                    echoed = msg;
-                    (void)isText;
-                    gotEcho.store(true);
-                    s->close(1000, "bye");
-                });
-            s->setCloseCallback([&gotClose](const net::WebSocketSession::Ptr&) {
-                gotClose.store(true);
+            auto s = session;  // 内层回调按值持有（勿引用外层参数）
+            s->setMessageCallback([s, &echoed, &gotEcho](const net::WebSocketSession::Ptr&,
+                                                         std::string msg, bool isText) {
+                echoed = msg;
+                (void)isText;
+                gotEcho.store(true);
+                s->close(1000, "bye");
             });
+            s->setCloseCallback(
+                [&gotClose](const net::WebSocketSession::Ptr&) { gotClose.store(true); });
             s->sendText("你好 zenith");
         },
         [](const std::string& reason) {
             ztest::reportFail(__FILE__, __LINE__, "ws connect failed: " + reason);
         });
 
-    for (int i = 0; i < 300 && !gotClose.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 300 && !gotClose.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(gotEcho.load());
     ZEXPECT_EQ(echoed, std::string("echo:你好 zenith"));
     ZEXPECT_TRUE(gotClose.load());
@@ -256,10 +253,11 @@ ZTEST(WsE2E, MultipleMessagesAndBinary) {
             ztest::reportFail(__FILE__, __LINE__, "ws connect failed: " + reason);
         });
 
-    for (int i = 0; i < 300 && !closed.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 300 && !closed.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(closed.load());
     ZEXPECT_EQ(echoes.load(), 3);
-    ZEXPECT_EQ(lastEcho.substr(0, 5), std::string("echo:")); // 二进制也走同一路径回显
+    ZEXPECT_EQ(lastEcho.substr(0, 5), std::string("echo:"));  // 二进制也走同一路径回显
     {
         std::lock_guard<std::mutex> lk(f.mtx);
         ZEXPECT_EQ(f.received.size(), size_t{3});
@@ -277,7 +275,7 @@ ZTEST(WsE2E, PingPongAndLargeMessage) {
     std::atomic<bool> gotLarge{false};
     std::atomic<bool> closed{false};
 
-    const std::string big(120 * 1024, 'z'); // 跨 16 位/64 位长度边界
+    const std::string big(120 * 1024, 'z');  // 跨 16 位/64 位长度边界
 
     auto client = std::make_shared<net::WebSocketClient>();
     net::WsConnectOptions opt;
@@ -290,14 +288,12 @@ ZTEST(WsE2E, PingPongAndLargeMessage) {
         [&](const net::WebSocketSession::Ptr& session) {
             auto s = session;
             s->setMessageCallback(
-                [s, &gotLarge, &big](const net::WebSocketSession::Ptr&, std::string msg,
-                                     bool) {
+                [s, &gotLarge, &big](const net::WebSocketSession::Ptr&, std::string msg, bool) {
                     if (msg.size() == big.size() + 5) gotLarge.store(true);
                     s->close();
                 });
-            s->setCloseCallback([&closed](const net::WebSocketSession::Ptr&) {
-                closed.store(true);
-            });
+            s->setCloseCallback(
+                [&closed](const net::WebSocketSession::Ptr&) { closed.store(true); });
             s->ping("hb");
             s->sendText(big);
         },
@@ -305,7 +301,8 @@ ZTEST(WsE2E, PingPongAndLargeMessage) {
             ztest::reportFail(__FILE__, __LINE__, "ws connect failed: " + reason);
         });
 
-    for (int i = 0; i < 400 && !closed.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 400 && !closed.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(gotLarge.load());
     ZEXPECT_TRUE(closed.load());
 
@@ -334,7 +331,8 @@ ZTEST(WsE2E, ServerRejectsNonWsPath) {
             failed.store(true);
         });
 
-    for (int i = 0; i < 300 && !failed.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 300 && !failed.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(failed.load());
     ZEXPECT_TRUE(reason.find("upgrade rejected") != std::string::npos);
 

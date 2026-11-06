@@ -52,7 +52,7 @@ public:
     /* ---- fd 注册（仅 loop 线程） ---- */
     using FdCallback = std::function<void(uint16_t revents)>;
     void registerFd(fd_t fd, uint16_t events, FdCallback cb);
-    void updateFd(fd_t fd, uint16_t events); // 保留回调
+    void updateFd(fd_t fd, uint16_t events);  // 保留回调
     void deregisterFd(fd_t fd);
 
     /* ---- 任务 ---- */
@@ -84,9 +84,9 @@ private:
     std::unique_ptr<Poller> poller_;
     const char* pollerName_ = "?";
 
-    std::unordered_map<fd_t, FdEntry> fds_; // 仅 loop 线程
+    std::unordered_map<fd_t, FdEntry> fds_;  // 仅 loop 线程
 
-    mutable std::mutex taskMtx_; // const 方法（nextTimeoutMs）亦需读取
+    mutable std::mutex taskMtx_;  // const 方法（nextTimeoutMs）亦需读取
     std::deque<Task> pendingTasks_;
 
     struct TimerEntry {
@@ -96,15 +96,15 @@ private:
         // 大顶堆语义反转（最早到期优先）
         bool operator<(const TimerEntry& o) const { return whenUs > o.whenUs; }
     };
-    std::vector<TimerEntry> timers_;             // 仅 loop 线程
-    std::unordered_set<uint64_t> canceledTimers_; // 仅 loop 线程
+    std::vector<TimerEntry> timers_;               // 仅 loop 线程
+    std::unordered_set<uint64_t> canceledTimers_;  // 仅 loop 线程
     uint64_t nextTimerSeq_ = 1;
 
-    fd_t wakeFd_ = kInvalidFd; // 自连接 UDP：跨线程唤醒
+    fd_t wakeFd_ = kInvalidFd;  // 自连接 UDP：跨线程唤醒
     std::atomic<bool> quit_{false};
     std::atomic<std::thread::id> threadId_{};
     std::vector<PollResult> pollResults_;
     bool looping_ = false;
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net

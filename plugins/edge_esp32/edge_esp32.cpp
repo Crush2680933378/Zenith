@@ -25,29 +25,29 @@
 #include "device_service.hpp"
 
 #if defined(_WIN32)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  #pragma comment(lib, "ws2_32.lib")
-  using SocketFd = SOCKET;
-  #define EDGE_INVALID INVALID_SOCKET
-  #define EDGE_WOULD(e) ((e) == WSAEWOULDBLOCK)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+using SocketFd = SOCKET;
+#define EDGE_INVALID INVALID_SOCKET
+#define EDGE_WOULD(e) ((e) == WSAEWOULDBLOCK)
 #else
-  #include <arpa/inet.h>
-  #include <errno.h>
-  #include <fcntl.h>
-  #include <netinet/in.h>
-  #include <netinet/tcp.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
-  using SocketFd = int;
-  #define EDGE_INVALID (-1)
-  #define EDGE_WOULD(e) ((e) == EAGAIN || (e) == EWOULDBLOCK)
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using SocketFd = int;
+#define EDGE_INVALID (-1)
+#define EDGE_WOULD(e) ((e) == EAGAIN || (e) == EWOULDBLOCK)
 #endif
 
 namespace {
@@ -96,7 +96,8 @@ std::string jsonStrField(const std::string& j, const std::string& key) {
     p = j.find(':', p + pat.size());
     if (p == std::string::npos) return "";
     ++p;
-    while (p < j.size() && (j[p] == ' ' || j[p] == '\t')) ++p;
+    while (p < j.size() && (j[p] == ' ' || j[p] == '\t'))
+        ++p;
     if (p >= j.size()) return "";
     if (j[p] == '"') {
         const size_t e = j.find('"', p + 1);
@@ -122,16 +123,14 @@ public:
         listenFd_ = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (listenFd_ == EDGE_INVALID) return -1;
         int one = 1;
-        setsockopt(listenFd_, SOL_SOCKET, SO_REUSEADDR,
-                   reinterpret_cast<const char*>(&one), sizeof(one));
+        setsockopt(listenFd_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&one),
+                   sizeof(one));
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         addr.sin_addr.s_addr =
-            (host.empty() || host == "0.0.0.0")
-                ? htonl(INADDR_ANY)
-                : inet_addr(host.c_str());
+            (host.empty() || host == "0.0.0.0") ? htonl(INADDR_ANY) : inet_addr(host.c_str());
         if (::bind(listenFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0 ||
             ::listen(listenFd_, 16) != 0) {
             logWarn("gateway bind/listen failed");
@@ -217,7 +216,8 @@ public:
             if (d.fd != EDGE_INVALID) closesock(d.fd);
         }
         devices_.clear();
-        for (auto* sp : serials_) delete sp;
+        for (auto* sp : serials_)
+            delete sp;
         serials_.clear();
     }
 
@@ -230,7 +230,7 @@ private:
         SocketFd fd = EDGE_INVALID;
         std::string address;
         int64_t lastSeen = 0;
-        std::string pendingName; // hello 待注册名（由持有迭代的循环执行转移）
+        std::string pendingName;  // hello 待注册名（由持有迭代的循环执行转移）
         zenith::io::frame::Deframer deframer;
         std::string writeBuf;
     };
@@ -268,13 +268,13 @@ private:
                 for (;;) {
                     sockaddr_in peer{};
                     socklen_t plen = sizeof(peer);
-                    const SocketFd c = ::accept(listenFd_,
-                                                reinterpret_cast<sockaddr*>(&peer), &plen);
+                    const SocketFd c =
+                        ::accept(listenFd_, reinterpret_cast<sockaddr*>(&peer), &plen);
                     if (c == EDGE_INVALID) break;
                     setNonBlocking(c);
                     int one = 1;
-                    setsockopt(c, IPPROTO_TCP, TCP_NODELAY,
-                               reinterpret_cast<const char*>(&one), sizeof(one));
+                    setsockopt(c, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&one),
+                               sizeof(one));
                     char ip[64] = {0};
                     inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
                     std::lock_guard<std::mutex> lk(mtx_);
@@ -293,7 +293,8 @@ private:
                     uint8_t buf[4096];
                     auto r = sp->readSome(buf, sizeof(buf));
                     if (r && r.value() > 0) {
-                        std::string id = "serial:" + std::to_string(reinterpret_cast<uintptr_t>(sp));
+                        std::string id =
+                            "serial:" + std::to_string(reinterpret_cast<uintptr_t>(sp));
                         Device& d = devices_[id];
                         d.tcp = false;
                         d.address = "serial";
@@ -334,7 +335,8 @@ private:
                         if (d.fd == EDGE_INVALID) return;
                         uint8_t buf[16384];
                         for (;;) {
-                            const int n = ::recv(d.fd, reinterpret_cast<char*>(buf), sizeof(buf), 0);
+                            const int n =
+                                ::recv(d.fd, reinterpret_cast<char*>(buf), sizeof(buf), 0);
                             if (n > 0) {
                                 d.lastSeen = now;
                                 handleFrames(d, id, buf, static_cast<size_t>(n));
@@ -354,11 +356,12 @@ private:
                             if (w > 0) d.writeBuf.erase(0, static_cast<size_t>(w));
                         }
                     };
-                    for (auto& [id, d] : devices_) sweep(id, d);
+                    for (auto& [id, d] : devices_)
+                        sweep(id, d);
                     for (size_t i = 0; i < anon_.size();) {
                         sweep("", *anon_[i]);
                         if (!anon_[i]->pendingName.empty()) {
-                            promote(i); // hello 注册：转移后不递增（元素已删除）
+                            promote(i);  // hello 注册：转移后不递增（元素已删除）
                             continue;
                         }
                         if (anon_[i]->fd == EDGE_INVALID) {
@@ -389,7 +392,7 @@ private:
                 if (id.empty()) continue;
                 d.lastSeen = nowMs();
                 if (knownId.empty()) {
-                    d.pendingName = id; // 由 sweep 循环（迭代持有者）完成转移
+                    d.pendingName = id;  // 由 sweep 循环（迭代持有者）完成转移
                 }
                 logInfo("device online: " + id);
                 fireEvent(id, payload);
@@ -423,14 +426,16 @@ private:
     std::thread thread_;
     std::atomic<bool> running_{false};
     std::map<std::string, Device> devices_;
-    std::vector<std::unique_ptr<Device>> anon_; // 未 hello 的接入连接
+    std::vector<std::unique_ptr<Device>> anon_;  // 未 hello 的接入连接
     std::vector<zenith::io::SerialPort*> serials_;
     std::map<uint32_t, PendingRpc> pending_;
     uint32_t nextRid_ = 1;
     EventHandler eventHandler_;
 };
 
-void destroyBridge(void* p) { delete static_cast<DeviceBridgeImpl*>(p); }
+void destroyBridge(void* p) {
+    delete static_cast<DeviceBridgeImpl*>(p);
+}
 
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
@@ -438,15 +443,20 @@ zenith_status pluginInit(const zenith_host_api* host) {
                     "edge_esp32: init (COBS+CRC32 framing, tcp gateway + serial)");
     auto* svc = new (std::nothrow) DeviceBridgeImpl();
     if (svc == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  zenith::edge::IDeviceBridge::service_name(),
-                                  zenith::edge::IDeviceBridge::service_version(),
-                                  static_cast<void*>(svc), &destroyBridge);
+    return host->register_service(
+        host->registry_ctx, host->plugin_token, zenith::edge::IDeviceBridge::service_name(),
+        zenith::edge::IDeviceBridge::service_version(), static_cast<void*>(svc), &destroyBridge);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -462,6 +472,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

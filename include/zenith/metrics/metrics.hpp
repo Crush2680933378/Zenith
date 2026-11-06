@@ -22,9 +22,7 @@ namespace zenith::metrics {
 class ZENITH_API Counter {
 public:
     void inc(int64_t delta = 1) noexcept { value_.fetch_add(delta, std::memory_order_relaxed); }
-    [[nodiscard]] int64_t value() const noexcept {
-        return value_.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] int64_t value() const noexcept { return value_.load(std::memory_order_relaxed); }
 
 private:
     std::atomic<int64_t> value_{0};
@@ -35,9 +33,7 @@ public:
     void set(int64_t v) noexcept { value_.store(v, std::memory_order_relaxed); }
     void inc(int64_t d = 1) noexcept { value_.fetch_add(d, std::memory_order_relaxed); }
     void dec(int64_t d = 1) noexcept { value_.fetch_sub(d, std::memory_order_relaxed); }
-    [[nodiscard]] int64_t value() const noexcept {
-        return value_.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] int64_t value() const noexcept { return value_.load(std::memory_order_relaxed); }
 
 private:
     std::atomic<int64_t> value_{0};
@@ -54,8 +50,7 @@ public:
         return sum_.load(std::memory_order_relaxed);
     }
     /// Prometheus 输出（le 桶行 + _sum/_count）
-    [[nodiscard]] std::vector<std::string> bucketsForExport(
-        const std::string& metricName) const;
+    [[nodiscard]] std::vector<std::string> bucketsForExport(const std::string& metricName) const;
 
     static constexpr size_t kBucketCount = 14;
 
@@ -97,4 +92,4 @@ private:
 /// 进程启动时间（status 用）
 ZENITH_API int64_t processUptimeMs() noexcept;
 
-} // namespace zenith::metrics
+}  // namespace zenith::metrics

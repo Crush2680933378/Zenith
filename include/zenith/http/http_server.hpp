@@ -82,4 +82,4 @@ private:
         wsPaths_;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

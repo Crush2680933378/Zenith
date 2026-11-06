@@ -34,10 +34,10 @@ public:
     std::vector<ai::ModelInfo> models() override { return {}; }
     std::mutex m;
     std::vector<std::string> pmPrompts;
-    std::vector<std::string> commands; // tester 输出的 exec 命令
+    std::vector<std::string> commands;  // tester 输出的 exec 命令
     bool embeddingsOk = false;
-    bool piiInDetail = false; // tester detail 塞邮箱（redact 用例）
-    int chatSleepMs = 0;      // 慢速（并发池观测用）
+    bool piiInDetail = false;  // tester detail 塞邮箱（redact 用例）
+    int chatSleepMs = 0;       // 慢速（并发池观测用）
     // 语义分组：voting/poll/survey/questionnaire 同向；game/match 另一向
     std::set<std::string> clusterA = {"voting", "poll", "survey", "questionnaire"};
 
@@ -46,15 +46,16 @@ public:
         e.ok = embeddingsOk;
         if (embeddingsOk) {
             std::string low;
-            for (char c : input) low.push_back(static_cast<char>(std::tolower(c)));
+            for (char c : input)
+                low.push_back(static_cast<char>(std::tolower(c)));
             bool inA = false;
-            for (const std::string& k : clusterA) inA = inA || low.find(k) != std::string::npos;
+            for (const std::string& k : clusterA)
+                inA = inA || low.find(k) != std::string::npos;
             e.vector = inA ? std::vector<float>{1, 0, 0, 0} : std::vector<float>{0, 1, 0, 0};
         }
         return e;
     }
-    ai::ChatResult chat(const ai::ChatRequest& req,
-                        const ai::TokenCallback& = nullptr,
+    ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
@@ -74,14 +75,18 @@ public:
                             ? R"({"choice":"approve","reason":"ok"})"
                             : R"({"choice":"sqlite","reason":"z"})";
         } else if (role == "pm") {
-            r.content = R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"}]}})";
+            r.content =
+                R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"}]}})";
         } else if (role == "architect") {
-            r.content = R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
+            r.content =
+                R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
         } else if (role == "backend" || role == "frontend") {
             r.content = R"({"files":[{"path":"x","content":"// impl"}],"notes":"n"})";
         } else if (role == "tester") {
-            json::JsonValue j = json::JsonValue::parse(
-                R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})").value();
+            json::JsonValue j =
+                json::JsonValue::parse(
+                    R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})")
+                    .value();
             if (piiInDetail) {
                 j["results"].at(size_t{0})["detail"] = "contact tom@example.com for logs";
             }
@@ -89,7 +94,8 @@ public:
                 std::lock_guard<std::mutex> lk(m);
                 if (!commands.empty() && user.find("RETEST") == std::string::npos) {
                     json::JsonValue cmds = json::JsonValue::array();
-                    for (const std::string& c : commands) cmds.push_back(c);
+                    for (const std::string& c : commands)
+                        cmds.push_back(c);
                     j["commands"] = std::move(cmds);
                 }
             }
@@ -120,8 +126,7 @@ private:
 };
 using RecPtr = std::shared_ptr<Rec>;
 
-crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
-                                int maxSec = 30) {
+crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id, int maxSec = 30) {
     for (int i = 0; i < maxSec * 20; ++i) {
         auto info = eng.taskInfo(id);
         if (info && !info.value().running &&
@@ -133,7 +138,7 @@ crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
     auto info = eng.taskInfo(id);
     return info ? info.value() : crew::CrewTaskInfo{};
 }
-} // namespace
+}  // namespace
 
 /* ---------------- A1：SSE 不再阻塞 IO 线程 ---------------- */
 
@@ -162,14 +167,14 @@ ZTEST(CrewM17, SseStreamDoesNotStarveIoPool) {
         addr.sin_port = htons(srv.port());
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
-            const std::string req = "GET /crew/tasks/" + id +
-                                    "/events/stream HTTP/1.1\r\nHost: x\r\n\r\n";
+            const std::string req =
+                "GET /crew/tasks/" + id + "/events/stream HTTP/1.1\r\nHost: x\r\n\r\n";
             ::send(fd, req.c_str(), static_cast<int>(req.size()), 0);
             socks.push_back(fd);
         }
     }
     ZEXPECT_EQ(socks.size(), size_t{2});
-    std::this_thread::sleep_for(500ms); // 让 SSE 泵接管
+    std::this_thread::sleep_for(500ms);  // 让 SSE 泵接管
 
     // REST 请求仍能及时应答（旧实现此处超时）
     ai::SimpleHttpCall call;
@@ -209,8 +214,8 @@ ZTEST(CrewM17, ExecAllowlistRejectsUnsafe) {
         if (e.detail.find("pass") != std::string::npos) ++passed;
         if (e.detail.find("REJECTED") != std::string::npos) ++rejected;
     }
-    ZEXPECT_EQ(passed, 1);            // echo 通过（默认白名单）
-    ZEXPECT_EQ(rejected, 2);          // dir 不在白名单；& 元字符拒绝
+    ZEXPECT_EQ(passed, 1);    // echo 通过（默认白名单）
+    ZEXPECT_EQ(rejected, 2);  // dir 不在白名单；& 元字符拒绝
 }
 
 /* ---------------- B1：持久化去抖不丢终态 ---------------- */
@@ -228,7 +233,7 @@ ZTEST(CrewM17, PersistDebounceKeepsTerminalState) {
         eng.setInference(std::make_shared<Rec>());
         id = eng.createTask("debounced");
         waitTerminal(eng, id);
-    } // 析构 flushDirty 补写
+    }  // 析构 flushDirty 补写
     crew::EngineOptions opt2;
     opt2.persistDir = dir;
     crew::CrewEngine eng2(opt2);
@@ -236,7 +241,7 @@ ZTEST(CrewM17, PersistDebounceKeepsTerminalState) {
     auto listed = eng2.listTasks();
     ZEXPECT_EQ(listed.size(), size_t{1});
     ZEXPECT_EQ(crew::phaseName(listed[0].phase), std::string("done"));
-    ZEXPECT_TRUE(eng2.artifacts(id).size() >= 8); // 全部产物都在
+    ZEXPECT_TRUE(eng2.artifacts(id).size() >= 8);  // 全部产物都在
     std::filesystem::remove_all(dir, ec);
 }
 
@@ -244,7 +249,7 @@ ZTEST(CrewM17, PersistDebounceKeepsTerminalState) {
 
 ZTEST(CrewM17, TaskEvictionByTtlAndCap) {
     crew::EngineOptions opt;
-    opt.maxRetainedTasks = 2; // 终态最多留 2 个
+    opt.maxRetainedTasks = 2;  // 终态最多留 2 个
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
     eng.setInference(rec);
@@ -253,18 +258,18 @@ ZTEST(CrewM17, TaskEvictionByTtlAndCap) {
         const std::string id = eng.createTask("evict " + std::to_string(i));
         waitTerminal(eng, id);
         ids.push_back(id);
-        std::this_thread::sleep_for(50ms); // updatedMs 分开
+        std::this_thread::sleep_for(50ms);  // updatedMs 分开
     }
     // 第 5 个任务触发惰性清扫 → 只留最新 2 个终态
     const std::string id5 = eng.createTask("evict trigger");
     waitTerminal(eng, id5);
     auto listed = eng.listTasks();
-    ZEXPECT_TRUE(listed.size() <= 3); // 保留 2 + trigger 自己（可能也被清成 2）
+    ZEXPECT_TRUE(listed.size() <= 3);  // 保留 2 + trigger 自己（可能也被清成 2）
     bool oldestGone = true;
     for (const auto& t : listed) {
         if (t.id == ids[0] || t.id == ids[1]) oldestGone = false;
     }
-    ZEXPECT_TRUE(oldestGone); // 最旧的必被淘汰
+    ZEXPECT_TRUE(oldestGone);  // 最旧的必被淘汰
 }
 
 /* ---------------- B3：resume × followup ---------------- */
@@ -291,7 +296,7 @@ ZTEST(CrewM17, FollowupInterruptThenResume) {
             if (st && st.value().phase == crew::CrewPhase::AwaitingApproval) break;
             std::this_thread::sleep_for(50ms);
         }
-    } // 关停（interrupted）
+    }  // 关停（interrupted）
     crew::EngineOptions opt2;
     opt2.persistDir = dir;
     crew::CrewEngine eng2(opt2);
@@ -300,7 +305,7 @@ ZTEST(CrewM17, FollowupInterruptThenResume) {
     auto st = eng2.taskInfo(child);
     ZEXPECT_TRUE(static_cast<bool>(st));
     ZEXPECT_TRUE(st.value().resumable);
-    ZEXPECT_EQ(st.value().parentTaskId, parent); // 跨重启保留 followup 关系
+    ZEXPECT_EQ(st.value().parentTaskId, parent);  // 跨重启保留 followup 关系
     ZEXPECT_TRUE(static_cast<bool>(eng2.approve(child)));
     ZEXPECT_TRUE(static_cast<bool>(eng2.resume(child)));
     const auto done = waitTerminal(eng2, child);
@@ -336,11 +341,11 @@ ZTEST(CrewM17, SemanticMemoryViaEmbeddings) {
 ZTEST(CrewM17, MemoryFallsBackToHashWhenEmbeddingsUnavailable) {
     crew::CrewEngine eng;
     RecPtr rec = std::make_shared<Rec>();
-    rec->embeddingsOk = false; // embeddings 不可用 → 词哈希回退
+    rec->embeddingsOk = false;  // embeddings 不可用 → 词哈希回退
     eng.setInference(rec);
     const std::string id1 = eng.createTask("team voting app for polls");
     waitTerminal(eng, id1);
-    const std::string id2 = eng.createTask("team voting app for surveys"); // 有共同词
+    const std::string id2 = eng.createTask("team voting app for surveys");  // 有共同词
     waitTerminal(eng, id2);
     std::lock_guard<std::mutex> lk(rec->m);
     bool sawLessons = false;
@@ -366,7 +371,7 @@ ZTEST(CrewM17, GuardBlocksInjectionBrief) {
         threw = true;
     }
     ZEXPECT_TRUE(threw);
-    ZEXPECT_EQ(eng.listTasks().size(), size_t{0}); // 任务未创建
+    ZEXPECT_EQ(eng.listTasks().size(), size_t{0});  // 任务未创建
 }
 
 ZTEST(CrewM17, GuardRedactsArtifactPii) {
@@ -376,7 +381,7 @@ ZTEST(CrewM17, GuardRedactsArtifactPii) {
     opt.guard = std::make_shared<ai::GuardInspector>(gc);
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
-    rec->piiInDetail = true; // tester 报告里带邮箱 → 产物入库前必须掩码
+    rec->piiInDetail = true;  // tester 报告里带邮箱 → 产物入库前必须掩码
     eng.setInference(rec);
     const std::string id = eng.createTask("normal brief about reports");
     waitTerminal(eng, id);
@@ -396,11 +401,11 @@ ZTEST(CrewM17, GuardRedactsArtifactPii) {
 
 ZTEST(CrewM17, ScheduledTaskViaCron) {
     crew::EngineOptions opt;
-    opt.scheduleCron = "* * * * *"; // 每分钟
+    opt.scheduleCron = "* * * * *";  // 每分钟
     opt.scheduleBrief = "nightly digest";
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
-    eng.setInference(rec); // 触发 startScheduleIfConfigured
+    eng.setInference(rec);  // 触发 startScheduleIfConfigured
     // 等下一个分钟边界（最长 ~65s）
     bool appeared = false;
     for (int i = 0; i < 1300 && !appeared; ++i) {
@@ -434,8 +439,8 @@ ZTEST(CrewM17, VoteAbstainAndQuorum) {
     // 破平按 options 声明序：平票时 sqlite（首项）胜出而非字典序
     crew::CrewEngine::VoteSpec tie;
     tie.question = "tie?";
-    tie.options = {"postgres", "sqlite"}; // 声明序：postgres 在前
-    tie.voters = {"pm", "tester"};        // mock 全投 sqlite → 2:0 非平
+    tie.options = {"postgres", "sqlite"};  // 声明序：postgres 在前
+    tie.voters = {"pm", "tester"};         // mock 全投 sqlite → 2:0 非平
     auto rec2 = eng.runVote(id, tie);
     ZEXPECT_EQ(rec2.winner, std::string("sqlite"));
 
@@ -444,7 +449,7 @@ ZTEST(CrewM17, VoteAbstainAndQuorum) {
     crew::CrewEngine::VoteSpec single;
     single.question = "single?";
     single.options = {"none", "sqlite"};
-    single.voters = {"pm"}; // mock 投 sqlite
+    single.voters = {"pm"};  // mock 投 sqlite
     auto rec3 = eng.runVote(id, single);
     ZEXPECT_EQ(rec3.winner, std::string("sqlite"));
 }
@@ -478,7 +483,7 @@ ZTEST(CrewM17, HttpTaskPagination) {
         const auto* arr = v.value()["tasks"].asArray();
         return arr == nullptr ? size_t{0} : arr->size();
     };
-    ZEXPECT_EQ(parseCount(get("").body), size_t{3});   // 全量
+    ZEXPECT_EQ(parseCount(get("").body), size_t{3});  // 全量
     ZEXPECT_EQ(parseCount(get("?limit=2").body), size_t{2});
     ZEXPECT_EQ(parseCount(get("?limit=2&offset=2").body), size_t{1});
     ZEXPECT_EQ(parseCount(get("?offset=9").body), size_t{0});
@@ -502,7 +507,7 @@ ZTEST(CrewM18, MarkdownReportContent) {
     ZEXPECT_TRUE(md.find("## 事件时间线") != std::string::npos);
     ZEXPECT_TRUE(md.find("## 产物清单") != std::string::npos);
     ZEXPECT_TRUE(md.find("## 质量评分卡") != std::string::npos);
-    ZEXPECT_TRUE(md.find("storage") != std::string::npos); // 投票议题在内
+    ZEXPECT_TRUE(md.find("storage") != std::string::npos);  // 投票议题在内
     // HTTP 端点
     net::EventLoop loop;
     net::EventLoopThreadPool io{1};
@@ -522,8 +527,8 @@ ZTEST(CrewM18, MarkdownReportContent) {
     std::this_thread::sleep_for(200ms);
     ai::SimpleHttpCall call;
     call.method = "GET";
-    call.url = "http://127.0.0.1:" + std::to_string(srv.port()) +
-               "/crew/tasks/" + id2 + "/report.md";
+    call.url =
+        "http://127.0.0.1:" + std::to_string(srv.port()) + "/crew/tasks/" + id2 + "/report.md";
     auto res = ai::simpleHttpRequest(call);
     ZEXPECT_TRUE(res.ok);
     ZEXPECT_TRUE(res.body.find("text/markdown") != std::string::npos ||
@@ -537,10 +542,10 @@ ZTEST(CrewM18, MarkdownReportContent) {
 
 ZTEST(CrewM18, ConcurrencyCapRespected) {
     crew::EngineOptions opt;
-    opt.maxConcurrentTasks = 2; // 池上限 2
+    opt.maxConcurrentTasks = 2;  // 池上限 2
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
-    rec->chatSleepMs = 60; // 慢速推理：保证观测窗口内有 agent 处于 working
+    rec->chatSleepMs = 60;  // 慢速推理：保证观测窗口内有 agent 处于 working
     eng.setInference(rec);
     std::vector<std::string> ids;
     for (int i = 0; i < 4; ++i) {
@@ -571,12 +576,59 @@ ZTEST(CrewM18, ConcurrencyCapRespected) {
         if (!anyBusy) break;
         std::this_thread::sleep_for(15ms);
     }
-    ZEXPECT_TRUE(maxExecuting <= 2); // 池上限生效：最多 2 条流水线同时在跑
-    for (const std::string& id : ids) waitTerminal(eng, id);
-    for (const std::string& id : ids) { // 4 个全部完成（排队不丢）
+    ZEXPECT_TRUE(maxExecuting <= 2);  // 池上限生效：最多 2 条流水线同时在跑
+    for (const std::string& id : ids)
+        waitTerminal(eng, id);
+    for (const std::string& id : ids) {  // 4 个全部完成（排队不丢）
         auto st = eng.taskInfo(id);
         ZEXPECT_EQ(crew::phaseName(st.value().phase), std::string("done"));
     }
+}
+
+/* ---------------- 流式导出（不再把整包拼成一个大字符串） ---------------- */
+
+ZTEST(CrewM18, ExportBundleStreamsInChunks) {
+    crew::CrewEngine eng;
+    eng.setInference(std::make_shared<Rec>());
+    const std::string id = eng.createTask("stream export");
+    waitTerminal(eng, id);
+
+    std::string streamed;
+    int chunks = 0;
+    const bool ok = eng.exportBundleStream(id, [&](std::string_view s) {
+        ++chunks;
+        streamed.append(s);
+        return true;
+    });
+    ZEXPECT_TRUE(ok);
+    ZEXPECT_TRUE(chunks >= 1);
+
+    // 流式拼出来的必须仍是合法 JSON，且段落齐全
+    auto v = json::JsonValue::parse(streamed);
+    ZEXPECT_TRUE(static_cast<bool>(v));
+    if (v) {
+        ZEXPECT_EQ(v.value()["id"].asString(), id);
+        ZEXPECT_TRUE(v.value()["artifacts"].isArray());
+        ZEXPECT_TRUE(v.value()["votes"].isArray());
+        const auto* evs = v.value()["events"].asArray();
+        ZEXPECT_TRUE(evs != nullptr && !evs->empty());
+        ZEXPECT_TRUE(v.value()["usage"].isObject());
+    }
+
+    // 整包 API 与流式 API 结果一致（前者现在就是后者拼起来）
+    ZEXPECT_EQ(eng.exportBundle(id), streamed);
+
+    // sink 返回 false → 立即中止，不再往下喂
+    int calls = 0;
+    const bool aborted = eng.exportBundleStream(id, [&](std::string_view) {
+        ++calls;
+        return false;
+    });
+    ZEXPECT_FALSE(aborted);
+    ZEXPECT_TRUE(calls <= 1);
+
+    // 不存在的任务
+    ZEXPECT_FALSE(eng.exportBundleStream("no-such-task", [](std::string_view) { return true; }));
 }
 
 ZTEST_MAIN

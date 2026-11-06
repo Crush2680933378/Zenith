@@ -18,7 +18,7 @@ namespace zenith::ai {
 struct DrawResult {
     bool ok = false;
     std::string promptId;
-    std::vector<std::string> outputs;   // 已保存的产物文件路径
+    std::vector<std::string> outputs;  // 已保存的产物文件路径
     std::string error;
 };
 
@@ -30,18 +30,14 @@ public:
     ZENITH_SERVICE_DECL(IAiDrawService, "zenith.ai.IAiDrawService", 1)
 
     /// 提交并等待完成（阻塞调用方线程——经线程池使用为宜）
-    virtual DrawResult draw(const std::string& workflowJson,
-                            const std::string& outputDir,
-                            PlaceholderResolver resolver = nullptr,
-                            int timeoutSec = 300) = 0;
+    virtual DrawResult draw(const std::string& workflowJson, const std::string& outputDir,
+                            PlaceholderResolver resolver = nullptr, int timeoutSec = 300) = 0;
 
     /// 异步形态：提交即返回 prompt_id，进度经轮询线程触发
     using ProgressCallback = std::function<void(const std::string& promptId, double progress)>;
-    virtual std::string submit(const std::string& workflowJson,
-                               const std::string& outputDir,
-                               PlaceholderResolver resolver,
-                               std::function<void(DrawResult)> onDone,
+    virtual std::string submit(const std::string& workflowJson, const std::string& outputDir,
+                               PlaceholderResolver resolver, std::function<void(DrawResult)> onDone,
                                ProgressCallback onProgress = nullptr) = 0;
 };
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

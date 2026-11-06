@@ -25,8 +25,7 @@ core::Result<json::JsonValue> McpClient::rpc(const std::string& method,
     }
     auto parsed = json::JsonValue::parse(resp.value().body);
     if (!parsed) {
-        return core::Result<json::JsonValue>::Err(
-            core::Error(220, "mcp: bad response JSON"));
+        return core::Result<json::JsonValue>::Err(core::Error(220, "mcp: bad response JSON"));
     }
     json::JsonValue& v = parsed.value();
     if (v["error"].isObject()) {
@@ -43,8 +42,7 @@ core::Result<std::vector<RemoteTool>> McpClient::listTools() {
         p["protocolVersion"] = "2026-07-28";
         p["clientInfo"]["name"] = "zenith-mcp-client";
         auto init = rpc("initialize", p);
-        if (!init) return core::Result<std::vector<RemoteTool>>::Err(
-                        std::move(init).error());
+        if (!init) return core::Result<std::vector<RemoteTool>>::Err(std::move(init).error());
     }
     auto res = rpc("tools/list", json::JsonValue::object());
     if (!res) return core::Result<std::vector<RemoteTool>>::Err(std::move(res).error());
@@ -67,7 +65,7 @@ core::Result<std::string> McpClient::callTool(const std::string& name,
                                               const json::JsonValue& args) {
     json::JsonValue p = json::JsonValue::object();
     p["name"] = name;
-    p["arguments"] = args; // 注：本仓 server 兼容 "args"/"arguments" 两种键
+    p["arguments"] = args;  // 注：本仓 server 兼容 "args"/"arguments" 两种键
     auto res = rpc("tools/call", p);
     if (!res) return core::Result<std::string>::Err(std::move(res).error());
     json::JsonValue& r = res.value();
@@ -88,4 +86,4 @@ core::Result<std::string> McpClient::callTool(const std::string& name,
     return core::Result<std::string>::Ok(std::move(text));
 }
 
-} // namespace zenith::mcp
+}  // namespace zenith::mcp

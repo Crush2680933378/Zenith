@@ -18,24 +18,23 @@
 #include "zenith/core/result.hpp"
 #include "zenith/plugin/service.hpp"
 
-#include "uORM/orm/Database.h"
 #include "uORM/driver/DataSource.h"
+#include "uORM/orm/Database.h"
 
 namespace zenith::db {
 
 /// 数据库连接配置（键前缀默认 "db"，如 db.driver / db.host / db.database）
 struct ZENITH_API DbConfig {
-    std::string driver = "sqlite";     // sqlite | mysql | postgresql
+    std::string driver = "sqlite";  // sqlite | mysql | postgresql
     std::string host = "127.0.0.1";
-    int port = 0;                      // sqlite 忽略
+    int port = 0;  // sqlite 忽略
     std::string username;
     std::string password;
-    std::string database = ":memory:"; // sqlite：文件路径或 :memory:
+    std::string database = ":memory:";  // sqlite：文件路径或 :memory:
     int poolSize = 4;
 
     /// 从配置读取（大小写不敏感键）。
-    static DbConfig fromConfig(const core::KeyValueConfig& cfg,
-                               const std::string& prefix = "db");
+    static DbConfig fromConfig(const core::KeyValueConfig& cfg, const std::string& prefix = "db");
 
     /// 转为 uORM 数据源配置。
     [[nodiscard]] uORM::DataSourceConfig toDataSourceConfig() const;
@@ -69,4 +68,4 @@ private:
     std::unique_ptr<concurrency::ThreadPool> workers_;
 };
 
-} // namespace zenith::db
+}  // namespace zenith::db

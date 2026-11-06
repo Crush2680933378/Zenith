@@ -20,9 +20,8 @@ struct CoroFixture {
 
     CoroFixture() {
         io.start();
-        server.router().get("/coro/hello", [](http::Context& c) {
-            c.text(200, "hello from coro");
-        });
+        server.router().get("/coro/hello",
+                            [](http::Context& c) { c.text(200, "hello from coro"); });
         server.router().post("/coro/echo", [](http::Context& c) {
             http::json::JsonValue v = c.bodyJson();
             c.json(200, v);
@@ -38,7 +37,7 @@ struct CoroFixture {
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
-} // namespace
+}  // namespace
 
 ZTEST(CoroHttp, CoAwaitFetch) {
     CoroFixture f;
@@ -88,7 +87,7 @@ ZTEST(CoroHttp, CoAwaitConnectFailureThrows) {
 
     bool threw = false;
     try {
-        auto t = coro::tcpConnect(loop, "127.0.0.1", 1, 1200); // 不可达端口
+        auto t = coro::tcpConnect(loop, "127.0.0.1", 1, 1200);  // 不可达端口
         coro::syncWait(std::move(t));
     } catch (const std::runtime_error&) {
         threw = true;

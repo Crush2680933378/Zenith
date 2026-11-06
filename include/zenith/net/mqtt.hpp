@@ -37,8 +37,7 @@ public:
                                             const std::string& clientId,
                                             const std::string& username = {},
                                             const std::string& password = {},
-                                            int keepAliveSeconds = 60,
-                                            int timeoutMs = 10000);
+                                            int keepAliveSeconds = 60, int timeoutMs = 10000);
     MqttClient() = default;
     ~MqttClient();
     MqttClient(MqttClient&& o) noexcept;
@@ -47,9 +46,8 @@ public:
     MqttClient& operator=(const MqttClient&) = delete;
 
     /// 发布（qos0 即发即忘；qos1 阻塞等 PUBACK）
-    [[nodiscard]] core::Result<void> publish(const std::string& topic,
-                                             std::string_view payload, int qos = 0,
-                                             bool retain = false);
+    [[nodiscard]] core::Result<void> publish(const std::string& topic, std::string_view payload,
+                                             int qos = 0, bool retain = false);
     /// 订阅并等 SUBACK（qos 为申请上限）
     [[nodiscard]] core::Result<void> subscribe(const std::string& topic, int qos = 0);
 
@@ -76,4 +74,4 @@ private:
     OnMessage onMessage_;
 };
 
-} // namespace zenith::net::mqtt
+}  // namespace zenith::net::mqtt

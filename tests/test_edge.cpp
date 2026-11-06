@@ -4,19 +4,19 @@
 #include <thread>
 
 #if defined(_WIN32)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #include "ztest.hpp"
@@ -51,7 +51,7 @@ ZTEST(Cobs, EncodeDecodeRoundtrip) {
     // 随机含零字节回环
     std::string rnd(1000, '\0');
     for (size_t i = 0; i < rnd.size(); ++i) {
-        rnd[i] = static_cast<char>((i * 37 + 11) % 256); // 周期性含 0x00
+        rnd[i] = static_cast<char>((i * 37 + 11) % 256);  // 周期性含 0x00
     }
     auto rb = io::cobsDecode(io::cobsEncode(rnd));
     ZEXPECT_TRUE(rb.has_value());
@@ -81,16 +81,15 @@ ZTEST(Frame, EncodeDecodeWithCrc) {
     const std::string payload = R"({"t":"hb","id":"esp-1"})";
     const std::string wire = io::frame::encode(payload);
     ZEXPECT_TRUE(wire.back() == '\0');
-    auto back = io::frame::decode(
-        reinterpret_cast<const uint8_t*>(wire.data()), wire.size() - 1);
+    auto back = io::frame::decode(reinterpret_cast<const uint8_t*>(wire.data()), wire.size() - 1);
     ZEXPECT_TRUE(back.has_value());
     ZEXPECT_EQ(back.value(), payload);
 
     // 破坏一字节 → CRC 拒绝
     std::string corrupt = wire;
     corrupt[corrupt.size() / 2] = static_cast<char>(corrupt[corrupt.size() / 2] ^ 0x55);
-    auto bad = io::frame::decode(
-        reinterpret_cast<const uint8_t*>(corrupt.data()), corrupt.size() - 1);
+    auto bad =
+        io::frame::decode(reinterpret_cast<const uint8_t*>(corrupt.data()), corrupt.size() - 1);
     ZEXPECT_TRUE(!bad.has_value());
 }
 
@@ -104,7 +103,8 @@ ZTEST(Deframer, StreamSplitAndMultiple) {
     std::vector<std::string> got;
     for (char c : stream) {
         auto frames = df.feed(&reinterpret_cast<const uint8_t&>(c), 1);
-        for (auto& f : frames) got.push_back(f);
+        for (auto& f : frames)
+            got.push_back(f);
     }
     ZEXPECT_EQ(got.size(), size_t{2});
     if (got.size() == 2) {
@@ -120,7 +120,7 @@ ZTEST(Deframer, StreamSplitAndMultiple) {
 
 ZTEST(Serial, EnumerateAndOpenMissing) {
     const auto ports = io::SerialPort::enumerate();
-    (void)ports; // 环境相关——仅验证不崩溃
+    (void)ports;  // 环境相关——仅验证不崩溃
     io::SerialPort sp;
     auto r = sp.open("COM_IMPOSSIBLE_99", io::SerialOptions{});
     ZEXPECT_TRUE(r.isErr());
@@ -147,15 +147,17 @@ public:
     }
     /// 读一帧（JSON 载荷）；超时返回空
     std::string recvJson(int timeoutMs = 3000) {
-        const auto deadline = std::chrono::steady_clock::now() +
-                              std::chrono::milliseconds(timeoutMs);
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
         while (std::chrono::steady_clock::now() < deadline) {
-            for (const std::string& f : deframer_.feed(buf_)) return f;
+            for (const std::string& f : deframer_.feed(buf_))
+                return f;
             uint8_t tmp[4096];
             const int n = ::recv(fd_, reinterpret_cast<char*>(tmp), sizeof(tmp), 0);
             if (n > 0) {
                 buf_.assign(reinterpret_cast<char*>(tmp), static_cast<size_t>(n));
-                for (const std::string& f : deframer_.feed(buf_)) return f;
+                for (const std::string& f : deframer_.feed(buf_))
+                    return f;
                 buf_.clear();
             } else if (n == 0) {
                 return "";
@@ -179,7 +181,7 @@ private:
     io::frame::Deframer deframer_;
     std::string buf_;
 };
-} // namespace
+}  // namespace
 
 ZTEST(EdgePlugin, GatewayHelloHeartbeatRpc) {
 #if defined(_WIN32)
@@ -192,7 +194,7 @@ ZTEST(EdgePlugin, GatewayHelloHeartbeatRpc) {
     (void)mgr.loadDirectory(ZENITH_TEST_PLUGIN_DIR);
 
     void* raw = registry.queryRaw(edge::IDeviceBridge::service_name(),
-                                   edge::IDeviceBridge::service_version());
+                                  edge::IDeviceBridge::service_version());
     ZEXPECT_TRUE(raw != nullptr);
     if (raw == nullptr) return;
     auto* bridge = static_cast<edge::IDeviceBridge*>(raw);
@@ -228,8 +230,7 @@ ZTEST(EdgePlugin, GatewayHelloHeartbeatRpc) {
     // RPC 往返
     std::atomic<bool> rpcDone{false};
     std::string rpcResp;
-    ZEXPECT_TRUE(bridge->sendRpc("esp32-test-1", "led",
-                                 R"({"on":true})",
+    ZEXPECT_TRUE(bridge->sendRpc("esp32-test-1", "led", R"({"on":true})",
                                  [&](bool ok, const std::string& resp) {
                                      rpcDone.store(true);
                                      rpcResp = resp;
@@ -243,7 +244,8 @@ ZTEST(EdgePlugin, GatewayHelloHeartbeatRpc) {
     // 提取 rid（简化：固定回 1 —— sendRpc 首个 rid）
     ZEXPECT_TRUE(dev.sendJson(R"({"t":"resp","rid":1,"ok":true,"data":{"state":"on"}})"));
 
-    for (int i = 0; i < 200 && !rpcDone.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 200 && !rpcDone.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(rpcDone.load());
     ZEXPECT_TRUE(rpcResp.find("\"state\":\"on\"") != std::string::npos);
 

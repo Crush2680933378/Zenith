@@ -13,7 +13,7 @@ using namespace std::chrono_literals;
 
 namespace {
 const char* kValid = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-} // namespace
+}  // namespace
 
 ZTEST(TraceContext, ParseValid) {
     auto tc = obs::TraceContext::parse(kValid);
@@ -23,36 +23,36 @@ ZTEST(TraceContext, ParseValid) {
     ZEXPECT_EQ(tc->spanId, std::string("00f067aa0ba902b7"));
     ZEXPECT_TRUE(tc->sampled);
     ZEXPECT_TRUE(tc->valid());
-    ZEXPECT_EQ(tc->traceparent(), std::string(kValid)); // 往返一致
+    ZEXPECT_EQ(tc->traceparent(), std::string(kValid));  // 往返一致
 }
 
 ZTEST(TraceContext, ParseRejectsInvalid) {
     // 太短
     ZEXPECT_FALSE(obs::TraceContext::parse("00-abc-def-01").has_value());
     // 大写十六进制（规范要求小写）
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01")
+            .has_value());
     // trace-id 全零
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "00-00000000000000000000000000000000-00f067aa0ba902b7-01")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("00-00000000000000000000000000000000-00f067aa0ba902b7-01")
+            .has_value());
     // parent-id 全零
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01")
+            .has_value());
     // 版本 ff 保留
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+            .has_value());
     // 版本 00 带多余尾巴
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra")
+            .has_value());
     // 分隔符错位
-    ZEXPECT_FALSE(obs::TraceContext::parse(
-                      "00_4bf92f3577b34da6a3ce929d0e0e4736_00f067aa0ba902b7_01")
-                      .has_value());
+    ZEXPECT_FALSE(
+        obs::TraceContext::parse("00_4bf92f3577b34da6a3ce929d0e0e4736_00f067aa0ba902b7_01")
+            .has_value());
     // 空
     ZEXPECT_FALSE(obs::TraceContext::parse("").has_value());
 }
@@ -86,11 +86,11 @@ ZTEST(TraceContext, ScopeRestoresPrevious) {
         ZEXPECT_EQ(cur->traceId, tc.traceId);
         {
             const obs::TraceScope nested(std::nullopt);
-            ZEXPECT_FALSE(obs::currentTrace().has_value()); // 内层清空
+            ZEXPECT_FALSE(obs::currentTrace().has_value());  // 内层清空
         }
-        ZEXPECT_TRUE(obs::currentTrace().has_value()); // 恢复外层
+        ZEXPECT_TRUE(obs::currentTrace().has_value());  // 恢复外层
     }
-    ZEXPECT_FALSE(obs::currentTrace().has_value()); // 整体复原
+    ZEXPECT_FALSE(obs::currentTrace().has_value());  // 整体复原
 }
 
 /* ---------------- 两跳传播：A 收到 → A 的下游调用带上同一条 trace ---------------- */
@@ -142,7 +142,7 @@ struct TraceFixture {
         return "http://127.0.0.1:" + std::to_string(a.port()) + path;
     }
 };
-} // namespace
+}  // namespace
 
 ZTEST(TraceE2E, ServerExtractsInboundHeader) {
     TraceFixture f;
@@ -151,7 +151,7 @@ ZTEST(TraceE2E, ServerExtractsInboundHeader) {
     rq.headers.set("traceparent", kValid);
     auto r = http::HttpClient::fetchBlocking(rq);
     ZEXPECT_TRUE(static_cast<bool>(r));
-    ZEXPECT_EQ(r.value().body, std::string(kValid)); // 服务端解析出同一条链路
+    ZEXPECT_EQ(r.value().body, std::string(kValid));  // 服务端解析出同一条链路
 }
 
 ZTEST(TraceE2E, ServerGeneratesWhenHeaderAbsent) {

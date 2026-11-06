@@ -22,15 +22,15 @@
 #include <stdint.h>
 
 #if defined(_WIN32)
-#  if defined(ZENITH_NINFER_SHIM_BUILD)
-#    define NZ_EXPORT __declspec(dllexport)
-#  else
-#    define NZ_EXPORT
-#  endif
-#  define NZ_CALL __cdecl
+#if defined(ZENITH_NINFER_SHIM_BUILD)
+#define NZ_EXPORT __declspec(dllexport)
 #else
-#  define NZ_EXPORT __attribute__((visibility("default")))
-#  define NZ_CALL
+#define NZ_EXPORT
+#endif
+#define NZ_CALL __cdecl
+#else
+#define NZ_EXPORT __attribute__((visibility("default")))
+#define NZ_CALL
 #endif
 
 #ifdef __cplusplus
@@ -42,16 +42,16 @@ extern "C" {
 
 /// 引擎配置（POD，字段全部定宽）
 typedef struct zenith_nz_config {
-    uint32_t struct_size;        ///< = sizeof(zenith_nz_config)，前向兼容
-    int32_t  device;             ///< CUDA 设备号，0 = 第一块卡
-    uint32_t max_context;        ///< 单请求逻辑上限，0 = 8192（kv_capacity 须 >= 它）
-    uint32_t kv_capacity_tokens; ///< KV 池 token 数，0 = max_context
-    uint32_t prefill_chunk;      ///< 预填分块，0 = 引擎默认
-    uint32_t kv_dtype;           ///< 见 zenith_nz_kv_dtype
-    uint32_t spec_backend;       ///< 见 zenith_nz_spec_backend
-    uint32_t draft_tokens;       ///< 投机草稿数（spec_backend != None 时生效）
-    uint32_t max_concurrency;    ///< 并发请求数，0 = 1
-    uint32_t gdn_state_fp16;     ///< 非 0 用 FP16 GDN 状态（省显存）
+    uint32_t struct_size;         ///< = sizeof(zenith_nz_config)，前向兼容
+    int32_t device;               ///< CUDA 设备号，0 = 第一块卡
+    uint32_t max_context;         ///< 单请求逻辑上限，0 = 8192（kv_capacity 须 >= 它）
+    uint32_t kv_capacity_tokens;  ///< KV 池 token 数，0 = max_context
+    uint32_t prefill_chunk;       ///< 预填分块，0 = 引擎默认
+    uint32_t kv_dtype;            ///< 见 zenith_nz_kv_dtype
+    uint32_t spec_backend;        ///< 见 zenith_nz_spec_backend
+    uint32_t draft_tokens;        ///< 投机草稿数（spec_backend != None 时生效）
+    uint32_t max_concurrency;     ///< 并发请求数，0 = 1
+    uint32_t gdn_state_fp16;      ///< 非 0 用 FP16 GDN 状态（省显存）
 } zenith_nz_config;
 
 typedef enum zenith_nz_kv_dtype {
@@ -82,60 +82,61 @@ typedef struct zenith_nz_message {
 /// 采样参数（全部可选：NaN/负值表示用引擎默认）
 typedef struct zenith_nz_sampling {
     uint32_t struct_size;
-    float    temperature;      ///< <0 = 默认
-    float    top_p;            ///< <=0 = 默认
-    int32_t  top_k;            ///< <=0 = 默认
+    float temperature;  ///< <0 = 默认
+    float top_p;        ///< <=0 = 默认
+    int32_t top_k;      ///< <=0 = 默认
     uint32_t seed;
-    int32_t  enable_thinking;  ///< -1 关闭 / 0 引擎默认 / 1 开启
+    int32_t enable_thinking;  ///< -1 关闭 / 0 引擎默认 / 1 开启
 } zenith_nz_sampling;
 
 /// 流式回调：返回 0 继续、非 0 请求中止
 /// 流式片段所属通道（ABI v2 新增）
 typedef enum zenith_nz_channel {
-    ZENITH_NZ_CHANNEL_CONTENT = 0,   ///< 正式回复
-    ZENITH_NZ_CHANNEL_REASONING = 1, ///< 思考过程（思考模型）
+    ZENITH_NZ_CHANNEL_CONTENT = 0,    ///< 正式回复
+    ZENITH_NZ_CHANNEL_REASONING = 1,  ///< 思考过程（思考模型）
 } zenith_nz_channel;
 
 /// 流式回调：piece/len 是 UTF-8 片段，channel 见 zenith_nz_channel。
 /// 返回 0 继续、非 0 请求中止。
 /// 注意：v1 的回调没有 channel 参数，只有 content；v2 起两路都实时回调。
-typedef int32_t (NZ_CALL *zenith_nz_token_cb)(const char* piece, int32_t len, int32_t channel,
+typedef int32_t(NZ_CALL* zenith_nz_token_cb)(const char* piece, int32_t len, int32_t channel,
                                              void* user);
 
 /// 结果（调用方分配；内部只用固定缓冲，绝不交出内部分配的指针）
 typedef struct zenith_nz_result {
     uint32_t struct_size;
-    int32_t  status;              ///< 0 = 成功，非 0 见 error
-    int32_t  finish_reason;       ///< 0=None 1=OutputLimit 2=ContextCapacity 3=StopToken 4=StopString 5=Cancelled
+    int32_t status;         ///< 0 = 成功，非 0 见 error
+    int32_t finish_reason;  ///< 0=None 1=OutputLimit 2=ContextCapacity 3=StopToken 4=StopString
+                            ///< 5=Cancelled
     uint32_t prompt_tokens;
     uint32_t completion_tokens;
     uint32_t reasoning_tokens;
     uint32_t reused_prompt_tokens;
     uint32_t reserved0;
-    double   first_token_seconds;
-    double   prefill_seconds;
-    double   decode_seconds;
-    double   total_seconds;
+    double first_token_seconds;
+    double prefill_seconds;
+    double decode_seconds;
+    double total_seconds;
     uint64_t drafted_tokens;
     uint64_t accepted_tokens;
-    uint32_t content_len;         ///< 实际写入 content 的字节数（截断时 < 生成长度）
-    uint32_t content_truncated;   ///< 非 0 = content 缓冲不够，已截断
-    char     content[16384];      ///< 定长缓冲，避免跨 CRT 释放
-    char     reasoning[16384]; ///< 思考模型会写很长，2 KB 不够
-    char     error[512];
+    uint32_t content_len;        ///< 实际写入 content 的字节数（截断时 < 生成长度）
+    uint32_t content_truncated;  ///< 非 0 = content 缓冲不够，已截断
+    char content[16384];         ///< 定长缓冲，避免跨 CRT 释放
+    char reasoning[16384];       ///< 思考模型会写很长，2 KB 不够
+    char error[512];
 } zenith_nz_result;
 
 /// 运行时资源占用（ABI v3）。调用方填 struct_size，插件按自己认识的字段写入。
 typedef struct zenith_nz_runtime {
     uint32_t struct_size;
-    uint32_t kv_used_tokens;        ///< 当前 KV 占用（token 数，含租约）
-    uint32_t kv_capacity_tokens;    ///< KV 池容量（token 数）
-    uint32_t kv_occupied_pages;     ///< 已占用页数（引擎内部单位）
-    uint32_t kv_capacity_pages;     ///< 容量页数
-    uint64_t host_kv_used_bytes;    ///< 落在 host 内存的 KV 占用
+    uint32_t kv_used_tokens;      ///< 当前 KV 占用（token 数，含租约）
+    uint32_t kv_capacity_tokens;  ///< KV 池容量（token 数）
+    uint32_t kv_occupied_pages;   ///< 已占用页数（引擎内部单位）
+    uint32_t kv_capacity_pages;   ///< 容量页数
+    uint64_t host_kv_used_bytes;  ///< 落在 host 内存的 KV 占用
     uint64_t host_kv_capacity_bytes;
-    uint64_t reused_tokens;         ///< 前缀缓存复用（累计）
-    uint32_t last_prompt_tokens;    ///< 最近一次请求
+    uint64_t reused_tokens;       ///< 前缀缓存复用（累计）
+    uint32_t last_prompt_tokens;  ///< 最近一次请求
     uint32_t last_completion_tokens;
 } zenith_nz_runtime;
 
@@ -146,22 +147,22 @@ typedef struct zenith_nz_engine zenith_nz_engine;
 typedef struct zenith_nz_service {
     uint32_t version;  ///< = ZENITH_NINFER_C_API_VERSION
     uint32_t reserved;
-    void*    engine;   ///< zenith_nz_engine*（由 shim 创建，插件持有）
+    void* engine;  ///< zenith_nz_engine*（由 shim 创建，插件持有）
     /// 生成一次；返回 0 表示调用成功（结果细节看 out->status）
-    int32_t (NZ_CALL* generate)(void* engine, const zenith_nz_message* messages, int32_t count,
-                                int32_t max_tokens, const zenith_nz_sampling* sampling,
-                                zenith_nz_token_cb cb, void* user, zenith_nz_result* out);
+    int32_t(NZ_CALL* generate)(void* engine, const zenith_nz_message* messages, int32_t count,
+                               int32_t max_tokens, const zenith_nz_sampling* sampling,
+                               zenith_nz_token_cb cb, void* user, zenith_nz_result* out);
     /// 引擎侧累计计数（请求数/生成 token 数），返回 0 成功
-    int32_t (NZ_CALL* stats)(void* engine, uint64_t* requests, uint64_t* prompt_tokens,
-                             uint64_t* completion_tokens, uint64_t* accepted, uint64_t* drafted);
+    int32_t(NZ_CALL* stats)(void* engine, uint64_t* requests, uint64_t* prompt_tokens,
+                            uint64_t* completion_tokens, uint64_t* accepted, uint64_t* drafted);
     /// 最近一次错误文本（引擎内静态缓冲，调用方不得释放）
-    const char* (NZ_CALL* last_error)(void* engine);
+    const char*(NZ_CALL* last_error)(void* engine);
     /// 运行时资源占用（ABI v3；v2 及更早的表没有这一项）。返回 0 成功
-    int32_t (NZ_CALL* runtime)(void* engine, zenith_nz_runtime* out);
+    int32_t(NZ_CALL* runtime)(void* engine, zenith_nz_runtime* out);
 } zenith_nz_service;
 
 #ifdef __cplusplus
-} // extern "C"
+}  // extern "C"
 #endif
 
-#endif // ZENITH_AI_NINFER_C_API_H
+#endif  // ZENITH_AI_NINFER_C_API_H

@@ -10,11 +10,11 @@ namespace {
 struct ConnState {
     explicit ConnState(size_t maxBody) : parser(maxBody) {}
     HttpRequestParser parser;
-    bool streaming = false; // M9.1：流式响应在途（不参与空闲踢除/keep-alive）
+    bool streaming = false;  // M9.1：流式响应在途（不参与空闲踢除/keep-alive）
     // M7.2a：连接级 Context 池——keep-alive 每请求零构造（reset 复用堆容量）
     std::unique_ptr<Context> ctx;
 };
-} // namespace
+}  // namespace
 
 HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool, size_t maxBody)
     : HttpServer(loop, ioPool, [&] {
@@ -24,13 +24,11 @@ HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool, s
       }()) {}
 
 HttpServer::HttpServer(net::EventLoop* loop, net::EventLoopThreadPool* ioPool,
-                        const SecurityLimits& limits)
+                       const SecurityLimits& limits)
     : loop_(loop), server_(loop, ioPool), limits_(limits) {
     maxBodyBytes_ = limits.maxBodyBytes;
     server_.setMessageCallback(
-        [this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) {
-            onMessage(conn, buf);
-        });
+        [this](const net::TcpConnection::Ptr& conn, core::Buffer& buf) { onMessage(conn, buf); });
     // 连接装饰器：计数 + 空闲踢除定时器（slowloris 防线）
     server_.addConnectionDecorator([this](const net::TcpConnection::Ptr& conn) {
         const int n = connCount_.fetch_add(1) + 1;
@@ -70,8 +68,8 @@ void HttpServer::armIdleTimer(const net::TcpConnection::Ptr& conn) {
     // 弱捕获：定时器不该拥有连接。强捕获会让「已关闭但定时器未到期」的连接
     // 一直活着（LSan 报的 TcpConnection 缓冲泄漏就是这么来的）。
     std::weak_ptr<net::TcpConnection> wconn = conn;
-    idleTimers_[key] = loop_->scheduleAfter(
-        std::chrono::seconds(limits_.keepAliveIdleSec), [this, wconn, key] {
+    idleTimers_[key] =
+        loop_->scheduleAfter(std::chrono::seconds(limits_.keepAliveIdleSec), [this, wconn, key] {
             std::lock_guard<std::mutex> lk2(idleMtx_);
             idleTimers_.erase(key);
             auto conn = wconn.lock();
@@ -79,7 +77,7 @@ void HttpServer::armIdleTimer(const net::TcpConnection::Ptr& conn) {
             // M9.1：SSE/分块流在途时不得踢除——长连接本身可能长时间无新字节
             auto st = conn->context<ConnState>();
             if (st != nullptr && st->streaming) return;
-            conn->forceClose(); // 空闲超限
+            conn->forceClose();  // 空闲超限
         });
 }
 
@@ -97,14 +95,16 @@ void HttpServer::cancelIdleTimer(const net::TcpConnection::Ptr& conn) {
     if (tid != 0) loop_->cancel(tid);
 }
 
-HttpServer::~HttpServer() { stop(); }
+HttpServer::~HttpServer() {
+    stop();
+}
 
 core::Result<void> HttpServer::listen(const std::string& host, uint16_t port, int backlog) {
     return server_.listen(host, port, backlog);
 }
 
-core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx,
-                                          const std::string& host, uint16_t port, int backlog) {
+core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx, const std::string& host,
+                                         uint16_t port, int backlog) {
     server_.addConnectionDecorator([&ctx](const net::TcpConnection::Ptr& conn) {
         SSL* ssl = ctx.newServerSession();
         if (ssl == nullptr) {
@@ -116,12 +116,14 @@ core::Result<void> HttpServer::listenTls(const tls::OpenSslContext& ctx,
     return server_.listen(host, port, backlog);
 }
 
-void HttpServer::stop() { server_.stop(); }
+void HttpServer::stop() {
+    server_.stop();
+}
 
 void HttpServer::beginGracefulShutdown(std::function<void()> onDrained) {
     closing_.store(true);
     drainedCb_ = std::move(onDrained);
-    server_.stop(); // 停 accept；既有连接继续服务至排空
+    server_.stop();  // 停 accept；既有连接继续服务至排空
     if (inflight_.load() == 0 && drainedCb_) {
         loop_->runInLoop([cb = std::move(drainedCb_)] { cb(); });
         drainedCb_ = nullptr;
@@ -136,14 +138,14 @@ void HttpServer::maybeFireDrained() {
     }
 }
 
-void HttpServer::enableWebSocket(
-    const std::string& path, std::function<void(const net::WebSocketSession::Ptr&)> onOpen) {
+void HttpServer::enableWebSocket(const std::string& path,
+                                 std::function<void(const net::WebSocketSession::Ptr&)> onOpen) {
     wsPaths_[path] = std::move(onOpen);
 }
 
 bool HttpServer::tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn) {
     auto state = conn->context<ConnState>();
-    const std::string path = state->parser.request().path; // 先拷贝（reset 会清空内部请求）
+    const std::string path = state->parser.request().path;  // 先拷贝（reset 会清空内部请求）
     const std::string key = state->parser.request().headers.get("Sec-WebSocket-Key");
     if (key.empty()) return false;
 
@@ -160,13 +162,13 @@ bool HttpServer::tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn) {
     // 接管动作投递执行：takeover 会替换正在执行的 HTTP 消息回调，
     // 在其闭包内继续操作属于 use-after-free。
     const std::string earlyFrames = state->parser.releaseLeftover();
-    state->parser.reset(); // HTTP 阶段结束
+    state->parser.reset();  // HTTP 阶段结束
     auto* self = this;
     loop_->queueInLoop([self, conn, path, earlyFrames]() mutable {
         auto session = net::WebSocketSession::takeover(conn, /*clientSide=*/false);
         auto it = self->wsPaths_.find(path);
         if (it != self->wsPaths_.end() && it->second) it->second(session);
-        session->processPending(earlyFrames); // 回放同包到达的早期帧
+        session->processPending(earlyFrames);  // 回放同包到达的早期帧
     });
     return true;
 }
@@ -179,7 +181,7 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
     }
 
     for (;;) {
-        const ParseOutcome out = state->parser.feed(buf); // buf 字节全部转入解析器
+        const ParseOutcome out = state->parser.feed(buf);  // buf 字节全部转入解析器
         if (out.failed()) {
             HttpResponse resp;
             resp.status = 400;
@@ -189,7 +191,7 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
             conn->shutdown();
             return;
         }
-        if (!out.complete()) return; // 等待更多数据
+        if (!out.complete()) return;  // 等待更多数据
 
         handleRequest(conn);
 
@@ -202,10 +204,11 @@ void HttpServer::onMessage(const net::TcpConnection::Ptr& conn, core::Buffer& bu
 }
 
 void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
-    armIdleTimer(conn); // 每请求续期空闲计时
+    armIdleTimer(conn);  // 每请求续期空闲计时
     inflight_.fetch_add(1);
     auto inflightGuard = [this](void*) { maybeFireDrained(); };
-    std::unique_ptr<void, decltype(inflightGuard)> guard{reinterpret_cast<void*>(this), inflightGuard};
+    std::unique_ptr<void, decltype(inflightGuard)> guard{reinterpret_cast<void*>(this),
+                                                         inflightGuard};
 
     auto state = conn->context<ConnState>();
     HttpRequest req = state->parser.request();
@@ -230,22 +233,21 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     Context& ctx = *state->ctx;
     ctx.response().httpMajor = ctx.request().httpMajor;
     ctx.response().httpMinor = ctx.request().httpMinor;
-    ctx.setConnection(conn); // M9.1：流式响应写端需要连接
+    ctx.setConnection(conn);  // M9.1：流式响应写端需要连接
     state->streaming = false;
 
     // M8.7：提取入站 W3C traceparent 并写入线程上下文（无则新起一条）。
     // 作用域覆盖整个派发过程：handler 里发起的下游 HttpClient 调用会自动
     // 带上同一条 trace，跨服务链路由此串起来——业务代码零改动。
-    const obs::TraceScope traceScope(
-        obs::TraceContext::parseOrGenerate(ctx.header("traceparent")));
+    const obs::TraceScope traceScope(obs::TraceContext::parseOrGenerate(ctx.header("traceparent")));
 
     try {
         router_.dispatch(ctx);
     } catch (const Context::BadRequestBody& e) {
         ctx.status(400).text(400, std::string("400 Bad Request: ") + e.what());
     } catch (const std::exception& e) {
-        ZLOG_ERROR("http handler exception: ", e.what(), " (", ctx.peer(), " ",
-                   ctx.request().path, ")");
+        ZLOG_ERROR("http handler exception: ", e.what(), " (", ctx.peer(), " ", ctx.request().path,
+                   ")");
         ctx.status(500).text(500, std::string("500 Internal Server Error"));
     } catch (...) {
         ZLOG_ERROR("http handler unknown exception (", ctx.peer(), " ", ctx.request().path, ")");
@@ -259,7 +261,7 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
 
     const bool isHead = ctx.request().method == HttpMethod::Head;
     bool keep = ctx.request().keepAlive();
-    if (closing_.load()) keep = false; // 停机中：一律短连接
+    if (closing_.load()) keep = false;  // 停机中：一律短连接
 
     // 流式响应（M9.1）：响应头已由 SseStream/ChunkWriter 写出，正文由 handler
     // 持有的写端继续推送；服务器此刻既不补 Content-Length，也不关连接。
@@ -298,4 +300,4 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     if (!keep) conn->shutdown();
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

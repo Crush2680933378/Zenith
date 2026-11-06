@@ -16,12 +16,14 @@ PluginManager::PluginManager(ServiceRegistry& registry, concurrency::ThreadPool*
                              core::KeyValueConfig* config)
     : registry_(registry), pool_(pool), config_(config) {}
 
-PluginManager::~PluginManager() { unloadAll(); }
+PluginManager::~PluginManager() {
+    unloadAll();
+}
 
 core::Result<PluginInfo*> PluginManager::load(const std::string& path) {
     auto info = std::make_unique<PluginInfo>();
     info->path = path;
-    info->lib  = std::make_unique<DynLib>(path);
+    info->lib = std::make_unique<DynLib>(path);
 
     auto lr = info->lib->load();
     if (!lr) {
@@ -34,7 +36,7 @@ core::Result<PluginInfo*> PluginManager::load(const std::string& path) {
         return core::Result<PluginInfo*>::Err(
             core::Error(3, "not a Zenith plugin (entry symbol missing): " + path));
     }
-    const zenith_plugin_desc* entry = entryFn(); // 调用入口函数取描述符
+    const zenith_plugin_desc* entry = entryFn();  // 调用入口函数取描述符
     if (entry == nullptr) {
         return core::Result<PluginInfo*>::Err(
             core::Error(3, "plugin entry returned null descriptor: " + path));
@@ -44,18 +46,18 @@ core::Result<PluginInfo*> PluginManager::load(const std::string& path) {
     if (!vr) {
         return core::Result<PluginInfo*>::Err(std::move(vr).error());
     }
-    info->desc        = *entry;
-    info->name        = entry->name ? entry->name : "(unnamed)";
-    info->version     = entry->version ? entry->version : "0.0.0";
+    info->desc = *entry;
+    info->name = entry->name ? entry->name : "(unnamed)";
+    info->version = entry->version ? entry->version : "0.0.0";
     info->description = entry->description ? entry->description : "";
-    info->author      = entry->author ? entry->author : "";
-    info->state       = PluginState::Loaded;
+    info->author = entry->author ? entry->author : "";
+    info->state = PluginState::Loaded;
 
     ZLOG_INFO("plugin loaded: ", info->name, " v", info->version, " (", path, ")");
 
     // init：注入携带本插件令牌的宿主能力表（存于 PluginInfo，栈生存期外仍有效）
-    info->hostApi = makeHostApiV1(HostContext{&registry_, pool_, config_},
-                                   static_cast<void*>(info.get()));
+    info->hostApi =
+        makeHostApiV1(HostContext{&registry_, pool_, config_}, static_cast<void*>(info.get()));
     const zenith_status st = info->desc.init(&info->hostApi);
     if (st != ZENITH_OK) {
         // init 可能已注册服务后才失败：必须先按令牌清理（此刻 DLL 仍在内存），
@@ -224,9 +226,8 @@ core::Result<PluginInfo*> PluginManager::reload(const std::string& path) {
     if (info->desc.start != nullptr) {
         const zenith_status st = info->desc.start();
         if (st != ZENITH_OK) {
-            return core::Result<PluginInfo*>::Err(
-                core::Error(9, "plugin start failed after reload (" + std::to_string(st) +
-                                   "): " + info->name));
+            return core::Result<PluginInfo*>::Err(core::Error(
+                9, "plugin start failed after reload (" + std::to_string(st) + "): " + info->name));
         }
         info->state = PluginState::Started;
     } else {
@@ -236,28 +237,24 @@ core::Result<PluginInfo*> PluginManager::reload(const std::string& path) {
     return core::Result<PluginInfo*>::Ok(info);
 }
 
-core::Result<void> PluginManager::validateDesc(const zenith_plugin_desc* desc,
-                                               const DynLib& lib) {
+core::Result<void> PluginManager::validateDesc(const zenith_plugin_desc* desc, const DynLib& lib) {
     if (desc == nullptr) {
         return core::Result<void>::Err(core::Error(8, lib.path() + ": null descriptor"));
     }
     if (desc->struct_size < ZENITH_DESC_MIN_SIZE) {
-        return core::Result<void>::Err(
-            core::Error(8, lib.path() + ": desc.struct_size too small (" +
-                               std::to_string(desc->struct_size) + " < " +
-                               std::to_string(ZENITH_DESC_MIN_SIZE) + ")"));
+        return core::Result<void>::Err(core::Error(
+            8, lib.path() + ": desc.struct_size too small (" + std::to_string(desc->struct_size) +
+                   " < " + std::to_string(ZENITH_DESC_MIN_SIZE) + ")"));
     }
     if (desc->abi_version == 0 || desc->abi_version > ZENITH_ABI_VERSION) {
-        return core::Result<void>::Err(
-            core::Error(8, lib.path() + ": ABI version mismatch (plugin " +
-                               std::to_string(desc->abi_version) + ", host " +
-                               std::to_string(ZENITH_ABI_VERSION) + ")"));
+        return core::Result<void>::Err(core::Error(
+            8, lib.path() + ": ABI version mismatch (plugin " + std::to_string(desc->abi_version) +
+                   ", host " + std::to_string(ZENITH_ABI_VERSION) + ")"));
     }
     if (desc->init == nullptr) {
-        return core::Result<void>::Err(
-            core::Error(8, lib.path() + ": desc.init is required"));
+        return core::Result<void>::Err(core::Error(8, lib.path() + ": desc.init is required"));
     }
     return core::Result<void>::Ok();
 }
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

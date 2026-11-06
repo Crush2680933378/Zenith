@@ -22,17 +22,17 @@ namespace zenith::net {
 /// WebSocket 操作码
 enum class WsOpcode : uint8_t {
     Continuation = 0x0,
-    Text         = 0x1,
-    Binary       = 0x2,
-    Close        = 0x8,
-    Ping         = 0x9,
-    Pong         = 0xA,
+    Text = 0x1,
+    Binary = 0x2,
+    Close = 0x8,
+    Ping = 0x9,
+    Pong = 0xA,
 };
 
 /// 单个帧（已解掩码 / 未编码）
 struct WsFrame {
-    bool      fin = true;
-    WsOpcode  opcode = WsOpcode::Text;
+    bool fin = true;
+    WsOpcode opcode = WsOpcode::Text;
     std::string payload;
 
     /// 服务端发出（不掩码）
@@ -45,7 +45,7 @@ struct WsDecodeResult {
     State state = State::Incomplete;
     std::string error;
     WsFrame frame;
-    size_t consumed = 0; // Ok 时：本帧占用字节数
+    size_t consumed = 0;  // Ok 时：本帧占用字节数
 };
 ZENITH_API WsDecodeResult wsDecodeFrame(const uint8_t* data, size_t n, bool requireMask);
 
@@ -55,19 +55,18 @@ ZENITH_API std::string wsComputeAccept(const std::string& clientKey);
 // ---------------------------------------------------------------------------
 // 会话（服务端/客户端共用；持有 TcpConnection）
 // ---------------------------------------------------------------------------
-class ZENITH_API WebSocketSession
-    : public std::enable_shared_from_this<WebSocketSession> {
+class ZENITH_API WebSocketSession : public std::enable_shared_from_this<WebSocketSession> {
 public:
     using Ptr = std::shared_ptr<WebSocketSession>;
     using MessageCallback = std::function<void(const Ptr&, std::string, bool isText)>;
-    using CloseCallback   = std::function<void(const Ptr&)>;
+    using CloseCallback = std::function<void(const Ptr&)>;
 
     /// 服务端：接管既有 TcpConnection（HttpServer 升级路径内部使用）
     static Ptr takeover(TcpConnection::Ptr conn, bool clientSide = false);
     ~WebSocketSession();
 
     void setMessageCallback(MessageCallback cb) { onMessage_ = std::move(cb); }
-    void setCloseCallback(CloseCallback cb)     { onClose_ = std::move(cb); }
+    void setCloseCallback(CloseCallback cb) { onClose_ = std::move(cb); }
     void setOpenCallback(std::function<void(const Ptr&)> cb) { onOpen_ = std::move(cb); }
 
     void sendText(const std::string& s);
@@ -130,20 +129,20 @@ struct WsConnectOptions {
     std::string host{"127.0.0.1"};
     uint16_t port = 80;
     std::string path{"/"};
-    std::string subprotocol; // 可选 Sec-WebSocket-Protocol
+    std::string subprotocol;  // 可选 Sec-WebSocket-Protocol
     int timeoutMs = 5000;
-    bool tls = false;        // wss://（M5.1）
-    std::string caFile;      // 自定 CA（空 = 系统信任）
+    bool tls = false;    // wss://（M5.1）
+    std::string caFile;  // 自定 CA（空 = 系统信任）
 };
 
 class ZENITH_API WebSocketClient {
 public:
-    using OpenCallback  = std::function<void(const WebSocketSession::Ptr&)>;
-    using FailCallback  = std::function<void(const std::string&)>;
+    using OpenCallback = std::function<void(const WebSocketSession::Ptr&)>;
+    using FailCallback = std::function<void(const std::string&)>;
 
     /// 连接并升级（须以 make_shared 持有）。回调在 loop 线程触发。
-    void connect(net::EventLoop* loop, const WsConnectOptions& opt,
-                 OpenCallback onOpen, FailCallback onFail);
+    void connect(net::EventLoop* loop, const WsConnectOptions& opt, OpenCallback onOpen,
+                 FailCallback onFail);
 
 private:
     void fail(const std::string& reason);
@@ -152,4 +151,4 @@ private:
     std::shared_ptr<Pending> pending_;
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net

@@ -5,9 +5,9 @@
 
 #if defined(ZENITH_PLATFORM_MACOS)
 
-  #include <errno.h>
-  #include <sys/event.h>
-  #include <unistd.h>
+#include <errno.h>
+#include <sys/event.h>
+#include <unistd.h>
 
 namespace zenith::net {
 
@@ -46,8 +46,8 @@ public:
             tsp = &ts;
         }
         events_.resize(kMaxEvents);
-        const int n = ::kevent(kq_, nullptr, 0, events_.data(),
-                               static_cast<int>(events_.size()), tsp);
+        const int n =
+            ::kevent(kq_, nullptr, 0, events_.data(), static_cast<int>(events_.size()), tsp);
         if (n <= 0) return n == 0 ? 0 : -1;
         for (int i = 0; i < n; ++i) {
             const struct kevent& ke = events_[i];
@@ -76,8 +76,10 @@ private:
     std::vector<struct kevent> events_;
 };
 
-std::unique_ptr<Poller> createKqueuePoller() { return std::make_unique<KqueuePoller>(); }
+std::unique_ptr<Poller> createKqueuePoller() {
+    return std::make_unique<KqueuePoller>();
+}
 
-} // namespace zenith::net
+}  // namespace zenith::net
 
-#endif // ZENITH_PLATFORM_MACOS
+#endif  // ZENITH_PLATFORM_MACOS

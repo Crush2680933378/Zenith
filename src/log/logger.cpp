@@ -7,12 +7,18 @@ namespace zenith::log {
 
 const char* toString(LogLevel level) noexcept {
     switch (level) {
-        case LogLevel::Trace: return "TRACE";
-        case LogLevel::Debug: return "DEBUG";
-        case LogLevel::Info:  return "INFO ";
-        case LogLevel::Warn:  return "WARN ";
-        case LogLevel::Error: return "ERROR";
-        case LogLevel::Fatal: return "FATAL";
+        case LogLevel::Trace:
+            return "TRACE";
+        case LogLevel::Debug:
+            return "DEBUG";
+        case LogLevel::Info:
+            return "INFO ";
+        case LogLevel::Warn:
+            return "WARN ";
+        case LogLevel::Error:
+            return "ERROR";
+        case LogLevel::Fatal:
+            return "FATAL";
     }
     return "?????";
 }
@@ -61,27 +67,32 @@ void LoggerFacade::shutdown() {
     clearSinks();
 }
 
-void LoggerFacade::setLevel(LogLevel level) noexcept { level_ = level; }
+void LoggerFacade::setLevel(LogLevel level) noexcept {
+    level_ = level;
+}
 
-LogLevel LoggerFacade::level() const noexcept { return level_; }
+LogLevel LoggerFacade::level() const noexcept {
+    return level_;
+}
 
 bool LoggerFacade::enabled(LogLevel level) const noexcept {
     return static_cast<int>(level) >= static_cast<int>(level_);
 }
 
 void LoggerFacade::write(LogLevel level, const char* file, int line, std::string message) {
-    if (!enabled(level)) return; // 与 writeT 宏路径保持同一语义
+    if (!enabled(level)) return;  // 与 writeT 宏路径保持同一语义
 
     LogRecord r;
-    r.level       = level;
+    r.level = level;
     r.timestampMs = core::nowMilliseconds();
-    r.threadId    = std::hash<std::thread::id>{}(std::this_thread::get_id());
-    r.file        = file;
-    r.line        = line;
-    r.message     = std::move(message);
+    r.threadId = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    r.file = file;
+    r.line = line;
+    r.message = std::move(message);
 
     std::lock_guard<std::mutex> lk(mtx_);
-    for (auto& sink : sinks_) sink->write(r);
+    for (auto& sink : sinks_)
+        sink->write(r);
 }
 
 void LoggerFacade::writeRaw(LogLevel level, const char* file, int line, const char* message) {
@@ -90,7 +101,8 @@ void LoggerFacade::writeRaw(LogLevel level, const char* file, int line, const ch
 
 void LoggerFacade::flush() {
     std::lock_guard<std::mutex> lk(mtx_);
-    for (auto& sink : sinks_) sink->flush();
+    for (auto& sink : sinks_)
+        sink->flush();
 }
 
-} // namespace zenith::log
+}  // namespace zenith::log

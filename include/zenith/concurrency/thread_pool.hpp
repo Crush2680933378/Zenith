@@ -46,11 +46,11 @@ private:
     void workerLoop();
 
     std::vector<std::thread> workers_;
-    std::deque<Task>         tasks_;
-    mutable std::mutex       mtx_;
-    std::condition_variable  cv_;
-    bool                     stopped_ = false;
-    std::atomic<size_t>      active_{0}; // 正在执行的任务数（waitIdle 用）
+    std::deque<Task> tasks_;
+    mutable std::mutex mtx_;
+    std::condition_variable cv_;
+    bool stopped_ = false;
+    std::atomic<size_t> active_{0};  // 正在执行的任务数（waitIdle 用）
 };
 
-} // namespace zenith::concurrency
+}  // namespace zenith::concurrency

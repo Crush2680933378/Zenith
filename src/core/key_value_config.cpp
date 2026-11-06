@@ -59,7 +59,7 @@ size_t KeyValueConfig::parseFromString(const std::string& text) {
         if (eq == std::string::npos) continue;
 
         const std::string key = trim(line.substr(0, eq));
-        std::string value     = trim(line.substr(eq + 1));
+        std::string value = trim(line.substr(eq + 1));
         if (key.empty()) continue;
 
         set(key, value);
@@ -83,4 +83,4 @@ std::vector<std::pair<std::string, std::string>> KeyValueConfig::entries() const
     return {map_.begin(), map_.end()};
 }
 
-} // namespace zenith::core
+}  // namespace zenith::core

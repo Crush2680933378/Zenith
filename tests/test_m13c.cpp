@@ -35,12 +35,12 @@ ZTEST(Cron, ParseAndNext) {
     ZEXPECT_FALSE(static_cast<bool>(concurrency::CronExpr::parse("* 24 * * *")));
     ZEXPECT_FALSE(static_cast<bool>(concurrency::CronExpr::parse("a * * * *")));
 
-    const int64_t t = 1792854493; // 固定 epoch（2026-10-24 前后）
+    const int64_t t = 1792854493;  // 固定 epoch（2026-10-24 前后）
     auto everyMin = concurrency::CronExpr::parse("* * * * *");
     ZEXPECT_TRUE(static_cast<bool>(everyMin));
     const int64_t n1 = everyMin.value().nextAfter(t);
     ZEXPECT_TRUE(n1 > t);
-    ZEXPECT_EQ(n1, t - t % 60 + 60); // 下一分钟整（时区无关：分钟粒度对齐）
+    ZEXPECT_EQ(n1, t - t % 60 + 60);  // 下一分钟整（时区无关：分钟粒度对齐）
 
     auto every5 = concurrency::CronExpr::parse("*/5 * * * *");
     ZEXPECT_TRUE(static_cast<bool>(every5));
@@ -62,10 +62,10 @@ ZTEST(Cron, SchedulerFiresAndRemoves) {
     const uint64_t id = sched.add("* * * * *", [&](int64_t) { ++fired; });
     ZEXPECT_TRUE(id != 0);
     ZEXPECT_EQ(sched.jobCount(), size_t{1});
-    ZEXPECT_FALSE(sched.remove(9999)); // 不存在
+    ZEXPECT_FALSE(sched.remove(9999));  // 不存在
     ZEXPECT_TRUE(sched.remove(id));
     ZEXPECT_EQ(sched.jobCount(), size_t{0});
-    ZEXPECT_EQ(sched.add("bad expr", {}), uint64_t{0}); // 解析失败 0
+    ZEXPECT_EQ(sched.add("bad expr", {}), uint64_t{0});  // 解析失败 0
 
     const uint64_t id2 = sched.add("* * * * *", [&](int64_t) { ++fired; });
     (void)id2;
@@ -99,7 +99,7 @@ ZTEST(Otel, ExportSpansToCollector) {
     obs::OtelConfig cfg;
     cfg.endpoint = "http://127.0.0.1:" + std::to_string(srv.port()) + "/v1/traces";
     cfg.serviceName = "zenith-test";
-    cfg.flushIntervalMs = 0; // 手动 flush
+    cfg.flushIntervalMs = 0;  // 手动 flush
     obs::OtelExporter ex(cfg);
 
     auto parent = ex.beginSpan("request");
@@ -119,8 +119,8 @@ ZTEST(Otel, ExportSpansToCollector) {
 
     // traceId 32 hex / spanId 16 hex
     auto v = json::JsonValue::parse(lastBody);
-    const auto& span0 = v.value()["resourceSpans"].at(size_t{0})["scopeSpans"]
-                             .at(size_t{0})["spans"].at(size_t{0});
+    const auto& span0 =
+        v.value()["resourceSpans"].at(size_t{0})["scopeSpans"].at(size_t{0})["spans"].at(size_t{0});
     ZEXPECT_EQ(span0["traceId"].asString().size(), size_t{32});
     ZEXPECT_EQ(span0["spanId"].asString().size(), size_t{16});
 
@@ -132,31 +132,31 @@ ZTEST(Otel, ExportSpansToCollector) {
 ZTEST(Otel, FailedFlushKeepsQueue) {
     // 端点不可达：失败回队不丢数据
     obs::OtelConfig cfg;
-    cfg.endpoint = "http://127.0.0.1:1/v1/traces"; // 无人监听
+    cfg.endpoint = "http://127.0.0.1:1/v1/traces";  // 无人监听
     cfg.flushIntervalMs = 0;
     obs::OtelExporter ex(cfg);
     auto s = ex.beginSpan("x");
     ex.endSpan(s);
     ZEXPECT_EQ(ex.flushNow(), size_t{0});
     ZEXPECT_EQ(ex.failedFlushes(), uint64_t{1});
-    ZEXPECT_EQ(ex.pending(), size_t{1}); // 回队保留
+    ZEXPECT_EQ(ex.pending(), size_t{1});  // 回队保留
 }
 
 /* ---------------- auth_oauth ---------------- */
 
 ZTEST(OAuth, PkceAndAuthorizeUrl) {
     auto pk = http::oauth::makePkce();
-    ZEXPECT_TRUE(pk.valid());           // verifier>=43, challenge 43
+    ZEXPECT_TRUE(pk.valid());  // verifier>=43, challenge 43
     ZEXPECT_EQ(pk.challenge.size(), size_t{43});
-    ZEXPECT_TRUE(pk.challenge.find('+') == std::string::npos); // base64url
+    ZEXPECT_TRUE(pk.challenge.find('+') == std::string::npos);  // base64url
     ZEXPECT_TRUE(pk.challenge.find('/') == std::string::npos);
     auto pk2 = http::oauth::makePkce();
-    ZEXPECT_TRUE(pk2.verifier != pk.verifier); // 随机性
+    ZEXPECT_TRUE(pk2.verifier != pk.verifier);  // 随机性
 
     http::oauth::OAuthClientConfig cfg;
     cfg.authorizeUrl = "https://idp.example.com/authorize";
     cfg.tokenUrl = "http://127.0.0.1:1/token";
-    cfg.clientId = "cid 1"; // 含空格验证 URL 编码
+    cfg.clientId = "cid 1";  // 含空格验证 URL 编码
     cfg.redirectUri = "http://localhost:8093/callback";
     cfg.scope = "read write";
     const std::string state = http::oauth::randomState();
@@ -251,8 +251,7 @@ public:
     void run(std::string downTopic, std::string downPayload, std::string* gotUpTopic,
              std::string* gotUpPayload) {
         timeval tv{5, 0};
-        ::setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO,
-                     reinterpret_cast<const char*>(&tv), sizeof(tv));
+        ::setsockopt(fd_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
         client_ = ::accept(fd_, nullptr, nullptr);
 #if defined(_WIN32)
         ::closesocket(fd_);
@@ -266,37 +265,37 @@ public:
             auto body = readPacket(h);
             if (!body) break;
             const uint8_t type = h >> 4;
-            if (type == 1) { // CONNECT → CONNACK(session present=0, code=0)
+            if (type == 1) {  // CONNECT → CONNACK(session present=0, code=0)
                 writeRaw(std::string("\x20\x02\x00\x00", 4));
-            } else if (type == 8) { // SUBSCRIBE → SUBACK
-                const uint16_t pid = static_cast<uint16_t>(
-                    (static_cast<uint8_t>(body.value()[0]) << 8) |
-                    static_cast<uint8_t>(body.value()[1]));
+            } else if (type == 8) {  // SUBSCRIBE → SUBACK
+                const uint16_t pid =
+                    static_cast<uint16_t>((static_cast<uint8_t>(body.value()[0]) << 8) |
+                                          static_cast<uint8_t>(body.value()[1]));
                 std::string ack;
                 ack.push_back(static_cast<char>(0x90));
                 ack.push_back('\x03');
                 ack.push_back(static_cast<char>((pid >> 8) & 0xFF));
                 ack.push_back(static_cast<char>(pid & 0xFF));
-                ack.push_back('\x00'); // granted qos0
+                ack.push_back('\x00');  // granted qos0
                 writeRaw(ack);
-            } else if (type == 3) { // PUBLISH 上行 → 回推下行
-                const uint16_t tlen = static_cast<uint16_t>(
-                    (static_cast<uint8_t>(body.value()[0]) << 8) |
-                    static_cast<uint8_t>(body.value()[1]));
+            } else if (type == 3) {  // PUBLISH 上行 → 回推下行
+                const uint16_t tlen =
+                    static_cast<uint16_t>((static_cast<uint8_t>(body.value()[0]) << 8) |
+                                          static_cast<uint8_t>(body.value()[1]));
                 if (gotUpTopic) *gotUpTopic = body.value().substr(2, tlen);
                 if (gotUpPayload) *gotUpPayload = body.value().substr(2 + tlen);
                 // 下行 QoS0 PUBLISH
                 std::string pkt;
                 pkt.push_back(static_cast<char>(0x30));
                 const size_t remain = 2 + downTopic.size() + downPayload.size();
-                pkt.push_back(static_cast<char>(remain)); // 短包单字节长度
+                pkt.push_back(static_cast<char>(remain));  // 短包单字节长度
                 pkt.push_back(static_cast<char>((downTopic.size() >> 8) & 0xFF));
                 pkt.push_back(static_cast<char>(downTopic.size() & 0xFF));
                 pkt += downTopic + downPayload;
                 writeRaw(pkt);
-            } else if (type == 12) { // PINGREQ → PINGRESP
+            } else if (type == 12) {  // PINGREQ → PINGRESP
                 writeRaw(std::string("\xD0\x00", 2));
-            } else if (type == 14) { // DISCONNECT
+            } else if (type == 14) {  // DISCONNECT
                 break;
             }
         }
@@ -346,8 +345,7 @@ private:
     bool writeRaw(const std::string& s) {
         size_t sent = 0;
         while (sent < s.size()) {
-            const int n = ::send(client_, s.data() + sent,
-                                 static_cast<int>(s.size() - sent), 0);
+            const int n = ::send(client_, s.data() + sent, static_cast<int>(s.size() - sent), 0);
             if (n <= 0) return false;
             sent += static_cast<size_t>(n);
         }
@@ -358,15 +356,13 @@ private:
     int client_ = -1;
     uint16_t port_ = 0;
 };
-} // namespace
+}  // namespace
 
 ZTEST(Mqtt, ConnectPubSubPingAgainstMiniBroker) {
     MiniBroker br;
     ZEXPECT_TRUE(br.start());
     std::string upTopic, upPayload;
-    std::thread brokerThread([&] {
-        br.run("down/topic", "from-broker", &upTopic, &upPayload);
-    });
+    std::thread brokerThread([&] { br.run("down/topic", "from-broker", &upTopic, &upPayload); });
     std::this_thread::sleep_for(100ms);
 
     auto c = net::mqtt::MqttClient::connect("127.0.0.1", br.port(), "zenith-test");

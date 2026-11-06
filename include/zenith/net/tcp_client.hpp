@@ -28,7 +28,7 @@ class ZENITH_API TcpClient : private core::NonCopyable,
 public:
     using Ptr = std::shared_ptr<TcpClient>;
     using ConnectedCallback = std::function<void(const TcpConnection::Ptr&)>;
-    using FailedCallback    = std::function<void(const std::string& reason)>;
+    using FailedCallback = std::function<void(const std::string& reason)>;
 
     explicit TcpClient(EventLoop* loop);
     ~TcpClient();
@@ -52,4 +52,4 @@ private:
     FailedCallback onFail_;
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net

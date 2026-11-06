@@ -5,14 +5,22 @@ namespace zenith::http {
 
 const char* toString(HttpMethod m) noexcept {
     switch (m) {
-        case HttpMethod::Get:     return "GET";
-        case HttpMethod::Post:    return "POST";
-        case HttpMethod::Put:     return "PUT";
-        case HttpMethod::Delete:  return "DELETE";
-        case HttpMethod::Patch:   return "PATCH";
-        case HttpMethod::Head:    return "HEAD";
-        case HttpMethod::Options: return "OPTIONS";
-        default:                  return "UNKNOWN";
+        case HttpMethod::Get:
+            return "GET";
+        case HttpMethod::Post:
+            return "POST";
+        case HttpMethod::Put:
+            return "PUT";
+        case HttpMethod::Delete:
+            return "DELETE";
+        case HttpMethod::Patch:
+            return "PATCH";
+        case HttpMethod::Head:
+            return "HEAD";
+        case HttpMethod::Options:
+            return "OPTIONS";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -30,43 +38,80 @@ HttpMethod methodFromString(const std::string& s) noexcept {
 
 const char* statusText(int code) noexcept {
     switch (code) {
-        case 100: return "Continue";
-        case 101: return "Switching Protocols";
-        case 200: return "OK";
-        case 201: return "Created";
-        case 202: return "Accepted";
-        case 204: return "No Content";
-        case 206: return "Partial Content";
-        case 301: return "Moved Permanently";
-        case 302: return "Found";
-        case 303: return "See Other";
-        case 304: return "Not Modified";
-        case 307: return "Temporary Redirect";
-        case 308: return "Permanent Redirect";
-        case 400: return "Bad Request";
-        case 401: return "Unauthorized";
-        case 403: return "Forbidden";
-        case 404: return "Not Found";
-        case 405: return "Method Not Allowed";
-        case 408: return "Request Timeout";
-        case 409: return "Conflict";
-        case 411: return "Length Required";
-        case 413: return "Payload Too Large";
-        case 414: return "URI Too Long";
-        case 415: return "Unsupported Media Type";
-        case 416: return "Range Not Satisfiable";
-        case 417: return "Expectation Failed";
-        case 421: return "Misdirected Request";
-        case 426: return "Upgrade Required";
-        case 429: return "Too Many Requests";
-        case 431: return "Request Header Fields Too Large";
-        case 500: return "Internal Server Error";
-        case 501: return "Not Implemented";
-        case 502: return "Bad Gateway";
-        case 503: return "Service Unavailable";
-        case 504: return "Gateway Timeout";
-        case 505: return "HTTP Version Not Supported";
-        default:  return "Unknown";
+        case 100:
+            return "Continue";
+        case 101:
+            return "Switching Protocols";
+        case 200:
+            return "OK";
+        case 201:
+            return "Created";
+        case 202:
+            return "Accepted";
+        case 204:
+            return "No Content";
+        case 206:
+            return "Partial Content";
+        case 301:
+            return "Moved Permanently";
+        case 302:
+            return "Found";
+        case 303:
+            return "See Other";
+        case 304:
+            return "Not Modified";
+        case 307:
+            return "Temporary Redirect";
+        case 308:
+            return "Permanent Redirect";
+        case 400:
+            return "Bad Request";
+        case 401:
+            return "Unauthorized";
+        case 403:
+            return "Forbidden";
+        case 404:
+            return "Not Found";
+        case 405:
+            return "Method Not Allowed";
+        case 408:
+            return "Request Timeout";
+        case 409:
+            return "Conflict";
+        case 411:
+            return "Length Required";
+        case 413:
+            return "Payload Too Large";
+        case 414:
+            return "URI Too Long";
+        case 415:
+            return "Unsupported Media Type";
+        case 416:
+            return "Range Not Satisfiable";
+        case 417:
+            return "Expectation Failed";
+        case 421:
+            return "Misdirected Request";
+        case 426:
+            return "Upgrade Required";
+        case 429:
+            return "Too Many Requests";
+        case 431:
+            return "Request Header Fields Too Large";
+        case 500:
+            return "Internal Server Error";
+        case 501:
+            return "Not Implemented";
+        case 502:
+            return "Bad Gateway";
+        case 503:
+            return "Service Unavailable";
+        case 504:
+            return "Gateway Timeout";
+        case 505:
+            return "HTTP Version Not Supported";
+        default:
+            return "Unknown";
     }
 }
 
@@ -80,7 +125,7 @@ int hexVal(char c) {
 char hexChar(int v) {
     return static_cast<char>(v < 10 ? '0' + v : 'A' + v - 10);
 }
-} // namespace
+}  // namespace
 
 std::string urlDecode(const std::string& s, bool plusAsSpace) {
     std::string out;
@@ -108,7 +153,7 @@ bool isUnreserved(unsigned char c) noexcept {
     if (c >= 'A' && c <= 'Z') return true;
     return c == '-' || c == '_' || c == '.' || c == '~';
 }
-} // namespace
+}  // namespace
 
 std::string urlEncode(const std::string& s) {
     std::string out;
@@ -166,14 +211,14 @@ std::string HttpResponse::serialize(bool includeBody, bool connKeepAlive) const 
     bool hasLen = false;
     for (const auto& [k, v] : headers.entries()) {
         if (iequals(k, "Content-Length")) hasLen = true;
-        if (iequals(k, "Connection")) continue; // 由参数统一控制
+        if (iequals(k, "Connection")) continue;  // 由参数统一控制
         if (chunked && (iequals(k, "Transfer-Encoding") || iequals(k, "Content-Length"))) continue;
         out += k;
         out += ": ";
         out += v;
         out += "\r\n";
     }
-    (void)hasLen; // Content-Length 统一由下方输出（此处仅探测，供未来 304 语义）
+    (void)hasLen;  // Content-Length 统一由下方输出（此处仅探测，供未来 304 语义）
     if (chunked) {
         // 流式响应（M9.1）：长度未知，改分块传输；终止块由写端（ChunkWriter）负责
         out += "Transfer-Encoding: chunked\r\n";
@@ -207,7 +252,8 @@ std::string chunkEncode(std::string_view data) {
     } while (v != 0);
     std::string out;
     out.reserve(data.size() + n + 4);
-    for (size_t i = n; i > 0; --i) out.push_back(digits[i - 1]);
+    for (size_t i = n; i > 0; --i)
+        out.push_back(digits[i - 1]);
     out += "\r\n";
     out.append(data.data(), data.size());
     out += "\r\n";
@@ -246,8 +292,7 @@ core::Result<Url> parseUrl(const std::string& url) {
     if (colon != std::string::npos) {
         u.host = rest.substr(0, colon);
         const std::string portStr = rest.substr(colon + 1);
-        if (portStr.empty() ||
-            portStr.find_first_not_of("0123456789") != std::string::npos) {
+        if (portStr.empty() || portStr.find_first_not_of("0123456789") != std::string::npos) {
             return core::Result<Url>::Err(core::Error(91, "bad port in url: " + url));
         }
         u.port = static_cast<uint16_t>(std::stoi(portStr));
@@ -261,4 +306,4 @@ core::Result<Url> parseUrl(const std::string& url) {
     return core::Result<Url>::Ok(std::move(u));
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

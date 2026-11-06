@@ -21,13 +21,13 @@
 namespace zenith::ai::detail {
 
 struct EngineSpec {
-    std::string exe;                                    // 引擎可执行文件全路径
-    std::vector<std::string> args;                      // 已展开的参数
-    std::vector<std::pair<std::string, std::string>> env; // 追加/覆盖的环境变量
-    std::string workDir;                                // 工作目录（引擎加载同目录 DLL）
-    std::string readyLine = "listening on";             // 日志就绪标记（空 = 不判日志）
+    std::string exe;                                       // 引擎可执行文件全路径
+    std::vector<std::string> args;                         // 已展开的参数
+    std::vector<std::pair<std::string, std::string>> env;  // 追加/覆盖的环境变量
+    std::string workDir;                                   // 工作目录（引擎加载同目录 DLL）
+    std::string readyLine = "listening on";                // 日志就绪标记（空 = 不判日志）
     int startupTimeoutMs = 180000;
-    int maxRestarts = 3;                                // 非预期退出后的重启上限
+    int maxRestarts = 3;  // 非预期退出后的重启上限
 };
 
 class EngineSupervisor {
@@ -51,4 +51,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
-#include <mutex>
 #include <fstream>
+#include <mutex>
 
 namespace zenith::http {
 
@@ -12,8 +12,7 @@ namespace fs = std::filesystem;
 
 std::string computeFileEtag(uint64_t size, int64_t mtimeSec) {
     char buf[48];
-    std::snprintf(buf, sizeof(buf), "\"%llx-%llx\"",
-                  static_cast<unsigned long long>(mtimeSec),
+    std::snprintf(buf, sizeof(buf), "\"%llx-%llx\"", static_cast<unsigned long long>(mtimeSec),
                   static_cast<unsigned long long>(size));
     return buf;
 }
@@ -22,9 +21,10 @@ std::string mimeTypeFor(const std::string& path) {
     const size_t dot = path.rfind('.');
     if (dot == std::string::npos) return "application/octet-stream";
     const size_t q = path.find_first_of("?#", dot);
-    std::string ext = path.substr(dot + 1, q == std::string::npos ? std::string::npos
-                                                                   : q - dot - 1);
-    for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string ext =
+        path.substr(dot + 1, q == std::string::npos ? std::string::npos : q - dot - 1);
+    for (char& c : ext)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (ext == "html" || ext == "htm") return "text/html; charset=utf-8";
     if (ext == "css") return "text/css; charset=utf-8";
     if (ext == "js" || ext == "mjs") return "application/javascript; charset=utf-8";
@@ -77,7 +77,7 @@ std::string safeJoin(const fs::path& root, const std::string& rel) {
 bool parseRange(const std::string& v, uint64_t size, uint64_t& start, uint64_t& end) {
     if (v.compare(0, 6, "bytes=") != 0) return false;
     const std::string spec = v.substr(6);
-    if (spec.find(',') != std::string::npos) return false; // 多段：忽略回全量
+    if (spec.find(',') != std::string::npos) return false;  // 多段：忽略回全量
     const size_t dash = spec.find('-');
     if (dash == std::string::npos) return false;
     const std::string a = spec.substr(0, dash);
@@ -116,7 +116,7 @@ bool parseRange(const std::string& v, uint64_t size, uint64_t& start, uint64_t& 
     end = std::min(e, size - 1);
     return true;
 }
-} // namespace
+}  // namespace
 
 namespace {
 // 小文件缓存（ETag 键；上限 256 条防膨胀）。M6.2：削静态热路径磁盘读。
@@ -135,7 +135,7 @@ bool cacheGet(const std::string& path, const std::string& etag, std::string& out
     auto it = gCache.find(path);
     if (it == gCache.end()) return false;
     if (it->second.etag != etag) {
-        gCache.erase(it); // 文件已变 —— 失效
+        gCache.erase(it);  // 文件已变 —— 失效
         return false;
     }
     outBody = it->second.body;
@@ -149,8 +149,8 @@ constexpr uint64_t kZeroCopyMinBytes = 256 * 1024;
 bool isPrecompressedMime(const std::string& mime) {
     return mime.rfind("image/", 0) == 0 || mime.rfind("video/", 0) == 0 ||
            mime.rfind("audio/", 0) == 0 || mime == "application/zip" ||
-           mime == "application/wasm" || mime == "application/pdf" ||
-           mime == "font/woff" || mime == "font/woff2" || mime == "font/ttf";
+           mime == "application/wasm" || mime == "application/pdf" || mime == "font/woff" ||
+           mime == "font/woff2" || mime == "font/ttf";
 }
 
 void cachePut(const std::string& path, const std::string& etag, const std::string& body,
@@ -159,15 +159,17 @@ void cachePut(const std::string& path, const std::string& etag, const std::strin
     if (gCache.size() >= kCacheMaxEntries) {
         // 简单逐出：清最旧 mtime 的一半
         std::vector<const std::string*> doomed;
-        for (const auto& [p, e] : gCache) doomed.push_back(&p);
+        for (const auto& [p, e] : gCache)
+            doomed.push_back(&p);
         std::sort(doomed.begin(), doomed.end(), [&](const std::string* a, const std::string* b) {
             return gCache[*a].mtime < gCache[*b].mtime;
         });
-        for (size_t i = 0; i < doomed.size() / 2; ++i) gCache.erase(*doomed[i]);
+        for (size_t i = 0; i < doomed.size() / 2; ++i)
+            gCache.erase(*doomed[i]);
     }
     gCache[path] = CacheEntry{etag, body, mtime};
 }
-} // namespace
+}  // namespace
 
 Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmallFiles) {
     return [root = std::move(rootDir), prefix = std::move(urlPrefix),
@@ -177,7 +179,8 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
         if (rel.compare(0, prefix.size(), prefix) == 0) {
             rel = rel.substr(prefix.size());
         }
-        while (!rel.empty() && rel[0] == '/') rel.erase(0, 1);
+        while (!rel.empty() && rel[0] == '/')
+            rel.erase(0, 1);
 
         const std::string full = safeJoin(fs::path(root), rel);
         if (full.empty()) {
@@ -192,8 +195,8 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
             return;
         }
         const auto size = static_cast<uint64_t>(fs::file_size(fp, ec));
-        const int64_t mtime = static_cast<int64_t>(
-            fs::last_write_time(fp, ec).time_since_epoch().count());
+        const int64_t mtime =
+            static_cast<int64_t>(fs::last_write_time(fp, ec).time_since_epoch().count());
 
         const std::string etag = computeFileEtag(size, mtime);
 
@@ -237,9 +240,8 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
         uint64_t start = 0, end = size == 0 ? 0 : size - 1;
         if (!range.empty() && size > 0 && parseRange(range, size, start, end)) {
             c.status(206);
-            c.setHeader("Content-Range",
-                        "bytes " + std::to_string(start) + "-" + std::to_string(end) + "/" +
-                            std::to_string(size));
+            c.setHeader("Content-Range", "bytes " + std::to_string(start) + "-" +
+                                             std::to_string(end) + "/" + std::to_string(size));
         } else {
             c.status(200);
         }
@@ -291,7 +293,8 @@ Handler spaHandler(std::string rootDir) {
 
     return [root = std::move(rootDir), files = std::move(files)](Context& c) {
         std::string rel = c.path();
-        while (!rel.empty() && rel[0] == '/') rel.erase(0, 1);
+        while (!rel.empty() && rel[0] == '/')
+            rel.erase(0, 1);
 
         std::error_code ec;
         const std::string full = safeJoin(fs::path(root), rel);
@@ -335,4 +338,4 @@ Handler spaHandler(std::string rootDir) {
     };
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

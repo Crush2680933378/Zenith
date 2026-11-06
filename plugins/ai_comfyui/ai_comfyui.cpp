@@ -7,9 +7,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
-#include <memory>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <random>
@@ -21,26 +21,26 @@
 #include "ai_service.hpp"
 
 #if defined(_WIN32)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  #pragma comment(lib, "ws2_32.lib")
-  using SocketFd = SOCKET;
-  #define AI_INVALID INVALID_SOCKET
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+using SocketFd = SOCKET;
+#define AI_INVALID INVALID_SOCKET
 #else
-  #include <arpa/inet.h>
-  #include <errno.h>
-  #include <netdb.h>
-  #include <netinet/in.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
-  using SocketFd = int;
-  #define AI_INVALID (-1)
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using SocketFd = int;
+#define AI_INVALID (-1)
 #endif
 
 namespace {
@@ -105,10 +105,10 @@ bool httpExec(const std::string& host, uint16_t port, const std::string& method,
         return false;
     }
 
-    std::string req = method + " " + path + " HTTP/1.1\r\nHost: " + host + ":" +
-                      std::to_string(port) +
-                      "\r\nContent-Type: application/json\r\nContent-Length: " +
-                      std::to_string(body.size()) + "\r\nConnection: close\r\n\r\n" + body;
+    std::string req =
+        method + " " + path + " HTTP/1.1\r\nHost: " + host + ":" + std::to_string(port) +
+        "\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.size()) +
+        "\r\nConnection: close\r\n\r\n" + body;
     size_t sent = 0;
     while (sent < req.size()) {
         const int n = ::send(fd, req.data() + sent, static_cast<int>(req.size() - sent), 0);
@@ -172,7 +172,8 @@ std::string jsonStr(const std::string& j, const std::string& key) {
     p = j.find(':', p + pat.size());
     if (p == std::string::npos) return "";
     ++p;
-    while (p < j.size() && (j[p] == ' ' || j[p] == '\t')) ++p;
+    while (p < j.size() && (j[p] == ' ' || j[p] == '\t'))
+        ++p;
     if (p < j.size() && j[p] == '"') {
         const size_t e = j.find('"', p + 1);
         return e == std::string::npos ? "" : j.substr(p + 1, e - p - 1);
@@ -182,8 +183,7 @@ std::string jsonStr(const std::string& j, const std::string& key) {
 }
 
 /// 占位符注入：{{seed}} / {{key}}
-std::string applyPlaceholders(const std::string& wf,
-                              const zenith::ai::PlaceholderResolver& r) {
+std::string applyPlaceholders(const std::string& wf, const zenith::ai::PlaceholderResolver& r) {
     std::string out;
     out.reserve(wf.size());
     for (size_t i = 0; i < wf.size();) {
@@ -212,13 +212,10 @@ std::string applyPlaceholders(const std::string& wf,
 // ---------------------------------------------------------------------------
 class AiDrawImpl final : public zenith::ai::IAiDrawService {
 public:
-    explicit AiDrawImpl(std::string host, uint16_t port)
-        : host_(std::move(host)), port_(port) {}
+    explicit AiDrawImpl(std::string host, uint16_t port) : host_(std::move(host)), port_(port) {}
 
-    zenith::ai::DrawResult draw(const std::string& workflowJson,
-                                const std::string& outputDir,
-                                zenith::ai::PlaceholderResolver resolver,
-                                int timeoutSec) override {
+    zenith::ai::DrawResult draw(const std::string& workflowJson, const std::string& outputDir,
+                                zenith::ai::PlaceholderResolver resolver, int timeoutSec) override {
         zenith::ai::DrawResult r;
         const std::string wf = applyPlaceholders(workflowJson, resolver);
 
@@ -239,8 +236,7 @@ public:
         }
 
         // 2) 轮询 /history/{id}
-        const auto deadline = std::chrono::steady_clock::now() +
-                              std::chrono::seconds(timeoutSec);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(timeoutSec);
         std::string outputsJson;
         for (;;) {
             if (std::chrono::steady_clock::now() > deadline) {
@@ -275,8 +271,7 @@ public:
                 continue;
             }
             HttpReply img;
-            if (httpExec(host_, port_, "GET",
-                         "/view?filename=" + file + "&type=output", "", img) &&
+            if (httpExec(host_, port_, "GET", "/view?filename=" + file + "&type=output", "", img) &&
                 img.ok() && !img.body.empty()) {
                 const std::string path = outputDir + "/" + file;
                 FILE* f = std::fopen(path.c_str(), "wb");
@@ -289,12 +284,12 @@ public:
         }
         r.ok = !r.outputs.empty();
         if (!r.ok) r.error = "no downloadable outputs";
-        logInfo("comfyui draw " + r.promptId + ": " + std::to_string(r.outputs.size()) + " file(s)");
+        logInfo("comfyui draw " + r.promptId + ": " + std::to_string(r.outputs.size()) +
+                " file(s)");
         return r;
     }
 
-    std::string submit(const std::string& workflowJson,
-                       const std::string& outputDir,
+    std::string submit(const std::string& workflowJson, const std::string& outputDir,
                        zenith::ai::PlaceholderResolver resolver,
                        std::function<void(zenith::ai::DrawResult)> onDone,
                        ProgressCallback onProgress) override {
@@ -303,12 +298,12 @@ public:
         auto resCopy = std::make_shared<zenith::ai::PlaceholderResolver>(resolver);
         auto doneCopy = std::make_shared<std::function<void(zenith::ai::DrawResult)>>(onDone);
         workers_.emplace_back([this, wfCopy, dirCopy, resCopy, doneCopy, onProgress] {
-            (void)onProgress; // M4：进度回调预留（WS /ws 接入在 M4.4 后续）
+            (void)onProgress;  // M4：进度回调预留（WS /ws 接入在 M4.4 后续）
             auto r = draw(*wfCopy, *dirCopy, *resCopy, 300);
             if (*doneCopy) (*doneCopy)(r);
         });
         workers_.back().detach();
-        return ""; // 异步句柄 M4 简化：经 onDone 回传
+        return "";  // 异步句柄 M4 简化：经 onDone 回传
     }
 
     void joinAll() {
@@ -321,7 +316,9 @@ private:
     std::vector<std::thread> workers_;
 };
 
-void destroyAi(void* p) { delete static_cast<AiDrawImpl*>(p); }
+void destroyAi(void* p) {
+    delete static_cast<AiDrawImpl*>(p);
+}
 
 // 插件配置键（宿主 config_get）：
 //   ai.comfyui.host（默认 127.0.0.1） / ai.comfyui.port（默认 8188）
@@ -330,10 +327,12 @@ zenith_status pluginInit(const zenith_host_api* host) {
     std::string h = "127.0.0.1";
     uint16_t port = 8188;
     const char* v = nullptr;
-    if (host->config_get(host->config_ctx, "ai.comfyui.host", "", &v) == ZENITH_OK && v != nullptr) {
+    if (host->config_get(host->config_ctx, "ai.comfyui.host", "", &v) == ZENITH_OK &&
+        v != nullptr) {
         h = v;
     }
-    if (host->config_get(host->config_ctx, "ai.comfyui.port", "", &v) == ZENITH_OK && v != nullptr) {
+    if (host->config_get(host->config_ctx, "ai.comfyui.port", "", &v) == ZENITH_OK &&
+        v != nullptr) {
         port = static_cast<uint16_t>(std::atoi(v));
     }
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_comfyui", 0,
@@ -341,15 +340,20 @@ zenith_status pluginInit(const zenith_host_api* host) {
 
     auto* svc = new (std::nothrow) AiDrawImpl(h, port);
     if (svc == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  zenith::ai::IAiDrawService::service_name(),
-                                  zenith::ai::IAiDrawService::service_version(),
-                                  static_cast<void*>(svc), &destroyAi);
+    return host->register_service(
+        host->registry_ctx, host->plugin_token, zenith::ai::IAiDrawService::service_name(),
+        zenith::ai::IAiDrawService::service_version(), static_cast<void*>(svc), &destroyAi);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -365,6 +369,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

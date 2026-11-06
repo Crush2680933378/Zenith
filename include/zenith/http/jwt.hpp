@@ -23,10 +23,13 @@ inline std::string b64url(const uint8_t* d, size_t n) {
     std::string s = crypto::base64Encode(d, n);
     // 标准表 → URL 安全表；去填充
     for (char& c : s) {
-        if (c == '+') c = '-';
-        else if (c == '/') c = '_';
+        if (c == '+')
+            c = '-';
+        else if (c == '/')
+            c = '_';
     }
-    while (!s.empty() && s.back() == '=') s.pop_back();
+    while (!s.empty() && s.back() == '=')
+        s.pop_back();
     return s;
 }
 inline std::string b64url(const std::string& s) {
@@ -35,18 +38,26 @@ inline std::string b64url(const std::string& s) {
 inline std::optional<std::string> unb64url(const std::string& s) {
     std::string t = s;
     for (char& c : t) {
-        if (c == '-') c = '+';
-        else if (c == '_') c = '/';
+        if (c == '-')
+            c = '+';
+        else if (c == '_')
+            c = '/';
     }
     switch (t.size() % 4) {
-        case 2: t += "=="; break;
-        case 3: t += "="; break;
-        case 0: break;
-        default: return std::nullopt;
+        case 2:
+            t += "==";
+            break;
+        case 3:
+            t += "=";
+            break;
+        case 0:
+            break;
+        default:
+            return std::nullopt;
     }
     return crypto::base64Decode(t);
 }
-} // namespace detail
+}  // namespace detail
 
 /// 签发：payloadJson + 秒级有效期 → token
 ZENITH_API std::string sign(const std::string& secret, const std::string& payloadJson,
@@ -59,12 +70,11 @@ struct VerifyResult {
 };
 
 /// 校验：签名（恒时比较）+ exp 过期。leewaySec 容忍时钟偏差。
-ZENITH_API VerifyResult verify(const std::string& secret, const std::string& token,
-                               int64_t nowSec, int64_t leewaySec = 30);
+ZENITH_API VerifyResult verify(const std::string& secret, const std::string& token, int64_t nowSec,
+                               int64_t leewaySec = 30);
 
 /// 提取 payload 中的数值字段（如 exp）；无返回 nullopt
-ZENITH_API std::optional<int64_t> claimInt(const std::string& payloadJson,
-                                            const std::string& key);
+ZENITH_API std::optional<int64_t> claimInt(const std::string& payloadJson, const std::string& key);
 
 /// 提取 token header 中的 alg（不做校验，仅用于选路）；缺失返回空串
 ZENITH_API std::string headerAlg(const std::string& token);
@@ -77,8 +87,8 @@ ZENITH_API std::string headerAlg(const std::string& token);
 namespace asym {
 
 struct KeyPair {
-    std::string privatePem; // PKCS#8 PEM
-    std::string publicPem;  // SubjectPublicKeyInfo PEM
+    std::string privatePem;  // PKCS#8 PEM
+    std::string publicPem;   // SubjectPublicKeyInfo PEM
 };
 
 /// 生成 RSA 密钥对（默认 2048 位）
@@ -88,8 +98,8 @@ ZENITH_API core::Result<KeyPair> generateEcP256();
 
 /// 签发：算法由私钥类型决定（RSA→RS256，P-256→ES256，P-384→ES384）。
 ZENITH_API core::Result<std::string> sign(const std::string& privatePem,
-                                          const std::string& payloadJson,
-                                          int64_t expiresInSeconds, int64_t nowSec);
+                                          const std::string& payloadJson, int64_t expiresInSeconds,
+                                          int64_t nowSec);
 ZENITH_API core::Result<std::string> sign(const KeyPair& kp, const std::string& payloadJson,
                                           int64_t expiresInSeconds, int64_t nowSec);
 
@@ -98,7 +108,7 @@ ZENITH_API core::Result<std::string> sign(const KeyPair& kp, const std::string& 
 ZENITH_API VerifyResult verify(const std::string& publicPem, const std::string& token,
                                int64_t nowSec, int64_t leewaySec = 30);
 
-} // namespace asym
-#endif // ZENITH_HAS_OPENSSL
+}  // namespace asym
+#endif  // ZENITH_HAS_OPENSSL
 
-} // namespace zenith::http::jwt
+}  // namespace zenith::http::jwt

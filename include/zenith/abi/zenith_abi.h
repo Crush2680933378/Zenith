@@ -22,16 +22,16 @@
 #ifndef ZENITH_ABI_H
 #define ZENITH_ABI_H
 
-#include <stddef.h>   /* size_t, offsetof */
-#include <stdint.h>   /* 定宽整数 */
+#include <stddef.h> /* size_t, offsetof */
+#include <stdint.h> /* 定宽整数 */
 
 /// 当前 ABI 版本。插件声明的 abi_version 必须 <= 此值。
 #define ZENITH_ABI_VERSION 1u
 
 #if defined(_WIN32)
-  #define ZENITH_EXPORT __declspec(dllexport)
+#define ZENITH_EXPORT __declspec(dllexport)
 #else
-  #define ZENITH_EXPORT __attribute__((visibility("default")))
+#define ZENITH_EXPORT __attribute__((visibility("default")))
 #endif
 
 #ifdef __cplusplus
@@ -42,31 +42,31 @@ extern "C" {
 // 状态码：宿主与插件之间唯一的错误语言
 // ---------------------------------------------------------------------------
 typedef enum zenith_status {
-    ZENITH_OK                     = 0,
-    ZENITH_ERR_INVALID_ARGUMENT   = 1,
-    ZENITH_ERR_NOT_FOUND          = 2,
-    ZENITH_ERR_UNSUPPORTED        = 3,
-    ZENITH_ERR_OUT_OF_MEMORY      = 4,
-    ZENITH_ERR_VERSION_MISMATCH   = 5,
-    ZENITH_ERR_ALREADY_EXISTS     = 6,
-    ZENITH_ERR_NOT_INITIALIZED    = 7,
+    ZENITH_OK = 0,
+    ZENITH_ERR_INVALID_ARGUMENT = 1,
+    ZENITH_ERR_NOT_FOUND = 2,
+    ZENITH_ERR_UNSUPPORTED = 3,
+    ZENITH_ERR_OUT_OF_MEMORY = 4,
+    ZENITH_ERR_VERSION_MISMATCH = 5,
+    ZENITH_ERR_ALREADY_EXISTS = 6,
+    ZENITH_ERR_NOT_INITIALIZED = 7,
     ZENITH_ERR_PLUGIN_INIT_FAILED = 8,
-    ZENITH_ERR_GENERIC            = 0x7FFFFFFF
+    ZENITH_ERR_GENERIC = 0x7FFFFFFF
 } zenith_status;
 
 /// 日志级别。数值与 zenith::log::LogLevel 一一对应。
 typedef enum zenith_log_level {
     ZENITH_LOG_TRACE = 0,
     ZENITH_LOG_DEBUG = 1,
-    ZENITH_LOG_INFO  = 2,
-    ZENITH_LOG_WARN  = 3,
+    ZENITH_LOG_INFO = 2,
+    ZENITH_LOG_WARN = 3,
     ZENITH_LOG_ERROR = 4,
     ZENITH_LOG_FATAL = 5
 } zenith_log_level;
 
 struct zenith_host_api;
-typedef struct zenith_host_api zenith_host_api;      /* 当前布局即 v1 */
-typedef zenith_host_api       zenith_host_api_v1;    /* v2 出现后供源码显式锁版 */
+typedef struct zenith_host_api zenith_host_api; /* 当前布局即 v1 */
+typedef zenith_host_api zenith_host_api_v1;     /* v2 出现后供源码显式锁版 */
 
 /// C 侧服务实例析构函数：插件提供，宿主在“库仍加载”的安全窗口内调用。
 typedef void (*zenith_destroy_fn)(void* instance);
@@ -77,27 +77,25 @@ typedef void (*zenith_destroy_fn)(void* instance);
 // 生命周期超出一次 init 周期的字段。
 // ---------------------------------------------------------------------------
 struct zenith_host_api {
-    uint32_t struct_size;    /* == sizeof(zenith_host_api)，前向兼容校验 */
-    uint32_t abi_version;    /* == ZENITH_ABI_VERSION                     */
+    uint32_t struct_size; /* == sizeof(zenith_host_api)，前向兼容校验 */
+    uint32_t abi_version; /* == ZENITH_ABI_VERSION                     */
 
     /// 宿主注入的本插件身份令牌。注册服务时必须原样回传，
     /// 宿主据此在卸载前安全清理本插件注册的所有服务。
     void* plugin_token;
 
     /* ---- 日志 ----------------------------------------------------------- */
-    void* log_ctx;           /* 保留：当前指向 NULL，走进程全局日志门面 */
-    void  (*log_write)(void* log_ctx, int level, const char* file, int line,
-                       const char* msg);
+    void* log_ctx; /* 保留：当前指向 NULL，走进程全局日志门面 */
+    void (*log_write)(void* log_ctx, int level, const char* file, int line, const char* msg);
 
     /* ---- 内存（可选统计钩子，插件可自由改用自己的分配器） ----------------- */
     void* (*mem_alloc)(size_t size);
-    void  (*mem_free)(void* ptr);
+    void (*mem_free)(void* ptr);
 
     /* ---- 服务注册表 ------------------------------------------------------ */
     void* registry_ctx;
     zenith_status (*register_service)(void* registry_ctx, void* owner_token,
-                                      const char* interface_name,
-                                      uint32_t impl_version,
+                                      const char* interface_name, uint32_t impl_version,
                                       void* instance,
                                       zenith_destroy_fn destroy_instance /* 可 NULL */);
     zenith_status (*query_service)(void* registry_ctx, const char* interface_name,
@@ -105,8 +103,8 @@ struct zenith_host_api {
 
     /* ---- 配置 ------------------------------------------------------------ */
     void* config_ctx;
-    zenith_status (*config_get)(void* config_ctx, const char* key,
-                                const char* default_value, const char** out_value);
+    zenith_status (*config_get)(void* config_ctx, const char* key, const char* default_value,
+                                const char** out_value);
 
     /* ---- 线程池任务派发 --------------------------------------------------- */
     void* pool_ctx;
@@ -120,25 +118,24 @@ struct zenith_host_api {
 // 插件描述符：zenith_plugin_entry() 返回指向静态存储期的本结构。
 // ---------------------------------------------------------------------------
 typedef struct zenith_plugin_desc {
-    uint32_t    struct_size;   /* 宿主校验 >= ZENITH_DESC_MIN_SIZE */
-    uint32_t    abi_version;   /* 编译时面向的 ABI 版本，须 <= ZENITH_ABI_VERSION */
+    uint32_t struct_size; /* 宿主校验 >= ZENITH_DESC_MIN_SIZE */
+    uint32_t abi_version; /* 编译时面向的 ABI 版本，须 <= ZENITH_ABI_VERSION */
 
-    const char* name;          /* 唯一短名，如 "media-ffmpeg"（非 NULL） */
-    const char* version;       /* 语义化版本字符串，如 "0.1.0" */
-    const char* description;   /* 可 NULL */
-    const char* author;        /* 可 NULL */
+    const char* name;        /* 唯一短名，如 "media-ffmpeg"（非 NULL） */
+    const char* version;     /* 语义化版本字符串，如 "0.1.0" */
+    const char* description; /* 可 NULL */
+    const char* author;      /* 可 NULL */
 
     zenith_status (*init)(const struct zenith_host_api* host); /* 必需，非 NULL */
-    zenith_status (*start)(void);                               /* 可 NULL */
-    zenith_status (*stop)(void);                                /* 可 NULL */
-    void          (*shutdown)(void);                            /* 可 NULL */
+    zenith_status (*start)(void);                              /* 可 NULL */
+    zenith_status (*stop)(void);                               /* 可 NULL */
+    void (*shutdown)(void);                                    /* 可 NULL */
 
     void* reserved[4];
 } zenith_plugin_desc;
 
 /// 宿主接受的描述符最小尺寸（核心字段到 reserved 之前）。
-#define ZENITH_DESC_MIN_SIZE \
-    ((uint32_t)offsetof(zenith_plugin_desc, reserved))
+#define ZENITH_DESC_MIN_SIZE ((uint32_t)offsetof(zenith_plugin_desc, reserved))
 
 /// 唯一入口符号：宿主在动态库中查找此名字。
 ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void);
@@ -147,10 +144,9 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void);
 /// C++ 插件便捷导出宏。用法：
 ///   static zenith_plugin_desc g_desc = { ... };
 ///   ZENITH_PLUGIN_EXPORT(g_desc)
-  #define ZENITH_PLUGIN_EXPORT(desc_var)                                          \
-    extern "C" ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void)  \
-    {                                                                             \
-        return &(desc_var);                                                       \
+#define ZENITH_PLUGIN_EXPORT(desc_var)                                             \
+    extern "C" ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { \
+        return &(desc_var);                                                        \
     }
 #endif
 

@@ -22,16 +22,16 @@ namespace zenith::ai {
 
 struct SttResult {
     bool ok = false;
-    std::string text;       // 转写文本
-    std::string language;   // "zh" / "en" / ""（未识别）
-    int durationMs = 0;     // 音频时长（后端估计）
+    std::string text;      // 转写文本
+    std::string language;  // "zh" / "en" / ""（未识别）
+    int durationMs = 0;    // 音频时长（后端估计）
     std::string error;
 };
 
 struct TtsResult {
     bool ok = false;
-    std::string audio;      // 音频字节（format 指定容器，默认 16bit/16kHz WAV）
-    std::string format;     // "wav"
+    std::string audio;   // 音频字节（format 指定容器，默认 16bit/16kHz WAV）
+    std::string format;  // "wav"
     std::string error;
 };
 
@@ -61,4 +61,4 @@ ZENITH_API std::shared_ptr<ISpeechToText> makeMockStt();
 /// mock：真实可播 WAV（440Hz 正弦 + 包络；时长随文本长度增长）
 ZENITH_API std::shared_ptr<ITextToSpeech> makeMockTts();
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

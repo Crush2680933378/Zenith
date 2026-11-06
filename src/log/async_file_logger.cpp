@@ -1,7 +1,7 @@
 #include "zenith/log/async_file_logger.hpp"
 
-#include <chrono>
 #include <cerrno>
+#include <chrono>
 #include <cstring>
 
 namespace zenith::log {
@@ -9,7 +9,7 @@ namespace zenith::log {
 namespace {
 // 后台线程每轮最多批量落盘的条数，避免长时间独占 pop 循环。
 constexpr size_t kBatchSize = 256;
-} // namespace
+}  // namespace
 
 AsyncFileLogger::AsyncFileLogger(std::string basePath, size_t rollBytes, int keepFiles)
     : path_(std::move(basePath)), rollBytes_(rollBytes), keepFiles_(keepFiles > 0 ? keepFiles : 1) {
@@ -24,12 +24,12 @@ AsyncFileLogger::~AsyncFileLogger() {
         wakeCv_.notify_all();
     }
     if (worker_.joinable()) worker_.join();
-    drainBatch(); // 析构前最后排空一次
+    drainBatch();  // 析构前最后排空一次
     closeFile();
 }
 
 void AsyncFileLogger::write(const LogRecord& record) {
-    if (stop_.load(std::memory_order_acquire)) return; // 已进入析构，直接丢弃
+    if (stop_.load(std::memory_order_acquire)) return;  // 已进入析构，直接丢弃
     if (!queue_->push(formatLogLine(record))) {
         dropped_.fetch_add(1, std::memory_order_relaxed);
         return;
@@ -52,13 +52,13 @@ void AsyncFileLogger::workerLoop() {
             return stop_.load(std::memory_order_acquire) || !queue_->emptyApprox();
         });
     }
-    drainBatch(); // 退出前排空
+    drainBatch();  // 退出前排空
 }
 
 void AsyncFileLogger::drainBatch() {
     std::string line;
     for (size_t i = 0; i < kBatchSize && queue_->pop(line); ++i) {
-        if (fp_ == nullptr && !openFile()) continue; // 打开失败则丢弃该行
+        if (fp_ == nullptr && !openFile()) continue;  // 打开失败则丢弃该行
         const size_t n = std::fwrite(line.data(), 1, line.size(), fp_);
         written_ += n;
         if (written_ >= rollBytes_) {
@@ -92,7 +92,7 @@ void AsyncFileLogger::rollFiles() {
     // base.log.N-1 ← ... ← base.log.1 ← base.log
     for (int i = keepFiles_ - 1; i >= 1; --i) {
         const std::string from = path_ + "." + std::to_string(i);
-        const std::string to   = path_ + "." + std::to_string(i + 1);
+        const std::string to = path_ + "." + std::to_string(i + 1);
         std::remove(to.c_str());
         std::rename(from.c_str(), to.c_str());
     }
@@ -105,4 +105,4 @@ void AsyncFileLogger::rollFiles() {
     openFile();
 }
 
-} // namespace zenith::log
+}  // namespace zenith::log

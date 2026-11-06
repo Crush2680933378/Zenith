@@ -26,7 +26,7 @@ struct CollectionInfo {
 struct VectorPoint {
     uint64_t id = 0;
     std::vector<float> vec;
-    std::string payloadJson; // 任意业务载荷（原样存取）
+    std::string payloadJson;  // 任意业务载荷（原样存取）
 };
 
 struct ScoredPoint {
@@ -58,16 +58,15 @@ public:
                                       const std::vector<VectorPoint>& points) = 0;
     virtual core::Result<void> remove(const std::string& name,
                                       const std::vector<uint64_t>& ids) = 0;
-    [[nodiscard]] virtual core::Result<VectorPoint> get(const std::string& name,
-                                                        uint64_t id) = 0;
+    [[nodiscard]] virtual core::Result<VectorPoint> get(const std::string& name, uint64_t id) = 0;
 
     /// 检索：top-k + 可选分数下限；payloadOnly 控制是否带载荷
-    [[nodiscard]] virtual core::Result<std::vector<ScoredPoint>>
-    search(const std::string& name, const std::vector<float>& query, int k,
-           float scoreThreshold = -1e30f) = 0;
+    [[nodiscard]] virtual core::Result<std::vector<ScoredPoint>> search(
+        const std::string& name, const std::vector<float>& query, int k,
+        float scoreThreshold = -1e30f) = 0;
 
     /// 引擎健康信息（points 总数等）
     [[nodiscard]] virtual size_t totalPoints() = 0;
 };
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

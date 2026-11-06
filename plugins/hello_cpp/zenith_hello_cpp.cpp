@@ -33,17 +33,17 @@ void demoTask(void* /*arg*/) {
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__,
-                    "hello_cpp: init (abi v" "1" ")");
+                    "hello_cpp: init (abi v"
+                    "1"
+                    ")");
 
     // 注册 C++ 虚接口服务：实例在插件堆上，destroy 回传给宿主安全调用
     auto* greeter = new (std::nothrow) GreeterImpl();
     if (greeter == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
 
     zenith_status st = host->register_service(
-        host->registry_ctx, host->plugin_token,
-        zenith::example::IGreeter::service_name(),
-        zenith::example::IGreeter::service_version(),
-        static_cast<void*>(greeter), &destroyGreeter);
+        host->registry_ctx, host->plugin_token, zenith::example::IGreeter::service_name(),
+        zenith::example::IGreeter::service_version(), static_cast<void*>(greeter), &destroyGreeter);
     if (st != ZENITH_OK) {
         delete greeter;
         return st;
@@ -55,20 +55,17 @@ zenith_status pluginInit(const zenith_host_api* host) {
 }
 
 zenith_status pluginStart(void) {
-    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__,
-                      "hello_cpp: start");
+    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__, "hello_cpp: start");
     return ZENITH_OK;
 }
 
 zenith_status pluginStop(void) {
-    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__,
-                      "hello_cpp: stop");
+    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__, "hello_cpp: stop");
     return ZENITH_OK;
 }
 
 void pluginShutdown(void) {
-    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__,
-                      "hello_cpp: shutdown");
+    g_host->log_write(g_host->log_ctx, ZENITH_LOG_INFO, __FILE__, __LINE__, "hello_cpp: shutdown");
     g_host = nullptr;
 }
 
@@ -86,6 +83,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

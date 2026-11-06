@@ -20,8 +20,8 @@ namespace zenith::log {
 enum class LogLevel : int {
     Trace = 0,
     Debug = 1,
-    Info  = 2,
-    Warn  = 3,
+    Info = 2,
+    Warn = 3,
     Error = 4,
     Fatal = 5,
 };
@@ -29,11 +29,11 @@ enum class LogLevel : int {
 ZENITH_API const char* toString(LogLevel level) noexcept;
 
 struct LogRecord {
-    LogLevel    level{LogLevel::Info};
-    int64_t     timestampMs{0};   // Unix 毫秒
-    uint64_t    threadId{0};      // hash(thread::id)
-    const char* file{""};         // 编译期字符串
-    int         line{0};
+    LogLevel level{LogLevel::Info};
+    int64_t timestampMs{0};  // Unix 毫秒
+    uint64_t threadId{0};    // hash(thread::id)
+    const char* file{""};    // 编译期字符串
+    int line{0};
     std::string message;
 };
 
@@ -83,25 +83,24 @@ public:
 private:
     LoggerFacade() = default;
 
-    mutable std::mutex                 mtx_;
+    mutable std::mutex mtx_;
     std::vector<std::shared_ptr<LogSink>> sinks_;
-    LogLevel                           level_ = LogLevel::Info;
+    LogLevel level_ = LogLevel::Info;
 };
 
-} // namespace zenith::log
+}  // namespace zenith::log
 
 // ---------------------------------------------------------------------------
 // 宏入口：流式拼接，逗号分隔传参，如 ZLOG_INFO("count = ", 42)
 // ---------------------------------------------------------------------------
-#define ZLOG_WRITE(zlevel, ...)                                                        \
-    do {                                                                               \
-        ::zenith::log::LoggerFacade::instance().writeT(                                \
-            zlevel, __FILE__, __LINE__, __VA_ARGS__);                                  \
+#define ZLOG_WRITE(zlevel, ...)                                                                  \
+    do {                                                                                         \
+        ::zenith::log::LoggerFacade::instance().writeT(zlevel, __FILE__, __LINE__, __VA_ARGS__); \
     } while (0)
 
 #define ZLOG_TRACE(...) ZLOG_WRITE(::zenith::log::LogLevel::Trace, __VA_ARGS__)
 #define ZLOG_DEBUG(...) ZLOG_WRITE(::zenith::log::LogLevel::Debug, __VA_ARGS__)
-#define ZLOG_INFO(...)  ZLOG_WRITE(::zenith::log::LogLevel::Info,  __VA_ARGS__)
-#define ZLOG_WARN(...)  ZLOG_WRITE(::zenith::log::LogLevel::Warn,  __VA_ARGS__)
+#define ZLOG_INFO(...) ZLOG_WRITE(::zenith::log::LogLevel::Info, __VA_ARGS__)
+#define ZLOG_WARN(...) ZLOG_WRITE(::zenith::log::LogLevel::Warn, __VA_ARGS__)
 #define ZLOG_ERROR(...) ZLOG_WRITE(::zenith::log::LogLevel::Error, __VA_ARGS__)
 #define ZLOG_FATAL(...) ZLOG_WRITE(::zenith::log::LogLevel::Fatal, __VA_ARGS__)

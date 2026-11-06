@@ -18,10 +18,10 @@ namespace zenith::io {
 
 struct SerialOptions {
     uint32_t baud = 115200;
-    uint8_t dataBits = 8;    // 7/8
-    char parity = 'N';       // N/E/O
-    uint8_t stopBits = 1;    // 1/2
-    int readTimeoutMs = 200; // 单次读超时（0 = 立即返回）
+    uint8_t dataBits = 8;     // 7/8
+    char parity = 'N';        // N/E/O
+    uint8_t stopBits = 1;     // 1/2
+    int readTimeoutMs = 200;  // 单次读超时（0 = 立即返回）
 };
 
 class ZENITH_API SerialPort : private core::NonCopyable {
@@ -50,4 +50,4 @@ private:
     uintptr_t fd_ = kInvalidSerial;
 };
 
-} // namespace zenith::io
+}  // namespace zenith::io

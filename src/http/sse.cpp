@@ -15,7 +15,9 @@ ChunkWriter::Ptr ChunkWriter::start(const net::TcpConnection::Ptr& conn, const H
     return writer;
 }
 
-bool ChunkWriter::alive() const noexcept { return conn_ != nullptr && conn_->connected(); }
+bool ChunkWriter::alive() const noexcept {
+    return conn_ != nullptr && conn_->connected();
+}
 
 void ChunkWriter::write(std::string_view data) {
     if (closed_.load() || data.empty() || !alive()) return;
@@ -41,8 +43,9 @@ SseStream::Ptr SseStream::start(const net::TcpConnection::Ptr& conn, int status,
     head.chunked = true;
     head.headers.set("Content-Type", "text/event-stream; charset=utf-8");
     head.headers.set("Cache-Control", "no-cache, no-transform");
-    head.headers.set("X-Accel-Buffering", "no"); // nginx 等反代不缓冲
-    for (const auto& [name, value] : extraHeaders) head.headers.set(name, value);
+    head.headers.set("X-Accel-Buffering", "no");  // nginx 等反代不缓冲
+    for (const auto& [name, value] : extraHeaders)
+        head.headers.set(name, value);
 
     auto writer = ChunkWriter::start(conn, head);
     if (writer == nullptr) return nullptr;
@@ -78,7 +81,7 @@ void SseStream::send(std::string_view data, std::string_view event, std::string_
         pos = nl + 1;
         if (pos >= data.size()) break;
     }
-    frame += '\n'; // 事件结束（空行）
+    frame += '\n';  // 事件结束（空行）
     w_->write(frame);
 }
 
@@ -107,6 +110,8 @@ void SseStream::close() {
     if (w_ != nullptr) w_->close();
 }
 
-bool SseStream::closed() const noexcept { return w_ == nullptr || w_->closed(); }
+bool SseStream::closed() const noexcept {
+    return w_ == nullptr || w_->closed();
+}
 
-} // namespace zenith::http
+}  // namespace zenith::http

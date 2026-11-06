@@ -14,8 +14,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 #include "zenith/config/json_config.hpp"
@@ -84,4 +84,4 @@ private:
     ErrorCallback onError_;
 };
 
-} // namespace zenith::config
+}  // namespace zenith::config

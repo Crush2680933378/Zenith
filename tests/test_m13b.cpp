@@ -21,11 +21,12 @@ struct FlakyUpstream {
     http::HttpServer srv{&loop, &io};
     std::thread t;
     std::atomic<int> hits{0};
-    std::atomic<int> failFirst{0}; // 前 N 次 500，之后 200
-    std::string body = "{\"choices\":[{\"message\":{\"content\":\"ok\"},"
-                        "\"finish_reason\":\"stop\"}],"
-                        "\"usage\":{\"prompt_tokens\":1000,"
-                        "\"completion_tokens\":2000}}";
+    std::atomic<int> failFirst{0};  // 前 N 次 500，之后 200
+    std::string body =
+        "{\"choices\":[{\"message\":{\"content\":\"ok\"},"
+        "\"finish_reason\":\"stop\"}],"
+        "\"usage\":{\"prompt_tokens\":1000,"
+        "\"completion_tokens\":2000}}";
 
     void start() {
         io.start();
@@ -47,9 +48,7 @@ struct FlakyUpstream {
         if (t.joinable()) t.join();
         io.stop();
     }
-    std::string baseURL() const {
-        return "http://127.0.0.1:" + std::to_string(srv.port()) + "/v1";
-    }
+    std::string baseURL() const { return "http://127.0.0.1:" + std::to_string(srv.port()) + "/v1"; }
 };
 
 ai::ChatRequest simpleReq(const std::string& model) {
@@ -66,19 +65,20 @@ json::JsonValue twoProviders(const FlakyUpstream& a, const FlakyUpstream& b,
                              const std::string& extra) {
     // extra 形如 "\"fallbackTo\":\"backup\""（无尾逗号）
     std::string cfg = std::string(R"({"providers":[
-        {"name":"main","api":"openai-chat","baseURL":")") + a.baseURL() +
-        R"(","apiKey":"k","models":["m"])" + (extra.empty() ? "" : "," + extra) +
-        R"(},{"name":"backup","api":"openai-chat","baseURL":")" + b.baseURL() +
-        R"(","apiKey":"k","models":["b"]}]})";
+        {"name":"main","api":"openai-chat","baseURL":")") +
+                      a.baseURL() + R"(","apiKey":"k","models":["m"])" +
+                      (extra.empty() ? "" : "," + extra) +
+                      R"(},{"name":"backup","api":"openai-chat","baseURL":")" + b.baseURL() +
+                      R"(","apiKey":"k","models":["b"]}]})";
     return json::JsonValue::parse(cfg).value();
 }
-} // namespace
+}  // namespace
 
 /* ---------------- failover ---------------- */
 
 ZTEST(RouterResilience, FallbackOnFailure) {
     FlakyUpstream main;
-    main.failFirst = 999; // 主永远 500
+    main.failFirst = 999;  // 主永远 500
     main.start();
     FlakyUpstream backup;
     backup.start();
@@ -100,8 +100,9 @@ ZTEST(RouterResilience, AllFailNoFallback) {
     solo.failFirst = 999;
     solo.start();
     auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"solo","api":"openai-chat","baseURL":")") +
-        solo.baseURL() + R"(","apiKey":"k","models":["m"]}]})").value();
+                   std::string(R"({"providers":[{"name":"solo","api":"openai-chat","baseURL":")") +
+                   solo.baseURL() + R"(","apiKey":"k","models":["m"]}]})")
+                   .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
     auto r = router.chat(simpleReq("m"));
     ZEXPECT_FALSE(r.ok);
@@ -112,16 +113,18 @@ ZTEST(RouterResilience, AllFailNoFallback) {
 
 ZTEST(RouterResilience, CircuitBreakerOpensAndFailsFast) {
     FlakyUpstream up;
-    up.failFirst = 999; // 永远失败
+    up.failFirst = 999;  // 永远失败
     up.start();
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
-        up.baseURL() +
-        R"(","apiKey":"k","models":["m"],"circuit":{"failThreshold":2,"openMs":60000}}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
+            up.baseURL() +
+            R"(","apiKey":"k","models":["m"],"circuit":{"failThreshold":2,"openMs":60000}}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
 
-    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok); // 失败 1（打到上游）
-    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok); // 失败 2 → 熔断打开
+    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok);  // 失败 1（打到上游）
+    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok);  // 失败 2 → 熔断打开
     ZEXPECT_EQ(up.hits.load(), 2);
     ZEXPECT_EQ(router.statsSnapshot()["u"].cbState, std::string("open"));
 
@@ -129,25 +132,26 @@ ZTEST(RouterResilience, CircuitBreakerOpensAndFailsFast) {
     auto r3 = router.chat(simpleReq("m"));
     ZEXPECT_FALSE(r3.ok);
     ZEXPECT_TRUE(r3.error.find("circuit breaker open") != std::string::npos);
-    ZEXPECT_EQ(up.hits.load(), 2); // 零新增流量
+    ZEXPECT_EQ(up.hits.load(), 2);  // 零新增流量
 }
 
 ZTEST(RouterResilience, HalfOpenRecoversAfterCooldown) {
     FlakyUpstream up;
-    up.failFirst = 2; // 前 2 次失败，之后恢复
+    up.failFirst = 2;  // 前 2 次失败，之后恢复
     up.start();
     auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
-        up.baseURL() +
-        R"(","apiKey":"k","models":["m"],"circuit":{"failThreshold":2,"openMs":300}}]})").value();
+                   std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
+                   up.baseURL() +
+                   R"(","apiKey":"k","models":["m"],"circuit":{"failThreshold":2,"openMs":300}}]})")
+                   .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
 
     ZEXPECT_FALSE(router.chat(simpleReq("m")).ok);
-    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok); // 打开，冷却 300ms
+    ZEXPECT_FALSE(router.chat(simpleReq("m")).ok);  // 打开，冷却 300ms
     ZEXPECT_EQ(router.statsSnapshot()["u"].cbState, std::string("open"));
-    std::this_thread::sleep_for(400ms); // 过冷却 → 半开
+    std::this_thread::sleep_for(400ms);  // 过冷却 → 半开
     ZEXPECT_EQ(router.statsSnapshot()["u"].cbState, std::string("half-open"));
-    auto r = router.chat(simpleReq("m")); // 试探成功 → 关闭
+    auto r = router.chat(simpleReq("m"));  // 试探成功 → 关闭
     ZEXPECT_TRUE(r.ok);
     ZEXPECT_EQ(router.statsSnapshot()["u"].cbState, std::string("closed"));
 }
@@ -155,12 +159,14 @@ ZTEST(RouterResilience, HalfOpenRecoversAfterCooldown) {
 /* ---------------- 成本记账 ---------------- */
 
 ZTEST(RouterResilience, CostAccounting) {
-    FlakyUpstream up; // mock 回包 usage: 1000 in / 2000 out
+    FlakyUpstream up;  // mock 回包 usage: 1000 in / 2000 out
     up.start();
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
-        up.baseURL() +
-        R"(","apiKey":"k","models":["m"],"pricing":{"promptPerM":0.5,"completionPerM":2.0}}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(R"({"providers":[{"name":"u","api":"openai-chat","baseURL":")") +
+            up.baseURL() +
+            R"(","apiKey":"k","models":["m"],"pricing":{"promptPerM":0.5,"completionPerM":2.0}}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
     ZEXPECT_TRUE(router.chat(simpleReq("m")).ok);
     ZEXPECT_TRUE(router.chat(simpleReq("m")).ok);
@@ -200,7 +206,7 @@ ZTEST(AiGuard, DetectsAndRedactsPii) {
 
 ZTEST(AiGuard, BenignBoundaryCases) {
     ai::GuardInspector guard;
-    auto r = guard.inspect("how do I ignore a git tracked file? ignore means skip"); // 无指令注入
+    auto r = guard.inspect("how do I ignore a git tracked file? ignore means skip");  // 无指令注入
     ZEXPECT_FALSE(r.hasFinding("prompt_injection"));
     ZEXPECT_EQ(guard.inspect("").score, 0);
 }
@@ -218,7 +224,7 @@ ZTEST(SpeechMock, SttTtsRoundtrip) {
 
     auto sp = tts->synthesize("你好 Zenith", "zf_xiaoxiao", "wav");
     ZEXPECT_TRUE(sp.ok);
-    ZEXPECT_TRUE(sp.audio.size() > 44); // 至少 WAV 头 + 数据
+    ZEXPECT_TRUE(sp.audio.size() > 44);  // 至少 WAV 头 + 数据
     // RIFF/WAVE 头校验
     ZEXPECT_EQ(std::string(sp.audio.data(), 4), std::string("RIFF"));
     ZEXPECT_EQ(std::string(sp.audio.data() + 8, 4), std::string("WAVE"));

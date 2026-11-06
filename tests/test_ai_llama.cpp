@@ -4,9 +4,9 @@
 //  未找到模型 → SKIP，不影响 CI。
 // ============================================================================
 #include <chrono>
-#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <thread>
@@ -62,7 +62,7 @@ struct LlamaFixture {
         cfg.set("ai.llama.model", modelPath);
         cfg.set("ai.llama.model_id", "qwen3.8-27b-iq3xxs");
         cfg.set("ai.llama.context", "2048");
-        cfg.set("ai.llama.gpu_layers", "0"); // 本插件链接的是 CPU 后端
+        cfg.set("ai.llama.gpu_layers", "0");  // 本插件链接的是 CPU 后端
         cfg.set("ai.llama.threads", "8");
 
         mgr = std::make_unique<plugin::PluginManager>(registry, &pool, &cfg);
@@ -110,7 +110,7 @@ struct LlamaFixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(AiLlama, InProcessModelLoadedAndChats) {
     if (!pluginPresent()) {
@@ -126,9 +126,9 @@ ZTEST(AiLlama, InProcessModelLoadedAndChats) {
 
     const auto t0 = std::chrono::steady_clock::now();
     LlamaFixture f(model);
-    const auto loadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
+    const auto loadMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
     ZEXPECT_TRUE(f.service != nullptr);
     if (f.service == nullptr) return;
     std::printf("[ llama ] plugin+model ready in %lld ms, backend=%s\n",
@@ -146,8 +146,7 @@ ZTEST(AiLlama, InProcessModelLoadedAndChats) {
             ZEXPECT_TRUE(data != nullptr && !data->empty());
             if (data != nullptr && !data->empty()) {
                 ZEXPECT_EQ((*data)[0]["id"].asString(), std::string("qwen3.8-27b-iq3xxs"));
-                std::printf("[ llama ] /v1/models -> %s\n",
-                            parsed.value()["data"].dump().c_str());
+                std::printf("[ llama ] /v1/models -> %s\n", parsed.value()["data"].dump().c_str());
             }
         }
     }
@@ -158,9 +157,9 @@ ZTEST(AiLlama, InProcessModelLoadedAndChats) {
         R"("max_tokens":24,"temperature":0})";
     const auto g0 = std::chrono::steady_clock::now();
     auto res = f.post("/v1/chat/completions", body);
-    const auto genMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::steady_clock::now() - g0)
-                           .count();
+    const auto genMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g0)
+            .count();
     ZEXPECT_TRUE(res.isOk());
     if (res.isErr()) {
         std::printf("[ llama ] 请求失败：%s\n", res.error().message.c_str());

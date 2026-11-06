@@ -52,7 +52,7 @@ struct Fixture {
     ~Fixture() {
         mgr.unloadAll();
         std::error_code ec;
-        fs::remove_all(kDir, ec); // 测试产生的临时插件目录不留在构建树里
+        fs::remove_all(kDir, ec);  // 测试产生的临时插件目录不留在构建树里
     }
 
     [[nodiscard]] ai::IInferenceService* service() {
@@ -60,7 +60,7 @@ struct Fixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(PluginReload, NewFileSwapReplacesService) {
     if (!prepareDir()) {
@@ -80,8 +80,7 @@ ZTEST(PluginReload, NewFileSwapReplacesService) {
     // 落一个 .new（真实场景里这是新编译出的 DLL）
     std::error_code ec;
     const fs::path dll = fs::path(kDir) / kDll;
-    fs::copy_file(dll, fs::path(kDir) / (kDll + ".new"),
-                  fs::copy_options::overwrite_existing, ec);
+    fs::copy_file(dll, fs::path(kDir) / (kDll + ".new"), fs::copy_options::overwrite_existing, ec);
     ZEXPECT_FALSE(static_cast<bool>(ec));
 
     plugin::PluginWatcher watcher(f.mgr, kDir);
@@ -105,8 +104,8 @@ ZTEST(PluginReload, NewFileSwapReplacesService) {
         ZEXPECT_EQ(svc2->backend(), std::string("mock"));
         ZEXPECT_TRUE(!svc2->models().empty());
         std::printf("[ reload ] 重载后：backend=%s models=%zu（指针 %p -> %p）\n",
-                    svc2->backend().c_str(), svc2->models().size(),
-                    static_cast<void*>(svc1), static_cast<void*>(svc2));
+                    svc2->backend().c_str(), svc2->models().size(), static_cast<void*>(svc1),
+                    static_cast<void*>(svc2));
     }
 
     // 插件状态应为 Started，且目录里不该残留 .new / .old
@@ -150,8 +149,9 @@ ZTEST(PluginReload, BadPluginFileIsRejected) {
 // ---------------------------------------------------------------------------
 ZTEST(PluginReload, AiLlamaModelReloads) {
     const char* env = std::getenv("ZENITH_TEST_LLAMA_MODEL");
-    std::string model = (env != nullptr && *env != '\0') ? std::string(env)
-                                                         : std::string("D:\\App\\Qwen3.8-27B-UD-IQ3_XXS.gguf");
+    std::string model = (env != nullptr && *env != '\0')
+                            ? std::string(env)
+                            : std::string("D:\\App\\Qwen3.8-27B-UD-IQ3_XXS.gguf");
     if (!fs::exists(model)) {
         std::printf("[ SKIP ] 无 GGUF 模型：%s\n", model.c_str());
         return;
@@ -184,7 +184,8 @@ ZTEST(PluginReload, AiLlamaModelReloads) {
     (void)mgr.startAll();
 
     auto chatOnce = [&]() {
-        auto* svc = static_cast<ai::IInferenceService*>(registry.queryRaw("zenith.ai.ILlamaInference", 1));
+        auto* svc =
+            static_cast<ai::IInferenceService*>(registry.queryRaw("zenith.ai.ILlamaInference", 1));
         if (svc == nullptr) return false;
         ai::ChatRequest req;
         req.messages.push_back(ai::ChatMessage{"user", "hi", ""});
@@ -197,14 +198,13 @@ ZTEST(PluginReload, AiLlamaModelReloads) {
     ZEXPECT_TRUE(chatOnce());
     std::printf("[ reload ] llama 初次加载并生成：OK\n");
 
-    fs::copy_file(fs::path(kLlamaDir) / kLlamaDll,
-                  fs::path(kLlamaDir) / (kLlamaDll + ".new"),
+    fs::copy_file(fs::path(kLlamaDir) / kLlamaDll, fs::path(kLlamaDir) / (kLlamaDll + ".new"),
                   fs::copy_options::overwrite_existing, ec);
     plugin::PluginWatcher watcher(mgr, kLlamaDir);
     const size_t n = watcher.pollOnce();
     std::printf("[ reload ] llama 热重载数=%zu\n", n);
     ZEXPECT_EQ(n, static_cast<size_t>(1));
-    ZEXPECT_TRUE(chatOnce()); // 重载后新实例仍可推理
+    ZEXPECT_TRUE(chatOnce());  // 重载后新实例仍可推理
     std::printf("[ reload ] llama 重载后生成：OK\n");
 
     mgr.unloadAll();

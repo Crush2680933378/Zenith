@@ -53,7 +53,7 @@ inline Middleware requestIdMiddleware() {
             }
         }
         c.setHeader("X-Request-Id", id);
-        c.setContext(std::make_shared<std::string>(id)); // contextAs<std::string>()
+        c.setContext(std::make_shared<std::string>(id));  // contextAs<std::string>()
         c.next();
     };
 }
@@ -68,8 +68,7 @@ inline Handler prometheusHandler(metrics::Registry& reg = metrics::Registry::ins
 }
 
 /// /zenith/status 处理器（运行时状态 JSON；可挂额外 gauge 供给连接/fd 等）
-inline Handler statusHandler(
-    std::function<int64_t(const std::string& key)> extraGauge = nullptr) {
+inline Handler statusHandler(std::function<int64_t(const std::string& key)> extraGauge = nullptr) {
     return [extraGauge](Context& c) {
         auto& reg = metrics::Registry::instance();
         json::JsonValue v = json::JsonValue::object();
@@ -80,7 +79,7 @@ inline Handler statusHandler(
         if (extraGauge) {
             if (auto conns = extraGauge("connections")) v["connections"] = conns;
             if (auto poolHit = extraGauge("pool_hit_rate_permille")) {
-                v["pool_hit_rate_permille"] = poolHit; // 0~1000（千分比）
+                v["pool_hit_rate_permille"] = poolHit;  // 0~1000（千分比）
             }
         }
         json::JsonValue lat = json::JsonValue::object();
@@ -92,4 +91,4 @@ inline Handler statusHandler(
     };
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

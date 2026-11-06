@@ -35,31 +35,31 @@
 namespace zenith::agent {
 
 struct AgentConfig {
-    std::string model;                       // 空 = 推理服务默认
-    std::string systemPrompt;                // 空 = 内置 ReAct 提示
-    int maxSteps = 8;                        // 工具调用上限（防死循环）
-    int sessionMaxTurns = 20;                // 会话滚动窗口（user/assistant 轮）
-    double temperature = 0.2;                // Agent 场景偏低
+    std::string model;         // 空 = 推理服务默认
+    std::string systemPrompt;  // 空 = 内置 ReAct 提示
+    int maxSteps = 8;          // 工具调用上限（防死循环）
+    int sessionMaxTurns = 20;  // 会话滚动窗口（user/assistant 轮）
+    double temperature = 0.2;  // Agent 场景偏低
     // 长期记忆（RAG）：提供时每轮注入相关记忆
-    std::string memoryCollection;            // 向量集合名（空 = 不启用）
+    std::string memoryCollection;  // 向量集合名（空 = 不启用）
     int memoryTopK = 3;
-    std::function<std::vector<float>(const std::string& text)> embedFn; // 向量化钩子
+    std::function<std::vector<float>(const std::string& text)> embedFn;  // 向量化钩子
 };
 
 struct AgentStep {
     int step = 0;
-    std::string thought;   // 模型原始输出（含 tool JSON 或 final）
-    std::string tool;      // 本步执行的工具（final 时空）
-    std::string toolArgs;  // args JSON（final 时空）
-    std::string observation; // 工具结果（final 时空）
+    std::string thought;      // 模型原始输出（含 tool JSON 或 final）
+    std::string tool;         // 本步执行的工具（final 时空）
+    std::string toolArgs;     // args JSON（final 时空）
+    std::string observation;  // 工具结果（final 时空）
 };
 
 struct AgentResult {
     bool ok = false;
-    std::string answer;              // 最终答复
-    std::vector<AgentStep> steps;    // 全过程（审计/调试）
+    std::string answer;            // 最终答复
+    std::vector<AgentStep> steps;  // 全过程（审计/调试）
     int toolCalls = 0;
-    ai::Usage usage;                 // 累计 token
+    ai::Usage usage;  // 累计 token
     std::string error;
 };
 
@@ -111,7 +111,7 @@ private:
     std::map<std::string, std::pair<std::string, std::shared_ptr<mcp::McpClient>>> remoteTools_;
     // session → (role, content) 序列
     std::map<std::string, std::vector<std::pair<std::string, std::string>>> sessions_;
-    void* vectorSvc_ = nullptr; // remember/recall 的向量服务（宿主注入，弱持有）
+    void* vectorSvc_ = nullptr;  // remember/recall 的向量服务（宿主注入，弱持有）
 };
 
-} // namespace zenith::agent
+}  // namespace zenith::agent

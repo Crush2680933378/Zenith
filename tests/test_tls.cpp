@@ -10,8 +10,8 @@
 #include <thread>
 
 #include <openssl/evp.h>
-#include <openssl/x509v3.h>
 #include <openssl/pem.h>
+#include <openssl/x509v3.h>
 
 #include "ztest.hpp"
 
@@ -22,7 +22,9 @@ using namespace zenith;
 using namespace std::chrono_literals;
 
 #ifndef ZENITH_HAS_TLS
-ZTEST(Tls, SkippedNoBackend) { ZEXPECT_TRUE(true); }
+ZTEST(Tls, SkippedNoBackend) {
+    ZEXPECT_TRUE(true);
+}
 ZTEST_MAIN
 #else
 
@@ -55,8 +57,7 @@ struct CertDir {
         // 版本直接暴露该签名），故显式构造名字对象——1.1/3.x/LibreSSL 通吃。
         X509_NAME* name = X509_NAME_new();
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-                                   reinterpret_cast<const unsigned char*>("127.0.0.1"), -1,
-                                   -1, 0);
+                                   reinterpret_cast<const unsigned char*>("127.0.0.1"), -1, -1, 0);
         X509_set_subject_name(x, name);
         X509_set_issuer_name(x, name);
         X509_NAME_free(name);
@@ -121,7 +122,7 @@ struct HttpsFixture {
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
-} // namespace
+}  // namespace
 
 ZTEST(TlsE2E, HttpsRoundtripWithTrust) {
     CertDir certs;
@@ -137,7 +138,7 @@ ZTEST(TlsE2E, HttpsRoundtripWithTrust) {
 
     http::ClientRequest rq;
     rq.url = "https://127.0.0.1:" + std::to_string(f.port()) + "/hello";
-    rq.caFile = certs.cert;    // 信任我们的自签 CA
+    rq.caFile = certs.cert;  // 信任我们的自签 CA
     rq.timeoutMs = 6000;
     auto r = http::HttpClient::fetchBlocking(rq);
     ZEXPECT_TRUE(static_cast<bool>(r));
@@ -156,7 +157,7 @@ ZTEST(TlsE2E, UntrustedCertRejected) {
     rq.url = "https://127.0.0.1:" + std::to_string(f.port()) + "/hello";
     rq.caFile.clear();
     // 不提供 CA，仅系统信任
-    rq.verifyPeer = true; // 不提供 CA → 校验失败
+    rq.verifyPeer = true;  // 不提供 CA → 校验失败
     rq.timeoutMs = 6000;
     auto r = http::HttpClient::fetchBlocking(rq);
     // 结果：握手失败（连接错误）——统一 Err
@@ -211,7 +212,8 @@ ZTEST(TlsE2E, KeepAlivePoolReuse) {
         });
     };
     sendNext();
-    for (int i = 0; i < 800 && done.load() < 10; ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 800 && done.load() < 10; ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_EQ(done.load(), 10);
     // 复用生效：池中空闲连接远少于请求数
     ZEXPECT_TRUE(client.pooledConnections() >= 1);
@@ -271,7 +273,7 @@ ZTEST(HttpPool, PlainHttpKeepAlive) {
         rq.path = "/ping";
         rq.keepAlive = true;
         rq.timeoutMs = 4000;
-        cloop.queueInLoop([&client, rq, &done, &sendNext]() { // rq 按值（异步任务跨越其生命期）
+        cloop.queueInLoop([&client, rq, &done, &sendNext]() {  // rq 按值（异步任务跨越其生命期）
             client.request(rq, [&done, &sendNext](core::Result<http::HttpResponse> r) {
                 if (r && r.value().status == 200) done.fetch_add(1);
                 sendNext();
@@ -279,14 +281,17 @@ ZTEST(HttpPool, PlainHttpKeepAlive) {
         });
     };
     sendNext();
-    for (int i = 0; i < 800 && done.load() < 20; ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 800 && done.load() < 20; ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_EQ(done.load(), 20);
-    ZEXPECT_TRUE(client.pooledConnections() >= 1);   // 有连接归还池
-    ZEXPECT_TRUE(client.pooledConnections() < 20);   // 且明显少于请求数（复用生效）
+    ZEXPECT_TRUE(client.pooledConnections() >= 1);  // 有连接归还池
+    ZEXPECT_TRUE(client.pooledConnections() < 20);  // 且明显少于请求数（复用生效）
     client.clearPool();
 
-    cloop.stop(); ct.join();
-    loop.stop(); t.join();
+    cloop.stop();
+    ct.join();
+    loop.stop();
+    t.join();
     io.stop();
 }
 

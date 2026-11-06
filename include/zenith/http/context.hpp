@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "zenith/core/export.hpp"
 #include "zenith/http/http_message.hpp"
 #include "zenith/http/multipart.hpp"
 #include "zenith/http/sse.hpp"
@@ -19,13 +20,15 @@
 
 namespace zenith::http {
 
-class Context; // 别名需要引用它
+class Context;  // 别名需要引用它
 
 using Handler = std::function<void(Context&)>;
 /// 中间件：包裹后续处理（洋葱模型）；调用 ctx.next() 放行。
 using Middleware = std::function<void(Context&)>;
 
-class Context {
+// ZENITH_API：sse()/chunkedStream() 的实现不在头文件里，动态库消费方
+// （示例、插件、下游）必须能链接到——此前没导出，示例一用到就 undefined reference。
+class ZENITH_API Context {
 public:
     /// 请求体不是合法 JSON 时抛出（服务器捕获后回 400）。
     struct BadRequestBody : std::runtime_error {
@@ -40,9 +43,9 @@ public:
     /// 就形成 连接→ConnState→Context→连接 的循环，整条连接永不释放。
     void reset(HttpRequest req) {
         req_ = std::move(req);
-        resp_.reset();          // 原地复位（不释放已分配的堆内存）
-        params_.clear();        // 保留哈希桶
-        chain_.clear();         // 保留容量（链长每请求固定，shrink_to_fit 反而是分配抖动）
+        resp_.reset();    // 原地复位（不释放已分配的堆内存）
+        params_.clear();  // 保留哈希桶
+        chain_.clear();   // 保留容量（链长每请求固定，shrink_to_fit 反而是分配抖动）
         context_.reset();
         formCache_.reset();
         conn_.reset();
@@ -66,13 +69,11 @@ public:
         return it == params_.end() ? std::string() : it->second;
     }
     /// 查询参数（?a=1）；不存在返回 def。
-    [[nodiscard]] std::string query(const std::string& key,
-                                    const std::string& def = "") const {
+    [[nodiscard]] std::string query(const std::string& key, const std::string& def = "") const {
         const auto it = req_.query.find(key);
         return it == req_.query.end() ? def : it->second;
     }
-    [[nodiscard]] std::string header(const std::string& key,
-                                     const std::string& def = "") const {
+    [[nodiscard]] std::string header(const std::string& key, const std::string& def = "") const {
         return req_.headers.get(key, def);
     }
     /// 解析请求体 JSON；失败抛 BadRequestBody。
@@ -85,8 +86,7 @@ public:
 
     /* ---- Cookie（M5.1） ---- */
     /// Cookie 值（解析 Cookie 头；不存在返回 def）。值为 urlDecode 后。
-    [[nodiscard]] std::string cookie(const std::string& name,
-                                     const std::string& def = "") const;
+    [[nodiscard]] std::string cookie(const std::string& name, const std::string& def = "") const;
 
     /* ---- multipart 表单（M5.1；懒解析缓存） ---- */
     /// 表单字段值（非文件部分）；缺失返回空。
@@ -153,7 +153,7 @@ public:
     void next() {
         if (aborted_) return;
         if (idx_ >= chain_.size()) return;
-        auto h = chain_[idx_++]; // 拷贝，防回调中改动链
+        auto h = chain_[idx_++];  // 拷贝，防回调中改动链
         h(*this);
     }
 
@@ -170,9 +170,7 @@ public:
     [[nodiscard]] bool streaming() const noexcept { return streaming_; }
     /// 由 HttpServer 在派发前注入（用户代码无需调用）。
     void setConnection(std::shared_ptr<net::TcpConnection> conn) { conn_ = std::move(conn); }
-    [[nodiscard]] std::shared_ptr<net::TcpConnection> connection() const noexcept {
-        return conn_;
-    }
+    [[nodiscard]] std::shared_ptr<net::TcpConnection> connection() const noexcept { return conn_; }
 
     /* ---- 零拷贝响应体（M7.3）---- */
     /// 声明响应体直接从文件的 [offset, offset+length) 发送（sendfile）。
@@ -212,10 +210,10 @@ private:
     HttpResponse resp_;
     std::unordered_map<std::string, std::string> params_;
     std::vector<Handler> chain_;
-    std::shared_ptr<void> context_;                      // session 等附带状态
+    std::shared_ptr<void> context_;  // session 等附带状态
     mutable std::shared_ptr<std::vector<multipart::FormPart>> formCache_;
-    std::shared_ptr<net::TcpConnection> conn_;            // 流式响应写端（M9.1）
-    std::string filePath_;                                // 零拷贝响应体来源（M7.3）
+    std::shared_ptr<net::TcpConnection> conn_;  // 流式响应写端（M9.1）
+    std::string filePath_;                      // 零拷贝响应体来源（M7.3）
     uint64_t fileOffset_ = 0;
     uint64_t fileLength_ = 0;
     bool streaming_ = false;
@@ -223,4 +221,4 @@ private:
     bool aborted_ = false;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

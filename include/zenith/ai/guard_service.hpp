@@ -24,20 +24,20 @@
 
 namespace zenith::http {
 class Router;
-} // namespace zenith::http
+}  // namespace zenith::http
 
 namespace zenith::ai {
 
 struct GuardFinding {
-    std::string type;  // prompt_injection / pii_email / pii_phone / pii_cn_id /
-                       // pii_card / pii_apikey
-    std::string match; // 命中片段（截断 40 字符）
-    int score = 0;     // 该项风险分
+    std::string type;   // prompt_injection / pii_email / pii_phone / pii_cn_id /
+                        // pii_card / pii_apikey
+    std::string match;  // 命中片段（截断 40 字符）
+    int score = 0;      // 该项风险分
 };
 
 struct ZENITH_API GuardResult {
     bool blocked = false;
-    int score = 0; // 0-100（多项取封顶累计）
+    int score = 0;  // 0-100（多项取封顶累计）
     std::vector<GuardFinding> findings;
 
     [[nodiscard]] bool hasFinding(const std::string& type) const;
@@ -46,9 +46,9 @@ struct ZENITH_API GuardResult {
 class ZENITH_API GuardInspector {
 public:
     struct Config {
-        int blockScore = 60;                 // ≥ 该分阻断
-        std::vector<std::string> extraPhrases; // 追加注入短语
-        std::vector<std::string> allowlist;    // 白名单片段（命中即跳过该 finding）
+        int blockScore = 60;                    // ≥ 该分阻断
+        std::vector<std::string> extraPhrases;  // 追加注入短语
+        std::vector<std::string> allowlist;     // 白名单片段（命中即跳过该 finding）
     };
 
     GuardInspector() : GuardInspector(Config{}) {}
@@ -91,4 +91,4 @@ private:
 ///           POST /guard/redact  {"text":...} → {"text":"掩码后"}
 ZENITH_API void mountGuardApi(http::Router& r, const GuardInspector& g);
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

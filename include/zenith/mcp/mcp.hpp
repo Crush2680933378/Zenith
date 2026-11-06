@@ -36,12 +36,12 @@ enum class RpcError : int {
 struct ToolDef {
     std::string name;
     std::string description;
-    json::JsonValue inputSchema = json::JsonValue::object(); // JSON Schema（宽松）
+    json::JsonValue inputSchema = json::JsonValue::object();  // JSON Schema（宽松）
 };
 
 struct ToolResult {
     bool isError = false;
-    std::string text; // text 内容块（MCP v1 最常用形态）
+    std::string text;  // text 内容块（MCP v1 最常用形态）
 };
 
 using ToolHandler = std::function<ToolResult(const json::JsonValue& args)>;
@@ -49,8 +49,7 @@ using ToolHandler = std::function<ToolResult(const json::JsonValue& args)>;
 /// MCP 服务器（协议基线 2026-07-28 无状态版：无 session、无 streaming）
 class ZENITH_API McpServer {
 public:
-    explicit McpServer(std::string serverName = "zenith",
-                       std::string version = "0.1.0");
+    explicit McpServer(std::string serverName = "zenith", std::string version = "0.1.0");
 
     /// 注册工具（重名覆盖）
     void registerTool(ToolDef def, ToolHandler handler);
@@ -83,4 +82,4 @@ private:
     std::map<std::string, ToolHandler> handlers_;
 };
 
-} // namespace zenith::mcp
+}  // namespace zenith::mcp

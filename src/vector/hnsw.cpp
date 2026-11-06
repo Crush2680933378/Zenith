@@ -8,8 +8,8 @@
 namespace zenith::vector {
 
 namespace {
-constexpr uint32_t kMagic = 0x5A484E57; // "ZHNS"
-} // namespace
+constexpr uint32_t kMagic = 0x5A484E57;  // "ZHNS"
+}  // namespace
 
 HnswIndex::HnswIndex(HnswConfig cfg) : cfg_(cfg) {
     if (cfg_.m < 2) cfg_.m = 2;
@@ -25,7 +25,8 @@ float HnswIndex::metricApply(Metric m, const float* x, const float* y, int dim) 
     switch (m) {
         case Metric::Cosine:
         case Metric::Dot:
-            for (int i = 0; i < dim; ++i) dot += x[i] * y[i];
+            for (int i = 0; i < dim; ++i)
+                dot += x[i] * y[i];
             return m == Metric::Cosine ? 1.0f - dot : -dot;
         case Metric::Euclidean: {
             float acc = 0;
@@ -82,14 +83,14 @@ std::vector<HnswIndex::Cand> HnswIndex::searchLayer(
         if (visited.insert(e.id).second) frontier.push(e);
     }
     // 初始 best = 入口点（含墓碑——以距离论，后续统一过滤）
-    for (const Cand& e : entry) best.push(e);
+    for (const Cand& e : entry)
+        best.push(e);
 
     while (!frontier.empty()) {
         const Cand c = frontier.top();
         frontier.pop();
         // 剪枝：最近候选比当前第 ef 名还远 → 结束
-        if (!best.empty() && static_cast<int>(best.size()) >= ef &&
-            c.dist > best.top().dist) {
+        if (!best.empty() && static_cast<int>(best.size()) >= ef && c.dist > best.top().dist) {
             break;
         }
         auto it = nodes_.find(c.id);
@@ -113,13 +114,12 @@ std::vector<HnswIndex::Cand> HnswIndex::searchLayer(
         if (dead.count(best.top().id) == 0) out.push_back(best.top());
         best.pop();
     }
-    std::sort(out.begin(), out.end(),
-              [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
+    std::sort(out.begin(), out.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
     return out;
 }
 
-std::vector<uint64_t> HnswIndex::selectNeighbors(const float* /*q*/, std::vector<Cand> cands,
-                                                 int m, bool keepPruned) const {
+std::vector<uint64_t> HnswIndex::selectNeighbors(const float* /*q*/, std::vector<Cand> cands, int m,
+                                                 bool keepPruned) const {
     std::sort(cands.begin(), cands.end(),
               [](const Cand& a, const Cand& b) { return a.dist < b.dist; });
     std::vector<uint64_t> selected;
@@ -159,10 +159,12 @@ void HnswIndex::upsert(uint64_t id, const float* v) {
     node.vec.assign(v, v + cfg_.dim);
     if (cfg_.metric == Metric::Cosine) {
         float norm = 0;
-        for (float x : node.vec) norm += x * x;
+        for (float x : node.vec)
+            norm += x * x;
         norm = std::sqrt(norm);
         if (norm > 0) {
-            for (float& x : node.vec) x /= norm;
+            for (float& x : node.vec)
+                x /= norm;
         }
     }
 
@@ -202,7 +204,7 @@ void HnswIndex::upsert(uint64_t id, const float* v) {
     }
 
     // 1) 自顶向下贪心（ef=1）定位至 level+1 层（此时新点尚未入图，不会自搜）
-    std::vector<float> qv = node.vec; // 拷贝——node 后续 move 入图
+    std::vector<float> qv = node.vec;  // 拷贝——node 后续 move 入图
     std::vector<Cand> ep{Cand{dist(nodes_.at(entryPoint_), qv.data()), entryPoint_}};
     for (int l = maxLevel_; l > level; --l) {
         auto r = searchLayer(qv.data(), ep, 1, l, dead_);
@@ -244,10 +246,9 @@ void HnswIndex::upsert(uint64_t id, const float* v) {
                 for (uint64_t cand : layer) {
                     auto cit = nodes_.find(cand);
                     if (cit != nodes_.end()) {
-                        all.push_back(
-                            Cand{metricApply(cfg_.metric, nit->second.vec.data(),
-                                             cit->second.vec.data(), cfg_.dim),
-                                 cand});
+                        all.push_back(Cand{metricApply(cfg_.metric, nit->second.vec.data(),
+                                                       cit->second.vec.data(), cfg_.dim),
+                                           cand});
                     }
                 }
                 layer = selectNeighbors(nit->second.vec.data(), std::move(all), mMax, true);
@@ -300,10 +301,12 @@ std::vector<SearchHit> HnswIndex::search(const float* q, int k, int efSearch) co
     std::vector<float> qv(q, q + cfg_.dim);
     if (cfg_.metric == Metric::Cosine) {
         float norm = 0;
-        for (float x : qv) norm += x * x;
+        for (float x : qv)
+            norm += x * x;
         norm = std::sqrt(norm);
         if (norm > 0) {
-            for (float& x : qv) x /= norm;
+            for (float& x : qv)
+                x /= norm;
         }
     }
 
@@ -362,7 +365,8 @@ core::Result<std::vector<uint8_t>> HnswIndex::serialize() const {
     }
     const uint32_t deadCount = static_cast<uint32_t>(dead_.size());
     put(&deadCount, 4);
-    for (uint64_t d : dead_) put(&d, 8);
+    for (uint64_t d : dead_)
+        put(&d, 8);
     return core::Result<std::vector<uint8_t>>::Ok(std::move(buf));
 }
 
@@ -385,35 +389,41 @@ core::Result<std::unique_ptr<HnswIndex>> HnswIndex::deserialize(const uint8_t* d
     HnswConfig cfg;
     if (!take(&cfg.dim, 4) || !take(&cfg.metric, 1) || !take(&cfg.m, 4) ||
         !take(&cfg.efConstruction, 4) || !take(&cfg.efSearch, 4)) {
-        return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated header"));
+        return core::Result<std::unique_ptr<HnswIndex>>::Err(
+            core::Error(200, "hnsw: truncated header"));
     }
     auto idxp = std::make_unique<HnswIndex>(cfg);
     HnswIndex& idx = *idxp;
     std::unique_lock<std::shared_mutex> lk(idx.mtx_);
     uint32_t count = 0;
     if (!take(&count, 4)) {
-        return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated count"));
+        return core::Result<std::unique_ptr<HnswIndex>>::Err(
+            core::Error(200, "hnsw: truncated count"));
     }
     for (uint32_t i = 0; i < count; ++i) {
         Node node;
         uint32_t lvl = 0;
         if (!take(&node.id, 8) || !take(&lvl, 4)) {
-            return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated point"));
+            return core::Result<std::unique_ptr<HnswIndex>>::Err(
+                core::Error(200, "hnsw: truncated point"));
         }
         node.level = static_cast<int>(lvl);
         node.vec.resize(static_cast<size_t>(cfg.dim));
         if (!take(node.vec.data(), static_cast<size_t>(cfg.dim) * 4)) {
-            return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated vector"));
+            return core::Result<std::unique_ptr<HnswIndex>>::Err(
+                core::Error(200, "hnsw: truncated vector"));
         }
         node.links.resize(static_cast<size_t>(lvl) + 1);
         for (auto& layer : node.links) {
             uint32_t deg = 0;
             if (!take(&deg, 4)) {
-                return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated deg"));
+                return core::Result<std::unique_ptr<HnswIndex>>::Err(
+                    core::Error(200, "hnsw: truncated deg"));
             }
             layer.resize(deg);
             if (deg > 0 && !take(layer.data(), static_cast<size_t>(deg) * 8)) {
-                return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated links"));
+                return core::Result<std::unique_ptr<HnswIndex>>::Err(
+                    core::Error(200, "hnsw: truncated links"));
             }
         }
         if (node.level > idx.maxLevel_) {
@@ -424,12 +434,14 @@ core::Result<std::unique_ptr<HnswIndex>> HnswIndex::deserialize(const uint8_t* d
     }
     uint32_t deadCount = 0;
     if (!take(&deadCount, 4)) {
-        return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated dead count"));
+        return core::Result<std::unique_ptr<HnswIndex>>::Err(
+            core::Error(200, "hnsw: truncated dead count"));
     }
     for (uint32_t i = 0; i < deadCount; ++i) {
         uint64_t d = 0;
         if (!take(&d, 8)) {
-            return core::Result<std::unique_ptr<HnswIndex>>::Err(core::Error(200, "hnsw: truncated dead id"));
+            return core::Result<std::unique_ptr<HnswIndex>>::Err(
+                core::Error(200, "hnsw: truncated dead id"));
         }
         idx.dead_.insert(d);
     }
@@ -437,4 +449,4 @@ core::Result<std::unique_ptr<HnswIndex>> HnswIndex::deserialize(const uint8_t* d
     return core::Result<std::unique_ptr<HnswIndex>>::Ok(std::move(idxp));
 }
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

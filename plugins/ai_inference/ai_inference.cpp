@@ -46,8 +46,12 @@ void logAt(zenith_log_level level, const std::string& m) {
         g_host->log_write(g_host->log_ctx, level, "ai_inference", 0, m.c_str());
     }
 }
-void logInfo(const std::string& m) { logAt(ZENITH_LOG_INFO, m); }
-void logError(const std::string& m) { logAt(ZENITH_LOG_ERROR, m); }
+void logInfo(const std::string& m) {
+    logAt(ZENITH_LOG_INFO, m);
+}
+void logError(const std::string& m) {
+    logAt(ZENITH_LOG_ERROR, m);
+}
 
 std::string cfgStr(const char* key, const char* fallback) {
     const char* v = nullptr;
@@ -66,8 +70,10 @@ int cfgInt(const char* key, int fallback) {
 std::string trimCopy(const std::string& s) {
     size_t b = 0;
     size_t e = s.size();
-    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n')) ++b;
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n')) --e;
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n'))
+        ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n'))
+        --e;
     return s.substr(b, e - b);
 }
 
@@ -141,8 +147,10 @@ std::string deriveUrl(const std::vector<std::string>& args) {
     std::string host = "127.0.0.1";
     int port = 0;
     for (size_t i = 0; i + 1 < args.size(); ++i) {
-        if (args[i] == "--host") host = args[i + 1];
-        else if (args[i] == "--port") port = std::atoi(args[i + 1].c_str());
+        if (args[i] == "--host")
+            host = args[i + 1];
+        else if (args[i] == "--port")
+            port = std::atoi(args[i + 1].c_str());
     }
     if (port <= 0) return std::string();
     if (host == "0.0.0.0" || host.empty()) host = "127.0.0.1";
@@ -167,7 +175,7 @@ public:
         : supervisor_(std::move(supervisor)), backend_(std::move(backend)) {}
 
     ~InferenceImpl() override {
-        if (supervisor_ != nullptr) supervisor_->stop(); // 先停引擎，再放后端
+        if (supervisor_ != nullptr) supervisor_->stop();  // 先停引擎，再放后端
     }
 
     [[nodiscard]] std::vector<zenith::ai::ModelInfo> models() override {
@@ -197,7 +205,9 @@ private:
     std::unique_ptr<zenith::ai::detail::Backend> backend_;
 };
 
-void destroyService(void* p) { delete static_cast<InferenceImpl*>(p); }
+void destroyService(void* p) {
+    delete static_cast<InferenceImpl*>(p);
+}
 
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
@@ -227,7 +237,8 @@ zenith_status pluginInit(const zenith_host_api* host) {
         } else {
             const std::string engineDir = dirOf(engineExe);
             std::vector<std::string> argv = splitArgs(engineArgs);
-            for (auto& a : argv) a = expand(a, engineModel, engineDir);
+            for (auto& a : argv)
+                a = expand(a, engineModel, engineDir);
 
             if (upstreamUrl.empty()) upstreamUrl = deriveUrl(argv);
             if (modelId.empty()) modelId = modelIdFromArgs(argv);
@@ -244,8 +255,8 @@ zenith_status pluginInit(const zenith_host_api* host) {
             std::string err;
             if (supervisor->start(spec, err)) {
                 const auto st = supervisor->snapshot();
-                logInfo("ai_inference: engine started (pid=" + std::to_string(st.pid) + ", last=" +
-                        st.lastLine + ")");
+                logInfo("ai_inference: engine started (pid=" + std::to_string(st.pid) +
+                        ", last=" + st.lastLine + ")");
             } else {
                 // 保留监管器：/zenith/ai/status 里能看到 supervised=true、running=false
                 // 与失败原因（lastLine），比静默降级更好排查
@@ -256,8 +267,9 @@ zenith_status pluginInit(const zenith_host_api* host) {
 
     if (upstreamUrl.empty()) {
         if (kind == "openai" || kind == "engine") {
-            logError("ai_inference: no upstream url (set ai.inference.upstream_url "
-                     "or pass --host/--port in engine.args)");
+            logError(
+                "ai_inference: no upstream url (set ai.inference.upstream_url "
+                "or pass --host/--port in engine.args)");
         }
     } else {
         backend = zenith::ai::detail::makeOpenAiUpstreamBackend(upstreamUrl, upstreamKey, modelId,
@@ -266,8 +278,8 @@ zenith_status pluginInit(const zenith_host_api* host) {
     }
 
     if (backend == nullptr) {
-        backend = zenith::ai::detail::makeMockBackend(
-            modelId.empty() ? "zenith-mock-1" : modelId, cfgInt("ai.inference.embedding_dim", 64));
+        backend = zenith::ai::detail::makeMockBackend(modelId.empty() ? "zenith-mock-1" : modelId,
+                                                      cfgInt("ai.inference.embedding_dim", 64));
     }
     if (backend == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
 
@@ -278,15 +290,20 @@ zenith_status pluginInit(const zenith_host_api* host) {
     logInfo("ai_inference: ready (backend=" + svc->backend() + ", upstream=" + upstreamUrl +
             ", models=" + std::to_string(loadedModels.size()) + ")");
 
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  zenith::ai::IInferenceService::service_name(),
-                                  zenith::ai::IInferenceService::service_version(),
-                                  static_cast<void*>(svc), &destroyService);
+    return host->register_service(
+        host->registry_ctx, host->plugin_token, zenith::ai::IInferenceService::service_name(),
+        zenith::ai::IInferenceService::service_version(), static_cast<void*>(svc), &destroyService);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -302,6 +319,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

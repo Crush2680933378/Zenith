@@ -44,7 +44,7 @@ std::string randomHex(size_t digits) {
     return out;
 }
 
-} // namespace
+}  // namespace
 
 bool TraceContext::valid() const noexcept {
     return traceId.size() == 32 && spanId.size() == 16 && isAllHexChars(traceId) &&
@@ -86,7 +86,7 @@ std::optional<TraceContext> TraceContext::parse(std::string_view h) {
 
     const std::string_view version = h.substr(0, 2);
     if (!isAllHexChars(version)) return std::nullopt;
-    if (version == "ff") return std::nullopt;       // 规范保留
+    if (version == "ff") return std::nullopt;  // 规范保留
     if (h[2] != '-' || h[35] != '-' || h[52] != '-') return std::nullopt;
 
     // version 00 必须是精确 55 字符；更高版本允许附加字段（"-..."）
@@ -103,7 +103,7 @@ std::optional<TraceContext> TraceContext::parse(std::string_view h) {
     TraceContext c;
     c.traceId.assign(traceId);
     c.spanId.assign(spanId);
-    c.sampled = (flags[1] == '1'); // 最低位为 sampled
+    c.sampled = (flags[1] == '1');  // 最低位为 sampled
     return c;
 }
 
@@ -113,14 +113,20 @@ TraceContext TraceContext::parseOrGenerate(std::string_view header) {
     return generate();
 }
 
-std::optional<TraceContext> currentTrace() { return gThreadTrace; }
+std::optional<TraceContext> currentTrace() {
+    return gThreadTrace;
+}
 
-void setCurrentTrace(std::optional<TraceContext> tc) { gThreadTrace = std::move(tc); }
+void setCurrentTrace(std::optional<TraceContext> tc) {
+    gThreadTrace = std::move(tc);
+}
 
 TraceScope::TraceScope(std::optional<TraceContext> tc) : saved_(gThreadTrace) {
     gThreadTrace = std::move(tc);
 }
 
-TraceScope::~TraceScope() { gThreadTrace = std::move(saved_); }
+TraceScope::~TraceScope() {
+    gThreadTrace = std::move(saved_);
+}
 
-} // namespace zenith::obs
+}  // namespace zenith::obs

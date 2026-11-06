@@ -5,27 +5,29 @@
 #include "zenith/core/platform.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <windows.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
-  #include <dirent.h>
-  #include <errno.h>
-  #include <fcntl.h>
-  #include <string.h>
-  #include <termios.h>
-  #include <unistd.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
 #endif
 
 namespace zenith::io {
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
 
-SerialPort::~SerialPort() { close(); }
+SerialPort::~SerialPort() {
+    close();
+}
 
 core::Result<void> SerialPort::open(const std::string& name, const SerialOptions& opt) {
     close();
@@ -33,11 +35,11 @@ core::Result<void> SerialPort::open(const std::string& name, const SerialOptions
     std::string dev = name;
     if (name.compare(0, 4, "\\\\.\\") != 0) dev = "\\\\.\\" + name;
 
-    HANDLE h = CreateFileA(dev.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
-                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    HANDLE h = CreateFileA(dev.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+                           FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h == INVALID_HANDLE_VALUE) {
-        return core::Result<void>::Err(
-            core::Error(100, "serial open failed (" + std::to_string(GetLastError()) + "): " + name));
+        return core::Result<void>::Err(core::Error(
+            100, "serial open failed (" + std::to_string(GetLastError()) + "): " + name));
     }
     fd_ = reinterpret_cast<uintptr_t>(h);
 
@@ -56,7 +58,7 @@ core::Result<void> SerialPort::open(const std::string& name, const SerialOptions
     }
 
     COMMTIMEOUTS t{};
-    t.ReadIntervalTimeout = 50;          // 字符间隔
+    t.ReadIntervalTimeout = 50;  // 字符间隔
     t.ReadTotalTimeoutConstant = static_cast<DWORD>(opt.readTimeoutMs);
     t.ReadTotalTimeoutMultiplier = 0;
     t.WriteTotalTimeoutConstant = 3000;
@@ -94,8 +96,8 @@ core::Result<size_t> SerialPort::writeAll(const uint8_t* buf, size_t n) {
     size_t done = 0;
     while (done < n) {
         DWORD wrote = 0;
-        if (!WriteFile(reinterpret_cast<HANDLE>(fd_), buf + done,
-                       static_cast<DWORD>(n - done), &wrote, nullptr)) {
+        if (!WriteFile(reinterpret_cast<HANDLE>(fd_), buf + done, static_cast<DWORD>(n - done),
+                       &wrote, nullptr)) {
             return core::Result<size_t>::Err(
                 core::Error(105, "serial write failed (" + std::to_string(GetLastError()) + ")"));
         }
@@ -120,7 +122,10 @@ std::vector<std::string> SerialPort::enumerate() {
             // 排除 COM 口映射的内核服务（如 LPT → 并口）
             bool digit = true;
             for (char c : entry.substr(3)) {
-                if (c < '0' || c > '9') { digit = false; break; }
+                if (c < '0' || c > '9') {
+                    digit = false;
+                    break;
+                }
             }
             if (digit) out.push_back(entry);
         }
@@ -128,9 +133,11 @@ std::vector<std::string> SerialPort::enumerate() {
     return out;
 }
 
-#else // POSIX
+#else  // POSIX
 
-SerialPort::~SerialPort() { close(); }
+SerialPort::~SerialPort() {
+    close();
+}
 
 core::Result<void> SerialPort::open(const std::string& name, const SerialOptions& opt) {
     close();
@@ -148,13 +155,27 @@ core::Result<void> SerialPort::open(const std::string& name, const SerialOptions
     }
     speed_t speed = B115200;
     switch (opt.baud) {
-        case 9600: speed = B9600; break;
-        case 19200: speed = B19200; break;
-        case 38400: speed = B38400; break;
-        case 57600: speed = B57600; break;
-        case 115200: speed = B115200; break;
-        case 230400: speed = B230400; break;
-        default: speed = B115200; break;
+        case 9600:
+            speed = B9600;
+            break;
+        case 19200:
+            speed = B19200;
+            break;
+        case 38400:
+            speed = B38400;
+            break;
+        case 57600:
+            speed = B57600;
+            break;
+        case 115200:
+            speed = B115200;
+            break;
+        case 230400:
+            speed = B230400;
+            break;
+        default:
+            speed = B115200;
+            break;
     }
     cfsetispeed(&tio, speed);
     cfsetospeed(&tio, speed);
@@ -165,7 +186,7 @@ core::Result<void> SerialPort::open(const std::string& name, const SerialOptions
         if (opt.parity == 'O') tio.c_cflag |= PARODD;
     }
     tio.c_cflag |= CLOCAL | CREAD;
-    tio.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); // 原始模式
+    tio.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);  // 原始模式
     tio.c_iflag &= ~(IXON | IXOFF | IXANY);
     tio.c_oflag &= ~OPOST;
     tio.c_cc[VTIME] = static_cast<cc_t>(opt.readTimeoutMs / 100);
@@ -239,4 +260,4 @@ std::vector<std::string> SerialPort::enumerate() {
 
 #endif
 
-} // namespace zenith::io
+}  // namespace zenith::io

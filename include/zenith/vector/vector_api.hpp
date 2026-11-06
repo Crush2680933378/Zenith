@@ -29,9 +29,12 @@ namespace detail {
 
 inline const char* metricName(Metric m) {
     switch (m) {
-        case Metric::Cosine: return "Cosine";
-        case Metric::Dot: return "Dot";
-        case Metric::Euclidean: return "Euclidean";
+        case Metric::Cosine:
+            return "Cosine";
+        case Metric::Dot:
+            return "Dot";
+        case Metric::Euclidean:
+            return "Euclidean";
     }
     return "Cosine";
 }
@@ -63,7 +66,7 @@ inline json::JsonValue okResult(json::JsonValue result) {
     return out;
 }
 
-} // namespace detail
+}  // namespace detail
 
 inline void mountVectorApi(http::Router& r, std::shared_ptr<IVectorStoreService> svc) {
     using namespace http;
@@ -165,8 +168,7 @@ inline void mountVectorApi(http::Router& r, std::shared_ptr<IVectorStoreService>
             c.status(404).text(404, "404 no such collection");
             return;
         }
-        const std::vector<float> q =
-            detail::jsonToVec(body["vector"], info.value().dim);
+        const std::vector<float> q = detail::jsonToVec(body["vector"], info.value().dim);
         if (q.empty()) {
             c.status(400).text(400, "400 vector size mismatch");
             return;
@@ -221,7 +223,8 @@ inline void mountVectorApi(http::Router& r, std::shared_ptr<IVectorStoreService>
         json::JsonValue o = json::JsonValue::object();
         o["id"] = static_cast<int64_t>(res.value().id);
         json::JsonValue vec = json::JsonValue::array();
-        for (float x : res.value().vec) vec.push_back(static_cast<double>(x));
+        for (float x : res.value().vec)
+            vec.push_back(static_cast<double>(x));
         o["vector"] = std::move(vec);
         if (!res.value().payloadJson.empty()) {
             auto pv = json::JsonValue::parse(res.value().payloadJson);
@@ -231,4 +234,4 @@ inline void mountVectorApi(http::Router& r, std::shared_ptr<IVectorStoreService>
     });
 }
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

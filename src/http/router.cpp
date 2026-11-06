@@ -5,12 +5,12 @@
 namespace zenith::http {
 
 struct Router::Node {
-    std::map<std::string, std::unique_ptr<Node>> statics; // 静态段 → 子节点
+    std::map<std::string, std::unique_ptr<Node>> statics;  // 静态段 → 子节点
     std::unique_ptr<Node> param;                           // :name
     std::string paramName;
-    std::unique_ptr<Node> catchAll;                        // *name（兜底剩余全段）
+    std::unique_ptr<Node> catchAll;  // *name（兜底剩余全段）
     std::string catchAllName;
-    std::map<HttpMethod, RouteEntry> routes;               // 方法 → 处理链
+    std::map<HttpMethod, RouteEntry> routes;  // 方法 → 处理链
 };
 
 Router::Router() : root_(std::make_unique<Node>()) {}
@@ -24,7 +24,7 @@ std::vector<std::string> splitPath(const std::string& path) {
     }
     return segs;
 }
-} // namespace
+}  // namespace
 
 Router& Router::handle(HttpMethod m, const std::string& pattern, Handler h,
                        std::vector<Middleware> mw) {
@@ -53,7 +53,7 @@ Router::Node* Router::insertNode(const std::string& pattern) {
             if (cur->catchAll == nullptr) cur->catchAll = std::make_unique<Node>();
             cur->catchAllName = seg.substr(1);
             cur = cur->catchAll.get();
-            break; // catchAll 必须是最后一段
+            break;  // catchAll 必须是最后一段
         }
         if (!seg.empty() && seg[0] == ':') {
             if (cur->param == nullptr) cur->param = std::make_unique<Node>();
@@ -94,7 +94,7 @@ const Router::Node* Router::walk(const std::string& path,
             }
             params[cur->catchAllName] = std::move(rest);
             cur = cur->catchAll.get();
-            return cur; // 剩余段全部被吞并
+            return cur;  // 剩余段全部被吞并
         }
         return nullptr;
     }
@@ -130,8 +130,10 @@ void Router::dispatch(Context& ctx) {
     const RouteEntry& entry = it->second;
     std::vector<Handler> chain;
     chain.reserve(globals_.size() + entry.middlewares.size() + 1);
-    for (const auto& g : globals_) chain.push_back(g);
-    for (const auto& r : entry.middlewares) chain.push_back(r);
+    for (const auto& g : globals_)
+        chain.push_back(g);
+    for (const auto& r : entry.middlewares)
+        chain.push_back(r);
     chain.push_back(entry.handler);
 
     // 写入路径参数后执行
@@ -151,7 +153,8 @@ bool Router::hasRoute(const std::string& pattern) const {
 Router::RouterGroup& Router::RouterGroup::handle(HttpMethod m, const std::string& pattern,
                                                  Handler h, std::vector<Middleware> extra) {
     std::vector<Middleware> all = mw_;
-    for (auto& e : extra) all.push_back(std::move(e));
+    for (auto& e : extra)
+        all.push_back(std::move(e));
     std::string full = prefix_;
     if (!pattern.empty() && pattern[0] != '/') full.push_back('/');
     full += pattern;
@@ -159,4 +162,4 @@ Router::RouterGroup& Router::RouterGroup::handle(HttpMethod m, const std::string
     return *this;
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

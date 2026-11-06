@@ -4,9 +4,9 @@
 //  环境变量：ZENITH_TEST_NINFER_NATIVE_MODEL（未设时试默认 .ninfer 路径）
 // ============================================================================
 #include <chrono>
-#include <filesystem>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <thread>
@@ -69,7 +69,8 @@ struct NativeFixture {
             const char* v = std::getenv(k);
             return (v != nullptr && *v != '\0') ? std::atoi(v) : def;
         };
-        cfg.set("ai.ninfer_native.spec", std::to_string(envInt("ZENITH_TEST_NINFER_NATIVE_SPEC", 1)));
+        cfg.set("ai.ninfer_native.spec",
+                std::to_string(envInt("ZENITH_TEST_NINFER_NATIVE_SPEC", 1)));
         cfg.set("ai.ninfer_native.draft_tokens",
                 std::to_string(envInt("ZENITH_TEST_NINFER_NATIVE_DRAFT", 4)));
         cfg.set("ai.ninfer_native.kv_tokens",
@@ -124,7 +125,7 @@ struct NativeFixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 ZTEST(AiNinferNative, InProcessChat) {
     if (!pluginPresent()) {
@@ -140,16 +141,16 @@ ZTEST(AiNinferNative, InProcessChat) {
 
     const auto t0 = std::chrono::steady_clock::now();
     NativeFixture f(model);
-    const auto loadMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
+    const auto loadMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
     ZEXPECT_TRUE(f.service != nullptr);
     if (f.service == nullptr) {
         std::printf("[ native ] 插件未注册 C 服务表（DLL 未加载？）\n");
         return;
     }
-    std::printf("[ native ] 引擎+插件就绪 %lld ms, backend=%s\n",
-                static_cast<long long>(loadMs), f.service->backend().c_str());
+    std::printf("[ native ] 引擎+插件就绪 %lld ms, backend=%s\n", static_cast<long long>(loadMs),
+                f.service->backend().c_str());
     ZEXPECT_TRUE(f.service->backend().find("in-process") != std::string::npos);
 
     // 进程内引擎的运行态（supervised=false 说明没有子进程）
@@ -165,9 +166,9 @@ ZTEST(AiNinferNative, InProcessChat) {
         R"({"messages":[{"role":"user","content":"用一句话介绍你自己"}],"max_tokens":64})";
     const auto g0 = std::chrono::steady_clock::now();
     auto res = f.post("/v1/chat/completions", body);
-    const auto genMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           std::chrono::steady_clock::now() - g0)
-                           .count();
+    const auto genMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - g0)
+            .count();
     ZEXPECT_TRUE(res.isOk());
     if (res.isErr()) {
         std::printf("[ native ] 请求失败：%s\n", res.error().message.c_str());
@@ -218,13 +219,14 @@ ZTEST(AiNinferNative, MeasurePrefillDecode) {
         prompt += std::to_string(i);
         prompt += ' ';
     }
-    prompt += "\n\nContinue the same number sequence from the next number. Output numbers only, "
-              "in the same space-separated format, and keep going until the length limit.";
+    prompt +=
+        "\n\nContinue the same number sequence from the next number. Output numbers only, "
+        "in the same space-separated format, and keep going until the length limit.";
 
     // 可用环境变量换成正常推理题（默认用包内教程的数数字语料）
     if (const char* p = std::getenv("ZENITH_TEST_NINFER_NATIVE_PROMPT");
         p != nullptr && *p != '\0') {
-        prompt = p; // 仅 ASCII 安全：MinGW 的 getenv 不做 UTF-8 转换
+        prompt = p;  // 仅 ASCII 安全：MinGW 的 getenv 不做 UTF-8 转换
     }
     // 中文等非 ASCII prompt 走文件（UTF-8 原样读入，绕开进程环境变量的编码转换）
     if (const char* pf = std::getenv("ZENITH_TEST_NINFER_NATIVE_PROMPT_FILE");
@@ -233,7 +235,8 @@ ZTEST(AiNinferNative, MeasurePrefillDecode) {
             std::string loaded;
             char buf[4096];
             size_t n = 0;
-            while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0) loaded.append(buf, n);
+            while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0)
+                loaded.append(buf, n);
             std::fclose(f);
             if (!loaded.empty()) prompt = loaded;
         }
@@ -252,24 +255,24 @@ ZTEST(AiNinferNative, MeasurePrefillDecode) {
 
     const auto t0 = std::chrono::steady_clock::now();
     const ai::ChatResult r = f.service->chat(req, nullptr, nullptr);
-    const auto wallMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
+    const auto wallMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
 
     if (!r.ok) std::printf("[ measure ] 失败原因：%s\n", r.error.c_str());
     ZEXPECT_TRUE(r.ok);
     std::printf("[ measure ] ok=%d 墙钟=%lld ms 正文=%zu 字节 思考=%zu 字节 finish=%s\n",
-                r.ok ? 1 : 0, static_cast<long long>(wallMs), r.content.size(),
-                r.reasoning.size(), r.finishReason.c_str());
+                r.ok ? 1 : 0, static_cast<long long>(wallMs), r.content.size(), r.reasoning.size(),
+                r.finishReason.c_str());
     std::printf("[ measure ] 输入 %d token / 输出 %d token（思考 %d）\n", r.usage.promptTokens,
                 r.usage.completionTokens, 0);
     if (r.stats.valid) {
-        std::printf("[ measure ] 输入(prefill) %.1f tok/s · 输出(decode) %.1f tok/s · "
-                    "投机 %lld/%lld · 缓存命中 %lld\n",
-                    r.stats.prefillTps, r.stats.decodeTps,
-                    static_cast<long long>(r.stats.draftAccepted),
-                    static_cast<long long>(r.stats.draftTotal),
-                    static_cast<long long>(r.stats.cachedTokens));
+        std::printf(
+            "[ measure ] 输入(prefill) %.1f tok/s · 输出(decode) %.1f tok/s · "
+            "投机 %lld/%lld · 缓存命中 %lld\n",
+            r.stats.prefillTps, r.stats.decodeTps, static_cast<long long>(r.stats.draftAccepted),
+            static_cast<long long>(r.stats.draftTotal),
+            static_cast<long long>(r.stats.cachedTokens));
     } else {
         std::printf("[ measure ] stats.valid=false（引擎未返回 timings）\n");
     }

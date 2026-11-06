@@ -37,7 +37,7 @@ inline int64_t steadyMicroseconds() noexcept {
 /// "YYYY-MM-DD HH:MM:SS.mmm"（本地时区）。
 inline std::string formatTimestamp(int64_t msSinceEpoch) {
     const time_t seconds = static_cast<time_t>(msSinceEpoch / 1000);
-    const int    millis  = static_cast<int>(msSinceEpoch % 1000);
+    const int millis = static_cast<int>(msSinceEpoch % 1000);
 
     std::tm tmv{};
 #if defined(ZENITH_PLATFORM_WINDOWS)
@@ -46,10 +46,9 @@ inline std::string formatTimestamp(int64_t msSinceEpoch) {
     localtime_r(&seconds, &tmv);
 #endif
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
-                  tmv.tm_year + 1900, tmv.tm_mon + 1, tmv.tm_mday,
-                  tmv.tm_hour, tmv.tm_min, tmv.tm_sec, millis);
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03d", tmv.tm_year + 1900,
+                  tmv.tm_mon + 1, tmv.tm_mday, tmv.tm_hour, tmv.tm_min, tmv.tm_sec, millis);
     return buf;
 }
 
-} // namespace zenith::core
+}  // namespace zenith::core

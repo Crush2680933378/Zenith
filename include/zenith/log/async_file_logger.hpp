@@ -26,15 +26,14 @@ namespace zenith::log {
 class ZENITH_API AsyncFileLogger : public LogSink {
 public:
     /// basePath：日志文件完整路径（如 logs/zenith.log），目录需已存在。
-    AsyncFileLogger(std::string basePath, size_t rollBytes = 10 * 1024 * 1024,
-                    int keepFiles = 5);
+    AsyncFileLogger(std::string basePath, size_t rollBytes = 10 * 1024 * 1024, int keepFiles = 5);
     ~AsyncFileLogger() override;
 
     AsyncFileLogger(const AsyncFileLogger&) = delete;
     AsyncFileLogger& operator=(const AsyncFileLogger&) = delete;
 
     void write(const LogRecord& record) override;
-    void flush() override; // 唤醒后台线程立即落盘
+    void flush() override;  // 唤醒后台线程立即落盘
 
     /// 因队列满而被丢弃的日志条数（监控指标）。
     [[nodiscard]] uint64_t droppedCount() const noexcept { return dropped_.load(); }
@@ -47,21 +46,21 @@ private:
     void drainBatch();
 
     std::string path_;
-    size_t      rollBytes_;
-    int         keepFiles_;
+    size_t rollBytes_;
+    int keepFiles_;
 
     // 队列堆上持有：65536 槽约 2.6MB，避免 AsyncFileLogger 栈构造时爆栈
     std::unique_ptr<concurrency::MpscRingQueue<std::string, 65536>> queue_ =
         std::make_unique<concurrency::MpscRingQueue<std::string, 65536>>();
 
-    std::thread             worker_;
-    std::mutex              wakeMtx_;
+    std::thread worker_;
+    std::mutex wakeMtx_;
     std::condition_variable wakeCv_;
-    std::atomic<bool>       stop_{false};
+    std::atomic<bool> stop_{false};
 
-    FILE*     fp_      = nullptr;
-    size_t    written_ = 0;
+    FILE* fp_ = nullptr;
+    size_t written_ = 0;
     std::atomic<uint64_t> dropped_{0};
 };
 
-} // namespace zenith::log
+}  // namespace zenith::log

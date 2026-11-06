@@ -19,7 +19,7 @@ ZTEST(Json, ScalarsRoundtrip) {
     ZEXPECT_TRUE(d.value().isDouble());
     ZEXPECT_EQ(d.value().asDouble(), 3.25);
 
-    auto big = JsonValue::parse("12345678901234567890"); // 溢出 int64 → double
+    auto big = JsonValue::parse("12345678901234567890");  // 溢出 int64 → double
     ZEXPECT_TRUE(big.value().isDouble());
 
     auto n = JsonValue::parse("null");
@@ -64,8 +64,8 @@ ZTEST(Json, BuildAndDump) {
     v["items"] = std::move(arr);
 
     const std::string compact = v.dump();
-    ZEXPECT_EQ(compact, std::string(
-        R"({"count":3,"items":[1,"two"],"name":"zenith","ratio":0.5})"));
+    ZEXPECT_EQ(compact,
+               std::string(R"({"count":3,"items":[1,"two"],"name":"zenith","ratio":0.5})"));
 
     // 回环
     auto back = JsonValue::parse(compact);
@@ -87,8 +87,8 @@ ZTEST(Json, FindAndAccess) {
     ZEXPECT_FALSE(v.has("y"));
     ZEXPECT_TRUE(v.find("y") == nullptr);
     ZEXPECT_EQ(v["x"].asInt(), int64_t{10});
-    ZEXPECT_EQ(v["missing"].asInt(), int64_t{0}); // 读默认
-    ZEXPECT_THROW(v.at(size_t{99}), std::out_of_range); // 非数组
+    ZEXPECT_EQ(v["missing"].asInt(), int64_t{0});        // 读默认
+    ZEXPECT_THROW(v.at(size_t{99}), std::out_of_range);  // 非数组
 }
 
 ZTEST(Json, ParseErrors) {
@@ -101,8 +101,10 @@ ZTEST(Json, ParseErrors) {
     ZEXPECT_TRUE(JsonValue::parse("\"\\u12\"").isErr());
     // 深度限制
     std::string deep;
-    for (int i = 0; i < 200; ++i) deep += "[";
-    for (int i = 0; i < 200; ++i) deep += "]";
+    for (int i = 0; i < 200; ++i)
+        deep += "[";
+    for (int i = 0; i < 200; ++i)
+        deep += "]";
     ZEXPECT_TRUE(JsonValue::parse(deep).isErr());
     // 错误信息带位置
     auto e = JsonValue::parse("{\"a\":}");

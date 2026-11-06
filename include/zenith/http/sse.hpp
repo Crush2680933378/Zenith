@@ -43,7 +43,7 @@ public:
 private:
     explicit ChunkWriter(net::TcpConnection::Ptr conn) : conn_(std::move(conn)) {}
 
-    net::TcpConnection::Ptr conn_; // 流存活期间保活连接
+    net::TcpConnection::Ptr conn_;  // 流存活期间保活连接
     std::atomic<bool> closed_{false};
 };
 
@@ -74,4 +74,4 @@ private:
     ChunkWriter::Ptr w_;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

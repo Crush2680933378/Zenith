@@ -45,4 +45,4 @@ private:
     int64_t nextId_ = 1;
 };
 
-} // namespace zenith::mcp
+}  // namespace zenith::mcp

@@ -25,13 +25,17 @@ namespace {
 
 thread_local std::string gLastError;
 
-void setError(std::string e) { gLastError = std::move(e); }
+void setError(std::string e) {
+    gLastError = std::move(e);
+}
 
 std::string trimAscii(std::string s) {
     size_t b = 0;
-    while (b < s.size() && (s[b] == ' ' || s[b] == '\n' || s[b] == '\r' || s[b] == '\t')) ++b;
+    while (b < s.size() && (s[b] == ' ' || s[b] == '\n' || s[b] == '\r' || s[b] == '\t'))
+        ++b;
     size_t e = s.size();
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\n' || s[e - 1] == '\r' || s[e - 1] == '\t')) --e;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\n' || s[e - 1] == '\r' || s[e - 1] == '\t'))
+        --e;
     return s.substr(b, e - b);
 }
 
@@ -58,7 +62,7 @@ public:
             r.error = "no samples after decode";
             return r;
         }
-        if (pcm.samples.size() < 1600) { // < 100ms：whisper 会直接报错，提前给出人话
+        if (pcm.samples.size() < 1600) {  // < 100ms：whisper 会直接报错，提前给出人话
             r.error = "audio too short (<100ms)";
             return r;
         }
@@ -75,8 +79,8 @@ public:
         const std::string lang = opt_.language.empty() ? std::string("auto") : opt_.language;
         p.language = (lang == "auto") ? nullptr : lang.c_str();
 
-        const int rc = whisper_full(ctx_, p, pcm.samples.data(),
-                                    static_cast<int>(pcm.samples.size()));
+        const int rc =
+            whisper_full(ctx_, p, pcm.samples.data(), static_cast<int>(pcm.samples.size()));
         if (rc != 0) {
             r.error = "whisper_full failed (rc=" + std::to_string(rc) + ")";
             return r;
@@ -104,9 +108,9 @@ private:
     WhisperOptions opt_;
     std::mutex mtx_;
 };
-#endif // ZENITH_HAS_WHISPER
+#endif  // ZENITH_HAS_WHISPER
 
-} // namespace
+}  // namespace
 
 bool whisperCompiledIn() {
 #if defined(ZENITH_HAS_WHISPER)
@@ -116,7 +120,9 @@ bool whisperCompiledIn() {
 #endif
 }
 
-std::string whisperLastError() { return gLastError; }
+std::string whisperLastError() {
+    return gLastError;
+}
 
 std::shared_ptr<ISpeechToText> makeWhisperStt(const WhisperOptions& opt) {
 #if defined(ZENITH_HAS_WHISPER)
@@ -125,7 +131,7 @@ std::shared_ptr<ISpeechToText> makeWhisperStt(const WhisperOptions& opt) {
         return nullptr;
     }
     whisper_context_params cp = whisper_context_default_params();
-    cp.use_gpu = false; // 服务端优先确定性；有 GPU 需求可后续开配置
+    cp.use_gpu = false;  // 服务端优先确定性；有 GPU 需求可后续开配置
     whisper_context* ctx = whisper_init_from_file_with_params(opt.modelPath.c_str(), cp);
     if (ctx == nullptr) {
         setError("whisper: failed to load model: " + opt.modelPath);
@@ -141,4 +147,4 @@ std::shared_ptr<ISpeechToText> makeWhisperStt(const WhisperOptions& opt) {
 #endif
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

@@ -23,7 +23,7 @@ public:
     ~EventLoopThreadPool();
 
     void start();
-    void stop(); // 停止全部 loop 并 join（幂等）
+    void stop();  // 停止全部 loop 并 join（幂等）
 
     /// round-robin 取一个 IO loop；未启动时返回 nullptr。
     EventLoop* nextLoop();
@@ -38,4 +38,4 @@ private:
     bool started_ = false;
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net

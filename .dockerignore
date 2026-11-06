@@ -1,0 +1,18 @@
+# 构建产物与本地缓存不进上下文（镜像里会重新构建）
+build/
+build-*/
+cmake-build-*/
+.git/
+.gitmodules
+.github/
+benchwww/
+prof/
+*.profraw
+*.profdata
+*.log
+*.tmp
+
+# 文档与示例不是镜像必需，但保留 examples（镜像要跑 http_server 示例）
+docs/
+benchmarks/
+fuzz/corpus/

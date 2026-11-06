@@ -23,16 +23,16 @@ namespace zenith::redis {
 struct RedisReply {
     enum class Type : uint8_t { Simple, Error, Integer, Bulk, Array, Null };
     Type type = Type::Null;
-    std::string str;                 // Simple/Error/Bulk
-    int64_t integer = 0;             // Integer
-    std::vector<RedisReply> items;   // Array
+    std::string str;                // Simple/Error/Bulk
+    int64_t integer = 0;            // Integer
+    std::vector<RedisReply> items;  // Array
 
     [[nodiscard]] bool isError() const noexcept { return type == Type::Error; }
     [[nodiscard]] bool isNull() const noexcept { return type == Type::Null; }
     [[nodiscard]] std::string toString() const {
         return type == Type::Bulk || type == Type::Simple || type == Type::Error ? str
-                 : type == Type::Integer ? std::to_string(integer)
-                                         : std::string("(nil)");
+               : type == Type::Integer ? std::to_string(integer)
+                                       : std::string("(nil)");
     }
 };
 
@@ -68,8 +68,7 @@ public:
     explicit RedisClient(net::EventLoop* loop);
 
     /// 连接（每实例一次）。回调在 loop 线程。
-    void connect(const std::string& host, uint16_t port,
-                 std::function<void()> onReady,
+    void connect(const std::string& host, uint16_t port, std::function<void()> onReady,
                  std::function<void(const std::string&)> onFail);
 
     /// 发送命令（支持流水线：多条命令可连续发送，回调按序触发）。
@@ -95,4 +94,4 @@ private:
     std::deque<ReplyCallback> pending_;
 };
 
-} // namespace zenith::redis
+}  // namespace zenith::redis

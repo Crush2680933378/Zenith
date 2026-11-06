@@ -49,7 +49,7 @@ core::Result<std::vector<FormPart>> parse(const std::string& body, const std::st
 
     for (;;) {
         // 边界后："--" = 结束；CRLF = 下一 part
-        if (body.compare(pos, 2, "--") == 0) break; // 终止边界
+        if (body.compare(pos, 2, "--") == 0) break;  // 终止边界
         if (body.compare(pos, 2, "\r\n") != 0) {
             return core::Result<std::vector<FormPart>>::Err(
                 core::Error(111, "malformed boundary terminator"));
@@ -59,7 +59,8 @@ core::Result<std::vector<FormPart>> parse(const std::string& body, const std::st
         // part 头（至空行）
         const size_t headEnd = body.find("\r\n\r\n", pos);
         if (headEnd == std::string::npos) {
-            return core::Result<std::vector<FormPart>>::Err(core::Error(111, "part headers unterminated"));
+            return core::Result<std::vector<FormPart>>::Err(
+                core::Error(111, "part headers unterminated"));
         }
         const std::string head = body.substr(pos, headEnd - pos);
 
@@ -95,4 +96,4 @@ core::Result<std::vector<FormPart>> parse(const std::string& body, const std::st
     return core::Result<std::vector<FormPart>>::Ok(std::move(parts));
 }
 
-} // namespace zenith::http::multipart
+}  // namespace zenith::http::multipart

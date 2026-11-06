@@ -31,10 +31,14 @@ bool parseChunkSize(const std::string& line, size_t& out) {
     size_t v = 0;
     for (char c : hex) {
         int d;
-        if (c >= '0' && c <= '9') d = c - '0';
-        else if (c >= 'a' && c <= 'f') d = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') d = c - 'A' + 10;
-        else return false;
+        if (c >= '0' && c <= '9')
+            d = c - '0';
+        else if (c >= 'a' && c <= 'f')
+            d = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            d = c - 'A' + 10;
+        else
+            return false;
         v = v * 16 + static_cast<size_t>(d);
         if (v > (1ull << 40)) return false;
     }
@@ -42,7 +46,7 @@ bool parseChunkSize(const std::string& line, size_t& out) {
     return true;
 }
 
-} // namespace
+}  // namespace
 
 /* ==========================================================================
  * HttpRequestParser
@@ -60,9 +64,8 @@ ParseOutcome HttpRequestParser::feed(const char* data, size_t n) {
 
 ParseOutcome HttpRequestParser::feed(core::Buffer& buf) {
     if (buf.readableBytes() == 0) return {};
-    const ParseOutcome out = feed(reinterpret_cast<const char*>(buf.peek()),
-                                   buf.readableBytes());
-    buf.consume(buf.readableBytes()); // 解析器已拷贝所需字节
+    const ParseOutcome out = feed(reinterpret_cast<const char*>(buf.peek()), buf.readableBytes());
+    buf.consume(buf.readableBytes());  // 解析器已拷贝所需字节
     return out;
 }
 
@@ -89,7 +92,7 @@ ParseOutcome HttpRequestParser::tryParse() {
                 std::string line;
                 const int r = takeLine(pending_, line, kMaxRequestLine);
                 if (r <= 0) return r < 0 ? fail("request line too long") : ParseOutcome{};
-                if (line.empty()) continue; // 跳过请求行前的空行（容忍）
+                if (line.empty()) continue;  // 跳过请求行前的空行（容忍）
                 if (!parseRequestLine(line)) return fail("malformed request line");
                 state_ = State::Headers;
                 continue;
@@ -100,9 +103,10 @@ ParseOutcome HttpRequestParser::tryParse() {
                 if (r <= 0) return r < 0 ? fail("headers too large") : ParseOutcome{};
                 if (line.empty()) {
                     // 头部结束：确定主体形态
-                    const bool chunked = req_.headers.contains("Transfer-Encoding") &&
+                    const bool chunked =
+                        req_.headers.contains("Transfer-Encoding") &&
                         core::string_util::toLower(req_.headers.get("Transfer-Encoding"))
-                            .find("chunked") != std::string::npos;
+                                .find("chunked") != std::string::npos;
                     if (chunked) {
                         state_ = State::BodyChunkSize;
                     } else {
@@ -124,8 +128,10 @@ ParseOutcome HttpRequestParser::tryParse() {
                     pending_.erase(0, take);
                     bodyRemaining_ -= take;
                 }
-                if (bodyRemaining_ == 0) state_ = State::Done;
-                else return ParseOutcome{};
+                if (bodyRemaining_ == 0)
+                    state_ = State::Done;
+                else
+                    return ParseOutcome{};
                 continue;
             }
             case State::BodyChunkSize: {
@@ -145,8 +151,10 @@ ParseOutcome HttpRequestParser::tryParse() {
                     pending_.erase(0, take);
                     chunkRemaining_ -= take;
                 }
-                if (chunkRemaining_ == 0) state_ = State::BodyChunkCrlf;
-                else return ParseOutcome{};
+                if (chunkRemaining_ == 0)
+                    state_ = State::BodyChunkCrlf;
+                else
+                    return ParseOutcome{};
                 continue;
             }
             case State::BodyChunkCrlf: {
@@ -194,9 +202,11 @@ bool HttpRequestParser::parseRequestLine(const std::string& line) {
     std::string target = line.substr(sp1 + 1, sp2 - sp1 - 1);
     const std::string version = line.substr(sp2 + 1);
     if (version == "HTTP/1.1") {
-        req_.httpMajor = 1; req_.httpMinor = 1;
+        req_.httpMajor = 1;
+        req_.httpMinor = 1;
     } else if (version == "HTTP/1.0") {
-        req_.httpMajor = 1; req_.httpMinor = 0;
+        req_.httpMajor = 1;
+        req_.httpMinor = 0;
     } else {
         return false;
     }
@@ -220,7 +230,7 @@ bool HttpRequestParser::parseHeaderLine(const std::string& line) {
     const std::string value = core::string_util::trim(line.substr(colon + 1));
     if (name.empty()) return false;
     for (char c : name) {
-        if (c == ' ' || c == '\t') return false; // 头名不允许空白
+        if (c == ' ' || c == '\t') return false;  // 头名不允许空白
     }
     req_.headers.add(name, value);
     return true;
@@ -245,8 +255,7 @@ ParseOutcome HttpResponseParser::feed(const char* data, size_t n) {
 
 ParseOutcome HttpResponseParser::feed(core::Buffer& buf) {
     if (buf.readableBytes() == 0) return {};
-    const ParseOutcome out = feed(reinterpret_cast<const char*>(buf.peek()),
-                                   buf.readableBytes());
+    const ParseOutcome out = feed(reinterpret_cast<const char*>(buf.peek()), buf.readableBytes());
     buf.consume(buf.readableBytes());
     return out;
 }
@@ -301,15 +310,15 @@ ParseOutcome HttpResponseParser::tryParse() {
                 if (r <= 0) return r < 0 ? fail("headers too large") : ParseOutcome{};
                 if (line.empty()) {
                     // 1xx/204/304 无消息体：头部结束即完成（如 WebSocket 101）
-                    if ((resp_.status >= 100 && resp_.status < 200) ||
-                        resp_.status == 204 || resp_.status == 304) {
+                    if ((resp_.status >= 100 && resp_.status < 200) || resp_.status == 204 ||
+                        resp_.status == 304) {
                         state_ = State::Done;
                         continue;
                     }
                     const bool chunked =
                         resp_.headers.contains("Transfer-Encoding") &&
                         core::string_util::toLower(resp_.headers.get("Transfer-Encoding"))
-                            .find("chunked") != std::string::npos;
+                                .find("chunked") != std::string::npos;
                     const std::string cl = resp_.headers.get("Content-Length");
                     if (chunked) {
                         state_ = State::BodyChunkSize;
@@ -317,7 +326,10 @@ ParseOutcome HttpResponseParser::tryParse() {
                         size_t n = 0;
                         bool ok = !cl.empty();
                         for (char c : cl) {
-                            if (c < '0' || c > '9') { ok = false; break; }
+                            if (c < '0' || c > '9') {
+                                ok = false;
+                                break;
+                            }
                             n = n * 10 + static_cast<size_t>(c - '0');
                             if (n > (1ull << 40)) break;
                         }
@@ -336,15 +348,17 @@ ParseOutcome HttpResponseParser::tryParse() {
                 continue;
             }
             case State::BodyIdentity: {
-                const size_t take = pending_.size() < bodyRemaining_ ? pending_.size()
-                                                                      : bodyRemaining_;
+                const size_t take =
+                    pending_.size() < bodyRemaining_ ? pending_.size() : bodyRemaining_;
                 if (take > 0) {
                     resp_.body.append(pending_, 0, take);
                     pending_.erase(0, take);
                     bodyRemaining_ -= take;
                 }
-                if (bodyRemaining_ == 0) state_ = State::Done;
-                else return ParseOutcome{};
+                if (bodyRemaining_ == 0)
+                    state_ = State::Done;
+                else
+                    return ParseOutcome{};
                 continue;
             }
             case State::BodyChunkSize: {
@@ -356,15 +370,17 @@ ParseOutcome HttpResponseParser::tryParse() {
                 continue;
             }
             case State::BodyChunkData: {
-                const size_t take = pending_.size() < chunkRemaining_ ? pending_.size()
-                                                                       : chunkRemaining_;
+                const size_t take =
+                    pending_.size() < chunkRemaining_ ? pending_.size() : chunkRemaining_;
                 if (take > 0) {
                     resp_.body.append(pending_, 0, take);
                     pending_.erase(0, take);
                     chunkRemaining_ -= take;
                 }
-                if (chunkRemaining_ == 0) state_ = State::BodyChunkCrlf;
-                else return ParseOutcome{};
+                if (chunkRemaining_ == 0)
+                    state_ = State::BodyChunkCrlf;
+                else
+                    return ParseOutcome{};
                 continue;
             }
             case State::BodyChunkCrlf: {
@@ -380,12 +396,12 @@ ParseOutcome HttpResponseParser::tryParse() {
                 const int r = takeLine(pending_, line, kMaxHeaderBytes);
                 if (r <= 0) return r < 0 ? fail("bad chunk trailer") : ParseOutcome{};
                 if (line.empty()) state_ = State::Done;
-                continue; // 忽略 trailer 头
+                continue;  // 忽略 trailer 头
             }
             case State::ReadUntilClose: {
                 resp_.body.append(pending_);
                 pending_.clear();
-                return ParseOutcome{}; // 由对端关闭判定完成
+                return ParseOutcome{};  // 由对端关闭判定完成
             }
             case State::Done: {
                 ParseOutcome o;
@@ -396,4 +412,4 @@ ParseOutcome HttpResponseParser::tryParse() {
     }
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

@@ -18,11 +18,11 @@ namespace {
 struct MockVendors {
     net::EventLoop loop;
     net::EventLoopThreadPool io{1};
-    http::HttpServer openai{&loop, &io};      // /v1/chat/completions + /v1/models + /v1/embeddings
-    http::HttpServer anthropic{&loop, &io};   // /v1/messages
-    http::HttpServer gemini{&loop, &io};      // /models/{m}:generateContent
+    http::HttpServer openai{&loop, &io};     // /v1/chat/completions + /v1/models + /v1/embeddings
+    http::HttpServer anthropic{&loop, &io};  // /v1/messages
+    http::HttpServer gemini{&loop, &io};     // /models/{m}:generateContent
     std::thread runner;
-    std::string openaiAuth, anthropicAuth, geminiAuth; // 记录收到的鉴权头
+    std::string openaiAuth, anthropicAuth, geminiAuth;  // 记录收到的鉴权头
 
     MockVendors() {
         io.start();
@@ -36,8 +36,9 @@ struct MockVendors {
             out["model"] = b["model"].asString();
             json::JsonValue choice = json::JsonValue::object();
             choice["message"]["role"] = "assistant";
-            choice["message"]["content"] = "[" + b["model"].asString() + "] " +
-                                           b["messages"].asArray()->at(size_t{0})["content"].asString();
+            choice["message"]["content"] =
+                "[" + b["model"].asString() + "] " +
+                b["messages"].asArray()->at(size_t{0})["content"].asString();
             choice["finish_reason"] = "stop";
             json::JsonValue choices = json::JsonValue::array();
             choices.push_back(std::move(choice));
@@ -93,12 +94,10 @@ struct MockVendors {
 
         // ---- Gemini 形态（/models/{model}:generateContent —— 冒号动作在同一段）----
         gemini.router().post("/models/:gen", [this](http::Context& c) {
-            const std::string seg = c.param("gen"); // "gemini-x:generateContent"
+            const std::string seg = c.param("gen");  // "gemini-x:generateContent"
             const size_t colon = seg.rfind(':');
-            const std::string action =
-                colon == std::string::npos ? "" : seg.substr(colon + 1);
-            const std::string model =
-                colon == std::string::npos ? seg : seg.substr(0, colon);
+            const std::string action = colon == std::string::npos ? "" : seg.substr(colon + 1);
+            const std::string model = colon == std::string::npos ? seg : seg.substr(0, colon);
             geminiAuth = c.header("x-goog-api-key");
             geminiAuth += "|model=" + model;
             auto b = c.bodyJson();
@@ -139,13 +138,13 @@ ai::RouterConfig makeConfig(const MockVendors& mv) {
     const std::string cfgJson = R"({
       "providers": [
         {"name":"deepseek","api":"openai-chat","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.openaiPort()) + R"(","apiKey":"sk-ds-test",
+                                std::to_string(mv.openaiPort()) + R"(","apiKey":"sk-ds-test",
          "models":["deepseek-chat","deepseek-reasoner"]},
         {"name":"anthropic","api":"anthropic","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.anthropicPort()) + R"(","apiKey":"sk-ant-test",
+                                std::to_string(mv.anthropicPort()) + R"(","apiKey":"sk-ant-test",
          "models":[]},
         {"name":"google","api":"gemini","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.geminiPort()) + R"(","apiKey":"AIza-test",
+                                std::to_string(mv.geminiPort()) + R"(","apiKey":"AIza-test",
          "models":[]}
       ],
       "routes": {"claude-*":"anthropic","gemini-*":"google","kimi-*":"deepseek"},
@@ -171,7 +170,7 @@ ai::ChatRequest makeReq(const std::string& model) {
     return r;
 }
 
-} // namespace
+}  // namespace
 
 ZTEST(Router, RoutesAllThreeProtocols) {
     MockVendors mv;
@@ -201,7 +200,7 @@ ZTEST(Router, RoutesAllThreeProtocols) {
     // 默认厂商兜底（未知模型 → defaultProvider=deepseek）
     auto r4 = router.chat(makeReq("unknown-model"));
     ZEXPECT_TRUE(r4.ok);
-    ZEXPECT_TRUE(r4.content.find("[unknown-model]") != std::string::npos); // 兜底走了 deepseek
+    ZEXPECT_TRUE(r4.content.find("[unknown-model]") != std::string::npos);  // 兜底走了 deepseek
     ZEXPECT_EQ(ai::ProviderRouter::lastProviderUsed, std::string("deepseek"));
 
     // 路由诊断
@@ -238,17 +237,19 @@ ZTEST(Router, DiscoveryAndEmbeddings) {
 ZTEST(Router, ConfigErrorsAndEnvKey) {
     MockVendors mv;
     // 坏 JSON 键：providers 缺失
-    auto c1 = ai::RouterConfig::fromJson(
-        json::JsonValue::parse(R"({"foo":1})").value());
+    auto c1 = ai::RouterConfig::fromJson(json::JsonValue::parse(R"({"foo":1})").value());
     ZEXPECT_TRUE(!c1);
 
     // 单条 provider 非法 api → 跳过；合法的保留
-    auto c2 = ai::RouterConfig::fromJson(json::JsonValue::parse(R"({
+    auto c2 = ai::RouterConfig::fromJson(
+        json::JsonValue::parse(R"({
       "providers": [
         {"name":"bad","api":"nope","baseURL":"http://x","apiKey":"k","models":[]},
         {"name":"good","api":"openai-chat","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.openaiPort()) + R"(","apiKey":"$ENV:ZTEST_ROUTER_KEY","models":["m"]}
-      ]})").value());
+                               std::to_string(mv.openaiPort()) +
+                               R"(","apiKey":"$ENV:ZTEST_ROUTER_KEY","models":["m"]}
+      ]})")
+            .value());
     ZEXPECT_TRUE(static_cast<bool>(c2));
     ZEXPECT_EQ(c2.value().providers.size(), size_t{1});
 #ifdef _WIN32
@@ -257,11 +258,14 @@ ZTEST(Router, ConfigErrorsAndEnvKey) {
     setenv("ZTEST_ROUTER_KEY", "sk-env-resolved", 1);
 #endif
     // ENV 解析发生在 fromJson 时——重新解析
-    auto c3 = ai::RouterConfig::fromJson(json::JsonValue::parse(R"({
+    auto c3 = ai::RouterConfig::fromJson(
+        json::JsonValue::parse(R"({
       "providers": [
         {"name":"good","api":"openai-chat","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.openaiPort()) + R"(","apiKey":"$ENV:ZTEST_ROUTER_KEY","models":["m"]}
-      ]})").value());
+                               std::to_string(mv.openaiPort()) +
+                               R"(","apiKey":"$ENV:ZTEST_ROUTER_KEY","models":["m"]}
+      ]})")
+            .value());
     ZEXPECT_EQ(c3.value().providers[0].apiKey, std::string("sk-env-resolved"));
     ai::ProviderRouter r3(std::move(c3).value());
     auto chat = r3.chat(makeReq("m"));
@@ -275,8 +279,10 @@ ZTEST(Router, NoRouteError) {
     auto cfg = json::JsonValue::parse(R"({
       "providers": [
         {"name":"deepseek","api":"openai-chat","baseURL":"http://127.0.0.1:)" +
-        std::to_string(mv.openaiPort()) + R"(","apiKey":"k","models":["deepseek-chat"]}
-      ]})").value();
+                                      std::to_string(mv.openaiPort()) +
+                                      R"(","apiKey":"k","models":["deepseek-chat"]}
+      ]})")
+                   .value();
     ai::ProviderRouter r(ai::RouterConfig::fromJson(cfg).value());
     auto bad = r.chat(makeReq("gpt-99"));
     ZEXPECT_FALSE(bad.ok);

@@ -42,31 +42,36 @@ zenith_status pluginInit(const zenith_host_api* host) {
         const zenith::json::JsonValue& j = parsed.value();
         cfg.blockScore = static_cast<int>(j["blockScore"].asInt(60));
         if (const auto* ex = j["extraPhrases"].asArray()) {
-            for (const auto& e : *ex) cfg.extraPhrases.push_back(e.asString());
+            for (const auto& e : *ex)
+                cfg.extraPhrases.push_back(e.asString());
         }
         if (const auto* al = j["allowlist"].asArray()) {
-            for (const auto& a : *al) cfg.allowlist.push_back(a.asString());
+            for (const auto& a : *al)
+                cfg.allowlist.push_back(a.asString());
         }
     }
 
-    auto* guard = new (std::nothrow)
-        zenith::ai::GuardServiceImpl(zenith::ai::GuardInspector(std::move(cfg)));
+    auto* guard =
+        new (std::nothrow) zenith::ai::GuardServiceImpl(zenith::ai::GuardInspector(std::move(cfg)));
     if (guard == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
     g_guard = guard;
 
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_guard", 0,
                     "ai_guard: ready (prompt-injection + PII: "
                     "email/phone/cn-id/card/apikey)");
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  zenith::ai::IGuardService::service_name(),
-                                  zenith::ai::IGuardService::service_version(),
-                                  static_cast<void*>(guard), &destroyGuard);
+    return host->register_service(
+        host->registry_ctx, host->plugin_token, zenith::ai::IGuardService::service_name(),
+        zenith::ai::IGuardService::service_version(), static_cast<void*>(guard), &destroyGuard);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
-    g_guard = nullptr; // 所有权归宿主（destroyGuard 删除）
+    g_guard = nullptr;  // 所有权归宿主（destroyGuard 删除）
     g_host = nullptr;
 }
 
@@ -84,6 +89,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

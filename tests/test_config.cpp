@@ -16,7 +16,7 @@ const char* kSample = R"({
     "count": 42,
     "note": null
 })";
-} // namespace
+}  // namespace
 
 ZTEST(JsonConfig, DottedGet) {
     auto c = config::JsonConfig::fromString(kSample);
@@ -33,7 +33,7 @@ ZTEST(JsonConfig, DottedGet) {
     // 缺失 / null → 默认
     ZEXPECT_EQ(c.value().get("server.missing", "def"), std::string("def"));
     ZEXPECT_EQ(c.value().get("note", "fallback"), std::string("fallback"));
-    ZEXPECT_EQ(c.value().get("db", "x"), std::string("x")); // 非标量
+    ZEXPECT_EQ(c.value().get("db", "x"), std::string("x"));  // 非标量
 }
 
 ZTEST(JsonConfig, Section) {
@@ -68,7 +68,7 @@ ZTEST(JsonConfig, LoadFileAndErrors) {
 
     ZEXPECT_TRUE(config::JsonConfig::loadFile("missing_config.json.tmp").isErr());
     ZEXPECT_TRUE(config::JsonConfig::fromString("{bad").isErr());
-    ZEXPECT_TRUE(config::JsonConfig::fromString("[1,2]").isErr()); // 根必须是对象
+    ZEXPECT_TRUE(config::JsonConfig::fromString("[1,2]").isErr());  // 根必须是对象
 }
 
 ZTEST_MAIN

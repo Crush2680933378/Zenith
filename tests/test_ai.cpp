@@ -102,7 +102,7 @@ struct MockComfy {
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
-} // namespace
+}  // namespace
 
 ZTEST(AiPlugin, DrawFullChainViaMockComfy) {
     MockComfy mock;
@@ -117,7 +117,7 @@ ZTEST(AiPlugin, DrawFullChainViaMockComfy) {
     (void)mgr.loadDirectory(ZENITH_TEST_PLUGIN_DIR);
 
     void* raw = registry.queryRaw(ai::IAiDrawService::service_name(),
-                                   ai::IAiDrawService::service_version());
+                                  ai::IAiDrawService::service_version());
     ZEXPECT_TRUE(raw != nullptr);
     if (raw == nullptr) return;
     auto* svc = static_cast<ai::IAiDrawService*>(raw);
@@ -138,7 +138,7 @@ ZTEST(AiPlugin, DrawFullChainViaMockComfy) {
     ZEXPECT_EQ(result.outputs.size(), size_t{1});
     if (!result.outputs.empty()) {
         ZEXPECT_TRUE(std::filesystem::exists(result.outputs[0]));
-        ZEXPECT_TRUE(std::filesystem::file_size(result.outputs[0]) >= 264); // 8 魔数 + 256
+        ZEXPECT_TRUE(std::filesystem::file_size(result.outputs[0]) >= 264);  // 8 魔数 + 256
         // PNG 魔数
         FILE* f = std::fopen(result.outputs[0].c_str(), "rb");
         if (f != nullptr) {
@@ -146,14 +146,14 @@ ZTEST(AiPlugin, DrawFullChainViaMockComfy) {
             std::fread(magic, 1, 8, f);
             std::fclose(f);
             ZEXPECT_EQ(magic[0], 0x89);
-            ZEXPECT_EQ(magic[1], 0x50); // 'P'
+            ZEXPECT_EQ(magic[1], 0x50);  // 'P'
         }
     }
     ZEXPECT_TRUE(result.error.empty());
 
     // mock 侧验证：workflow 已收到且占位符已注入
     ZEXPECT_EQ(mock.promptsReceived.load(), 1);
-    ZEXPECT_TRUE(mock.lastWorkflow.find("{{") == std::string::npos); // 无残留占位符
+    ZEXPECT_TRUE(mock.lastWorkflow.find("{{") == std::string::npos);  // 无残留占位符
     ZEXPECT_TRUE(mock.lastWorkflow.find("ink-wash") != std::string::npos);
     ZEXPECT_TRUE(mock.lastWorkflow.find("\"seed\":") != std::string::npos);
     ZEXPECT_TRUE(mock.historyPolls.load() >= 2);
@@ -165,7 +165,7 @@ ZTEST(AiPlugin, DrawFullChainViaMockComfy) {
 ZTEST(AiPlugin, UnreachableServerFails) {
     core::KeyValueConfig cfg;
     cfg.set("ai.comfyui.host", "127.0.0.1");
-    cfg.set("ai.comfyui.port", "1"); // 不可达
+    cfg.set("ai.comfyui.port", "1");  // 不可达
 
     concurrency::ThreadPool pool(1);
     plugin::ServiceRegistry registry;

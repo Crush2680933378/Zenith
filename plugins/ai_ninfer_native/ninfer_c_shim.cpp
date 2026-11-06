@@ -47,27 +47,40 @@ ninfer::ChatRole roleFromString(const char* role) {
 ninfer::KvCacheStorage kvFromCode(uint32_t code) {
     using S = ninfer::KvCacheStorage;
     switch (code) {
-        case ZENITH_NZ_KV_INT8: return S::Int8Group64;
-        case ZENITH_NZ_KV_FP8: return S::Fp8E4M3Row256;
-        case ZENITH_NZ_KV_RK8V4: return S::RotatedInt8KeyInt4ValueGroup64;
-        case ZENITH_NZ_KV_NVFP4: return S::Nvfp4Group16;
-        case ZENITH_NZ_KV_K8V4: return S::Fp8KeyNvfp4Value;
-        case ZENITH_NZ_KV_RK4V4: return S::RotatedLloyd4KeyInt4Value;
-        case ZENITH_NZ_KV_RK4V4_E8: return S::RotatedInt4KeyInt4ValueE8;
-        case ZENITH_NZ_KV_RK2V4_E8: return S::RotatedE8RootKeyInt4Value;
+        case ZENITH_NZ_KV_INT8:
+            return S::Int8Group64;
+        case ZENITH_NZ_KV_FP8:
+            return S::Fp8E4M3Row256;
+        case ZENITH_NZ_KV_RK8V4:
+            return S::RotatedInt8KeyInt4ValueGroup64;
+        case ZENITH_NZ_KV_NVFP4:
+            return S::Nvfp4Group16;
+        case ZENITH_NZ_KV_K8V4:
+            return S::Fp8KeyNvfp4Value;
+        case ZENITH_NZ_KV_RK4V4:
+            return S::RotatedLloyd4KeyInt4Value;
+        case ZENITH_NZ_KV_RK4V4_E8:
+            return S::RotatedInt4KeyInt4ValueE8;
+        case ZENITH_NZ_KV_RK2V4_E8:
+            return S::RotatedE8RootKeyInt4Value;
         case ZENITH_NZ_KV_BF16:
-        default: return S::BFloat16;
+        default:
+            return S::BFloat16;
     }
 }
 
 ninfer::SpeculativeBackend specFromCode(uint32_t code) {
     using B = ninfer::SpeculativeBackend;
     switch (code) {
-        case ZENITH_NZ_SPEC_MTP: return B::Mtp;
-        case ZENITH_NZ_SPEC_DFLASH: return B::DFlash;
-        case ZENITH_NZ_SPEC_DFLASH2: return B::DFlash2;
+        case ZENITH_NZ_SPEC_MTP:
+            return B::Mtp;
+        case ZENITH_NZ_SPEC_DFLASH:
+            return B::DFlash;
+        case ZENITH_NZ_SPEC_DFLASH2:
+            return B::DFlash2;
         case ZENITH_NZ_SPEC_NONE:
-        default: return B::None;
+        default:
+            return B::None;
     }
 }
 
@@ -107,7 +120,8 @@ public:
         if (cb_ != nullptr && !delta.text.empty()) {
             const int32_t channel =
                 isContent ? ZENITH_NZ_CHANNEL_CONTENT : ZENITH_NZ_CHANNEL_REASONING;
-            if (cb_(delta.text.data(), static_cast<int32_t>(delta.text.size()), channel, user_) != 0) {
+            if (cb_(delta.text.data(), static_cast<int32_t>(delta.text.size()), channel, user_) !=
+                0) {
                 aborted = true;
             }
         }
@@ -122,25 +136,28 @@ private:
     void* user_;
 };
 
-} // namespace
+}  // namespace
 
 namespace {
 /// 创建失败时的错误文本（进程级静态，插件 init 里读出来写日志）
 char g_createError[1024] = {0};
 
 void setCreateError(const std::string& msg) {
-    const size_t n = msg.size() < sizeof(g_createError) - 1 ? msg.size() : sizeof(g_createError) - 1;
+    const size_t n =
+        msg.size() < sizeof(g_createError) - 1 ? msg.size() : sizeof(g_createError) - 1;
     std::memcpy(g_createError, msg.data(), n);
     g_createError[n] = '\0';
 }
-} // namespace
+}  // namespace
 
 extern "C" {
 
-NZ_EXPORT const char* NZ_CALL zenith_nz_last_create_error(void) { return g_createError; }
+NZ_EXPORT const char* NZ_CALL zenith_nz_last_create_error(void) {
+    return g_createError;
+}
 
 NZ_EXPORT zenith_nz_engine* NZ_CALL zenith_nz_create(const char* artifact_path,
-                                                    const zenith_nz_config* cfg) {
+                                                     const zenith_nz_config* cfg) {
     try {
         g_createError[0] = '\0';
         auto holder = std::make_unique<zenith_nz_engine>();
@@ -150,11 +167,9 @@ NZ_EXPORT zenith_nz_engine* NZ_CALL zenith_nz_create(const char* artifact_path,
 
         // NInfer 的约束：kv_capacity >= max_context，且页数落在可用区间内。
         // 默认让两者相等（8192），调用方需要更长上下文时同时抬高这两个值。
-        const uint32_t maxCtx =
-            (cfg != nullptr && cfg->max_context != 0) ? cfg->max_context : 8192;
-        const uint32_t kvTokens = (cfg != nullptr && cfg->kv_capacity_tokens != 0)
-                                      ? cfg->kv_capacity_tokens
-                                      : maxCtx;
+        const uint32_t maxCtx = (cfg != nullptr && cfg->max_context != 0) ? cfg->max_context : 8192;
+        const uint32_t kvTokens =
+            (cfg != nullptr && cfg->kv_capacity_tokens != 0) ? cfg->kv_capacity_tokens : maxCtx;
         opt.max_context = maxCtx;
         opt.kv_capacity = ninfer::KvCapacityPolicy::explicit_capacity(kvTokens);
         if (cfg != nullptr && cfg->prefill_chunk != 0) opt.prefill_chunk = cfg->prefill_chunk;
@@ -180,15 +195,16 @@ NZ_EXPORT zenith_nz_engine* NZ_CALL zenith_nz_create(const char* artifact_path,
     }
 }
 
-NZ_EXPORT void NZ_CALL zenith_nz_destroy(zenith_nz_engine* e) { delete e; }
+NZ_EXPORT void NZ_CALL zenith_nz_destroy(zenith_nz_engine* e) {
+    delete e;
+}
 
 NZ_EXPORT const char* NZ_CALL zenith_nz_last_error(zenith_nz_engine* e) {
     return e != nullptr ? e->lastError.c_str() : "null engine";
 }
 
-NZ_EXPORT int32_t NZ_CALL zenith_nz_generate(zenith_nz_engine* e,
-                                             const zenith_nz_message* messages, int32_t count,
-                                             int32_t max_tokens,
+NZ_EXPORT int32_t NZ_CALL zenith_nz_generate(zenith_nz_engine* e, const zenith_nz_message* messages,
+                                             int32_t count, int32_t max_tokens,
                                              const zenith_nz_sampling* sampling,
                                              zenith_nz_token_cb cb, void* user,
                                              zenith_nz_result* out) {
@@ -218,7 +234,8 @@ NZ_EXPORT int32_t NZ_CALL zenith_nz_generate(zenith_nz_engine* e,
         req.execution.requested_output_tokens =
             max_tokens > 0 ? static_cast<uint32_t>(max_tokens) : 256;
         if (sampling != nullptr) {
-            if (sampling->temperature >= 0.0f) req.execution.sampling.temperature = sampling->temperature;
+            if (sampling->temperature >= 0.0f)
+                req.execution.sampling.temperature = sampling->temperature;
             if (sampling->top_p > 0.0f) req.execution.sampling.top_p = sampling->top_p;
             if (sampling->top_k > 0) req.execution.sampling.top_k = sampling->top_k;
             req.execution.sampling.seed = static_cast<uint64_t>(sampling->seed);
@@ -300,14 +317,12 @@ NZ_EXPORT int32_t NZ_CALL zenith_nz_query_runtime(zenith_nz_engine* e, zenith_nz
         const uint32_t cap = mem.kv_capacity;
         // 每页组覆盖多少 token（容量 / 页组数），再乘占用页数
         const double perPage = pages != 0 ? static_cast<double>(cap) / pages : 0.0;
-        const uint32_t occupied =
-            st.device_main_kv_occupied_pages + st.device_main_kv_lease_pages;
+        const uint32_t occupied = st.device_main_kv_occupied_pages + st.device_main_kv_lease_pages;
 
         out->kv_capacity_tokens = cap;
         out->kv_capacity_pages = pages;
         out->kv_occupied_pages = occupied;
-        out->kv_used_tokens =
-            perPage > 0.0 ? static_cast<uint32_t>(occupied * perPage) : 0u;
+        out->kv_used_tokens = perPage > 0.0 ? static_cast<uint32_t>(occupied * perPage) : 0u;
         if (cap != 0 && out->kv_used_tokens > cap) out->kv_used_tokens = cap;
         out->host_kv_used_bytes = static_cast<uint64_t>(st.host_kv_occupied_bytes);
         out->host_kv_capacity_bytes = static_cast<uint64_t>(mem.host_kv_capacity_bytes);
@@ -332,4 +347,4 @@ NZ_EXPORT int32_t NZ_CALL zenith_nz_stats(zenith_nz_engine* e, uint64_t* request
     return 0;
 }
 
-} // extern "C"
+}  // extern "C"

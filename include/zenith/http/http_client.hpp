@@ -29,16 +29,16 @@ struct ClientRequest {
     uint16_t port = 80;
     HttpMethod method = HttpMethod::Get;
     std::string path = "/";
-    HttpHeaders headers; // Host/Content-Length/Connection 由客户端自动填写
+    HttpHeaders headers;  // Host/Content-Length/Connection 由客户端自动填写
     std::string body;
     int timeoutMs = 8000;
 
     // ---- M4 扩展 ----
-    std::string url;          // 非空则解析覆盖 host/port/path（支持 http/https）
-    bool tls = false;         // scheme=https 时自动置位
-    bool verifyPeer = true;   // https 证书校验
-    std::string caFile;       // 额外 CA（PEM）；空则仅系统信任
-    bool keepAlive = false;   // true 时请求走连接池复用（Connection: keep-alive）
+    std::string url;         // 非空则解析覆盖 host/port/path（支持 http/https）
+    bool tls = false;        // scheme=https 时自动置位
+    bool verifyPeer = true;  // https 证书校验
+    std::string caFile;      // 额外 CA（PEM）；空则仅系统信任
+    bool keepAlive = false;  // true 时请求走连接池复用（Connection: keep-alive）
 };
 
 class ZENITH_API HttpClient : private core::NonCopyable {
@@ -78,7 +78,7 @@ private:
         net::EventLoop* loop = nullptr;
         uint64_t timerId = 0;
         bool done = false;
-        bool reusable = false; // 响应完成且 keep-alive → 归还池
+        bool reusable = false;  // 响应完成且 keep-alive → 归还池
         std::string poolKey;
     };
 
@@ -98,4 +98,4 @@ private:
     static constexpr size_t kMaxPoolPerHost = 8;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

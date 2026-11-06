@@ -23,7 +23,7 @@ namespace {
 struct Args {
     std::string url = "http://127.0.0.1:8080/";
     int durationSec = 5;
-    int connsPerThread = 4; // 每线程并发链数
+    int connsPerThread = 4;  // 每线程并发链数
     int threads = 2;
     std::string caFile;
 };
@@ -33,11 +33,16 @@ Args parseArgs(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string s = argv[i];
         auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
-        if (s == "-u") a.url = next();
-        else if (s == "-d") a.durationSec = std::atoi(next());
-        else if (s == "-c") a.connsPerThread = std::atoi(next());
-        else if (s == "-t") a.threads = std::atoi(next());
-        else if (s == "--tls-ca") a.caFile = next();
+        if (s == "-u")
+            a.url = next();
+        else if (s == "-d")
+            a.durationSec = std::atoi(next());
+        else if (s == "-c")
+            a.connsPerThread = std::atoi(next());
+        else if (s == "-t")
+            a.threads = std::atoi(next());
+        else if (s == "--tls-ca")
+            a.caFile = next();
     }
     return a;
 }
@@ -49,8 +54,8 @@ struct Stats {
     // 延迟直方图（毫秒桶）
     static constexpr size_t kBuckets = 12;
     std::atomic<uint64_t> latMs[kBuckets]{};
-    static constexpr int64_t kBoundsMs[kBuckets] = {1, 2, 5, 10, 20, 50, 100, 200, 500,
-                                                    1000, 5000, 9223372036854775807LL};
+    static constexpr int64_t kBoundsMs[kBuckets] = {
+        1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 5000, 9223372036854775807LL};
     void record(int64_t us, uint64_t bodyBytes) {
         bytes.fetch_add(bodyBytes, std::memory_order_relaxed);
         const int64_t ms = us / 1000;
@@ -63,7 +68,8 @@ struct Stats {
     }
     [[nodiscard]] double percentile(double q) const {
         uint64_t total = 0;
-        for (auto& b : latMs) total += b.load();
+        for (auto& b : latMs)
+            total += b.load();
         if (total == 0) return 0;
         const double target = static_cast<double>(total) * q;
         uint64_t cum = 0;
@@ -77,11 +83,11 @@ struct Stats {
     }
 };
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     Args a = parseArgs(argc, argv);
-    log::LoggerFacade::instance().clearSinks(); // 压测静音
+    log::LoggerFacade::instance().clearSinks();  // 压测静音
 
     std::printf("zenith-bench\n  url=%s dur=%ds threads=%d chains/thread=%d\n", a.url.c_str(),
                 a.durationSec, a.threads, a.connsPerThread);
@@ -123,8 +129,7 @@ int main(int argc, char** argv) {
                         cl->request(rq, [this, t0](core::Result<http::HttpResponse> r) {
                             if (r && r.value().status == 200) {
                                 st->ok.fetch_add(1, std::memory_order_relaxed);
-                                st->record(core::steadyMicroseconds() - t0,
-                                           r.value().body.size());
+                                st->record(core::steadyMicroseconds() - t0, r.value().body.size());
                             } else {
                                 st->fail.fetch_add(1, std::memory_order_relaxed);
                             }
@@ -145,7 +150,8 @@ int main(int argc, char** argv) {
                 ch->step = [ch] { ch->run(); };
                 chains->push_back(ch);
             }
-            for (auto& ch : *chains) loop.queueInLoop([ch] { ch->run(); });
+            for (auto& ch : *chains)
+                loop.queueInLoop([ch] { ch->run(); });
 
             std::this_thread::sleep_for(std::chrono::seconds(a.durationSec));
             stop.store(true);
@@ -160,9 +166,10 @@ int main(int argc, char** argv) {
     }
 
     const auto t0 = std::chrono::steady_clock::now();
-    for (auto& t : pool) t.join();
-    const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0)
-                            .count();
+    for (auto& t : pool)
+        t.join();
+    const double wall =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
 
     const uint64_t total = st.ok.load() + st.fail.load();
     const double rps = static_cast<double>(st.ok.load()) / wall;

@@ -20,8 +20,7 @@ core::Result<JsonConfig> JsonConfig::fromString(const std::string& text) {
         return core::Result<JsonConfig>::Err(std::move(v).error());
     }
     if (!v.value().isObject()) {
-        return core::Result<JsonConfig>::Err(
-            core::Error(71, "JsonConfig: root must be an object"));
+        return core::Result<JsonConfig>::Err(core::Error(71, "JsonConfig: root must be an object"));
     }
     return core::Result<JsonConfig>::Ok(JsonConfig(std::move(v).value()));
 }
@@ -41,8 +40,7 @@ std::string JsonConfig::get(const std::string& dottedKey, const std::string& def
             const long idx = std::strtol(seg.c_str(), &endp, 10);
             if (endp == seg.c_str() || *endp != '\0') return def;
             const auto* arr = cur->asArray();
-            if (arr == nullptr || idx < 0 ||
-                static_cast<size_t>(idx) >= arr->size()) {
+            if (arr == nullptr || idx < 0 || static_cast<size_t>(idx) >= arr->size()) {
                 return def;
             }
             cur = &(*arr)[static_cast<size_t>(idx)];
@@ -61,11 +59,11 @@ std::string JsonConfig::get(const std::string& dottedKey, const std::string& def
         case json::JsonValue::Type::Int:
             return std::to_string(cur->asInt());
         case json::JsonValue::Type::Double:
-            return cur->dump(); // 最短往返形态
+            return cur->dump();  // 最短往返形态
         case json::JsonValue::Type::Bool:
             return cur->asBool() ? "true" : "false";
         default:
-            return def; // null/object/array → 默认
+            return def;  // null/object/array → 默认
     }
 }
 
@@ -85,7 +83,7 @@ json::JsonValue JsonConfig::section(const std::string& dottedKey) const {
 }
 
 void JsonConfig::flattenInto(const json::JsonValue& node, const std::string& prefix,
-                              core::KeyValueConfig& out) {
+                             core::KeyValueConfig& out) {
     if (node.isObject()) {
         if (const auto* obj = node.asObject()) {
             for (const auto& [k, v] : *obj) {
@@ -105,11 +103,21 @@ void JsonConfig::flattenInto(const json::JsonValue& node, const std::string& pre
     // 标量
     std::string value;
     switch (node.type()) {
-        case json::JsonValue::Type::String: value = node.asString(); break;
-        case json::JsonValue::Type::Int:     value = std::to_string(node.asInt()); break;
-        case json::JsonValue::Type::Double:  value = node.dump(); break;
-        case json::JsonValue::Type::Bool:    value = node.asBool() ? "true" : "false"; break;
-        default: value = "null"; break;
+        case json::JsonValue::Type::String:
+            value = node.asString();
+            break;
+        case json::JsonValue::Type::Int:
+            value = std::to_string(node.asInt());
+            break;
+        case json::JsonValue::Type::Double:
+            value = node.dump();
+            break;
+        case json::JsonValue::Type::Bool:
+            value = node.asBool() ? "true" : "false";
+            break;
+        default:
+            value = "null";
+            break;
     }
     out.set(prefix, value);
 }
@@ -120,4 +128,4 @@ core::KeyValueConfig JsonConfig::flatten() const {
     return out;
 }
 
-} // namespace zenith::config
+}  // namespace zenith::config

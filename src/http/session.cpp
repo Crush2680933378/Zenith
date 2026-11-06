@@ -27,7 +27,7 @@ std::string unesc(const std::string& s) {
     }
     return out;
 }
-} // namespace
+}  // namespace
 
 std::string Session::serialize() const {
     std::ostringstream os;
@@ -85,8 +85,7 @@ size_t MemorySessionStore::size() const {
 void MemorySessionStore::sweepLocked() {
     // 写路径顺手清扫（低频触发：超容量或攒够 128 条过期）
     const int64_t now = std::chrono::steady_clock::now().time_since_epoch().count();
-    const int64_t ttlNs =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(ttl_).count();
+    const int64_t ttlNs = std::chrono::duration_cast<std::chrono::nanoseconds>(ttl_).count();
     static thread_local int sweepDebt = 0;
     if (++sweepDebt < 128 && map_.size() <= maxEntries_) return;
     sweepDebt = 0;
@@ -102,8 +101,7 @@ void MemorySessionStore::sweepLocked() {
 // ---------------------------------------------------------------------------
 // SessionManager
 // ---------------------------------------------------------------------------
-SessionManager::SessionManager(std::shared_ptr<ISessionStore> store)
-    : store_(std::move(store)) {}
+SessionManager::SessionManager(std::shared_ptr<ISessionStore> store) : store_(std::move(store)) {}
 
 std::string SessionManager::newSessionId() {
     static thread_local std::mt19937_64 rng{std::random_device{}()};
@@ -129,7 +127,7 @@ std::shared_ptr<Session> SessionManager::load(const std::string& cookieSid) {
     }
     auto s = std::make_shared<Session>(newSessionId());
     s->isNew_ = true;
-    s->dirty_ = true; // 新建需要落库
+    s->dirty_ = true;  // 新建需要落库
     return s;
 }
 
@@ -139,7 +137,7 @@ bool SessionManager::save(const std::shared_ptr<Session>& s) {
     s->dirty_ = false;
     const bool wasNew = s->isNew_;
     s->isNew_ = false;
-    return wasNew; // 新建 → 需要下发 cookie
+    return wasNew;  // 新建 → 需要下发 cookie
 }
 
 // ---------------------------------------------------------------------------
@@ -151,11 +149,10 @@ Middleware sessionMiddleware(std::shared_ptr<SessionManager> mgr) {
         c.setContext(std::static_pointer_cast<void>(s));
         c.next();
         if (m->save(s)) {
-            c.setHeader("Set-Cookie",
-                        std::string(SessionManager::kCookieName()) + "=" + s->id() +
-                            "; Path=/; HttpOnly; SameSite=Lax");
+            c.setHeader("Set-Cookie", std::string(SessionManager::kCookieName()) + "=" + s->id() +
+                                          "; Path=/; HttpOnly; SameSite=Lax");
         }
     };
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

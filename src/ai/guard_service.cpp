@@ -23,8 +23,7 @@ bool containsPhrase(const std::string& text, const std::string& phrase) {
     const size_t n = text.size() - phrase.size();
     for (size_t i = 0; i <= n; ++i) {
         size_t j = 0;
-        while (j < phrase.size() &&
-               lowerAscii(text[i + j]) == lowerAscii(phrase[j])) {
+        while (j < phrase.size() && lowerAscii(text[i + j]) == lowerAscii(phrase[j])) {
             ++j;
         }
         if (j == phrase.size()) return true;
@@ -32,7 +31,9 @@ bool containsPhrase(const std::string& text, const std::string& phrase) {
     return false;
 }
 
-bool isDigit(char c) { return c >= '0' && c <= '9'; }
+bool isDigit(char c) {
+    return c >= '0' && c <= '9';
+}
 bool isAlnumAscii(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
@@ -40,7 +41,8 @@ bool isAlnumAscii(char c) {
 /// 提取 text[i..) 起的连续数字长度（可含 ' '、'-' 分组，仅银行卡用）
 size_t digitRun(const std::string& s, size_t i) {
     size_t n = 0;
-    while (i + n < s.size() && isDigit(s[i + n])) ++n;
+    while (i + n < s.size() && isDigit(s[i + n]))
+        ++n;
     return n;
 }
 
@@ -69,8 +71,8 @@ bool cnIdValid(const std::string& s, size_t i) {
     }
     const char last = s[i + 17];
     if (!isDigit(last) && last != 'X' && last != 'x') return false;
-    const int year = (s[i + 6] - '0') * 1000 + (s[i + 7] - '0') * 100 +
-                     (s[i + 8] - '0') * 10 + (s[i + 9] - '0');
+    const int year =
+        (s[i + 6] - '0') * 1000 + (s[i + 7] - '0') * 100 + (s[i + 8] - '0') * 10 + (s[i + 9] - '0');
     const int month = (s[i + 10] - '0') * 10 + (s[i + 11] - '0');
     const int day = (s[i + 12] - '0') * 10 + (s[i + 13] - '0');
     if (year < 1900 || year > 2100) return false;
@@ -80,7 +82,7 @@ bool cnIdValid(const std::string& s, size_t i) {
 
 // 注入短语表（命中即 60 分 —— 默认 blockScore=60 直接阻断）
 const std::array<const char*, 16> kInjectionPhrases = {
-    "ignore previous instructions", "ignore all previous instructions",
+    "ignore previous instructions",  "ignore all previous instructions",
     "ignore the above instructions", "disregard previous instructions",
     "forget your instructions",      "forget all previous",
     "override your instructions",    "override all instructions",
@@ -95,7 +97,7 @@ struct Detector {
     int score;
 };
 
-} // namespace
+}  // namespace
 
 bool GuardResult::hasFinding(const std::string& type) const {
     for (const GuardFinding& f : findings) {
@@ -140,21 +142,19 @@ GuardResult GuardInspector::inspect(const std::string& text) const {
         // 邮箱：局部@域名.后缀
         if (isAlnumAscii(c)) {
             size_t j = i;
-            while (j < n && (isAlnumAscii(text[j]) || text[j] == '.' ||
-                             text[j] == '_' || text[j] == '%' || text[j] == '+' ||
-                             text[j] == '-')) {
+            while (j < n && (isAlnumAscii(text[j]) || text[j] == '.' || text[j] == '_' ||
+                             text[j] == '%' || text[j] == '+' || text[j] == '-')) {
                 ++j;
             }
             if (j < n && text[j] == '@') {
                 size_t d = j + 1;
                 size_t lastDot = std::string::npos;
-                while (d < n && (isAlnumAscii(text[d]) || text[d] == '.' ||
-                                 text[d] == '-')) {
+                while (d < n && (isAlnumAscii(text[d]) || text[d] == '.' || text[d] == '-')) {
                     if (text[d] == '.') lastDot = d;
                     ++d;
                 }
-                if (lastDot != std::string::npos && lastDot > j + 1 &&
-                    d - lastDot >= 3 && d - lastDot <= 12) {
+                if (lastDot != std::string::npos && lastDot > j + 1 && d - lastDot >= 3 &&
+                    d - lastDot <= 12) {
                     add("pii_email", 30, text.substr(i, d - i));
                     i = d;
                     continue;
@@ -183,15 +183,13 @@ GuardResult GuardInspector::inspect(const std::string& text) const {
                     i += 18;
                     continue;
                 }
-                if (boundedBefore && run == 11 && text[i] == '1' &&
-                    text[i + 1] >= '3' && text[i + 1] <= '9' &&
-                    (i + 11 >= n || !isDigit(text[i + 11]))) {
+                if (boundedBefore && run == 11 && text[i] == '1' && text[i + 1] >= '3' &&
+                    text[i + 1] <= '9' && (i + 11 >= n || !isDigit(text[i + 11]))) {
                     add("pii_phone", 30, text.substr(i, 11));
                     i += 11;
                     continue;
                 }
-                if (boundedBefore && run >= 13 && run <= 19 &&
-                    luhnValid(text.substr(i, run))) {
+                if (boundedBefore && run >= 13 && run <= 19 && luhnValid(text.substr(i, run))) {
                     add("pii_card", 45, text.substr(i, run));
                     i += run;
                     continue;
@@ -205,7 +203,8 @@ GuardResult GuardInspector::inspect(const std::string& text) const {
 
     // 汇总：单项分累加（注入 60 + PII 任意 30+ → 90+），封顶 100
     int total = 0;
-    for (const GuardFinding& f : out.findings) total += f.score;
+    for (const GuardFinding& f : out.findings)
+        total += f.score;
     out.score = total > 100 ? 100 : total;
     out.blocked = out.score >= cfg_.blockScore;
     return out;
@@ -214,7 +213,7 @@ GuardResult GuardInspector::inspect(const std::string& text) const {
 std::string GuardInspector::redact(const std::string& text) const {
     // 复用 inspect 的检测器定位命中区间，再统一掩码（保留首尾 2 字符）
     GuardResult r = inspect(text);
-    std::vector<std::pair<size_t, size_t>> spans; // [begin,end)
+    std::vector<std::pair<size_t, size_t>> spans;  // [begin,end)
     for (const GuardFinding& f : r.findings) {
         if (f.type.compare(0, 4, "pii_") != 0) continue;
         const std::string& m = f.match;
@@ -234,7 +233,7 @@ std::string GuardInspector::redact(const std::string& text) const {
     out.reserve(text.size() + spans.size() * 8);
     size_t last = 0;
     for (const auto& [b, e] : spans) {
-        if (b < last) continue; // 重叠
+        if (b < last) continue;  // 重叠
         out.append(text, last, b - last);
         if (e - b > 4) {
             out.append(text, b, 2);
@@ -276,4 +275,4 @@ void mountGuardApi(http::Router& r, const GuardInspector& g) {
     });
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

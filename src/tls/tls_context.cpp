@@ -11,8 +11,7 @@ namespace zenith::tls {
 void openSslGlobalInit() {
     static std::once_flag once;
     std::call_once(once, [] {
-        OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS,
-                         nullptr);
+        OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS | OPENSSL_INIT_LOAD_CRYPTO_STRINGS, nullptr);
     });
 }
 
@@ -26,7 +25,7 @@ std::string lastSslError(const char* context) {
     ERR_error_string_n(code, buf, sizeof(buf));
     return std::string(context) + ": " + buf;
 }
-} // namespace
+}  // namespace
 
 /* ==========================================================================
  * OpenSslContext
@@ -144,8 +143,8 @@ SSL* OpenSslContext::newClientSession(const std::string& serverName) const {
     SSL* ssl = SSL_new(ctx_);
     if (ssl == nullptr) return nullptr;
     if (!serverName.empty()) {
-        SSL_set_tlsext_host_name(ssl, serverName.c_str()); // SNI
-        SSL_set1_host(ssl, serverName.c_str());            // 证书主机名校验
+        SSL_set_tlsext_host_name(ssl, serverName.c_str());  // SNI
+        SSL_set1_host(ssl, serverName.c_str());             // 证书主机名校验
     }
     return ssl;
 }
@@ -170,14 +169,14 @@ TlsFilter::TlsFilter(bool serverSide, SSL* ssl) : ssl_(ssl) {
 }
 
 TlsFilter::~TlsFilter() {
-    if (ssl_ != nullptr) SSL_free(ssl_); // 同时释放关联 BIO
+    if (ssl_ != nullptr) SSL_free(ssl_);  // 同时释放关联 BIO
 }
 
 void TlsFilter::feedCipher(const char* data, size_t n, std::string& outPlain,
-                            std::string& outWire) {
+                           std::string& outWire) {
     if (state_ == TlsState::Failed || state_ == TlsState::Closed) return;
     if (!pendingWireAtConstruct_.empty()) {
-        outWire += pendingWireAtConstruct_; // 客户端首条 ClientHello
+        outWire += pendingWireAtConstruct_;  // 客户端首条 ClientHello
         pendingWireAtConstruct_.clear();
     }
     if (BIO_write(static_cast<BIO*>(rbio_), data, static_cast<int>(n)) < 0) {
@@ -198,11 +197,11 @@ void TlsFilter::encrypt(const char* data, size_t n, std::string& outWire) {
         pendingWireAtConstruct_.clear();
     }
     if (n == 0) {
-        if (!established()) pumpHandshake(outWire); // 仅推进握手
+        if (!established()) pumpHandshake(outWire);  // 仅推进握手
         return;
     }
     if (!established()) {
-        pendingPlain_.append(data, n); // 握手未完：暂存
+        pendingPlain_.append(data, n);  // 握手未完：暂存
         pumpHandshake(outWire);
         return;
     }
@@ -225,7 +224,7 @@ void TlsFilter::shutdown(std::string& outWire) {
 }
 
 void TlsFilter::pumpHandshake(std::string& outWire) {
-    for (int round = 0; round < 8; ++round) { // 防意外死循环
+    for (int round = 0; round < 8; ++round) {  // 防意外死循环
         if (SSL_is_init_finished(ssl_)) {
             state_ = TlsState::Established;
             handshakeDone_ = true;
@@ -255,7 +254,7 @@ void TlsFilter::pumpHandshake(std::string& outWire) {
         }
         const int err = SSL_get_error(ssl_, r);
         if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
-            continue; // 正常等待对端数据（read 走 rbio）
+            continue;  // 正常等待对端数据（read 走 rbio）
         }
         fail(lastSslError("handshake"));
         return;
@@ -271,8 +270,8 @@ void TlsFilter::drainRead(std::string& outPlain) {
             continue;
         }
         const int err = SSL_get_error(ssl_, n);
-        if (err == SSL_ERROR_WANT_READ) return; // 读尽
-        if (err == SSL_ERROR_ZERO_RETURN) {     // 对端 close_notify
+        if (err == SSL_ERROR_WANT_READ) return;  // 读尽
+        if (err == SSL_ERROR_ZERO_RETURN) {      // 对端 close_notify
             state_ = TlsState::Closed;
             return;
         }
@@ -289,14 +288,16 @@ void TlsFilter::drainWire(std::string& outWire) {
             outWire.append(buf, static_cast<size_t>(n));
             continue;
         }
-        return; // 读尽（BIO EOF）
+        return;  // 读尽（BIO EOF）
     }
 }
 
 void TlsFilter::fail(std::string msg) {
-    if (state_ == TlsState::Established) state_ = TlsState::Failed;
-    else state_ = TlsState::Failed;
+    if (state_ == TlsState::Established)
+        state_ = TlsState::Failed;
+    else
+        state_ = TlsState::Failed;
     error_ = std::move(msg);
 }
 
-} // namespace zenith::tls
+}  // namespace zenith::tls

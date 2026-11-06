@@ -113,4 +113,4 @@ private:
 ///   auto s = c.session();  s->set("user", "tom");
 ZENITH_API Middleware sessionMiddleware(std::shared_ptr<SessionManager> mgr);
 
-} // namespace zenith::http
+}  // namespace zenith::http

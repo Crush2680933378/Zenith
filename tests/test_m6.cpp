@@ -4,16 +4,16 @@
 #include <thread>
 
 #if defined(_WIN32)
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #include "ztest.hpp"
@@ -40,7 +40,7 @@ ZTEST(ConnLimit, OverLimitGets503) {
 
     http::SecurityLimits lim;
     lim.maxConcurrentConns = 2;
-    lim.keepAliveIdleSec = 0; // 不干扰本用例
+    lim.keepAliveIdleSec = 0;  // 不干扰本用例
     http::HttpServer server(&loop, &io, lim);
     server.router().get("/hi", [](http::Context& c) { c.text(200, "ok"); });
     (void)server.listen("127.0.0.1", 0);
@@ -49,10 +49,10 @@ ZTEST(ConnLimit, OverLimitGets503) {
 
     // 2 条长连接占位：原生阻塞 socket（行为最确定——连接建立即占额，无需请求）
     const std::string base = "http://127.0.0.1:" + std::to_string(server.port()) + "/hi";
-  #if defined(_WIN32)
+#if defined(_WIN32)
     WSADATA wsa;
     WSAStartup(MAKEWORD(2, 2), &wsa);
-  #endif
+#endif
     std::vector<uintptr_t> socks;
     for (int i = 0; i < 2; ++i) {
         const uintptr_t fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -64,7 +64,7 @@ ZTEST(ConnLimit, OverLimitGets503) {
             socks.push_back(fd);
         }
     }
-    ZEXPECT_EQ(socks.size(), size_t{2}); // 两条连接已占满额度
+    ZEXPECT_EQ(socks.size(), size_t{2});  // 两条连接已占满额度
     std::this_thread::sleep_for(200ms);
 
     // 第 3 条：应 503
@@ -77,11 +77,11 @@ ZTEST(ConnLimit, OverLimitGets503) {
     ZEXPECT_TRUE(r3.value().body.find("connection limit") != std::string::npos);
 
     for (uintptr_t fd : socks) {
-      #if defined(_WIN32)
+#if defined(_WIN32)
         closesocket(static_cast<SOCKET>(fd));
-      #else
+#else
         ::close(static_cast<int>(fd));
-      #endif
+#endif
     }
 
     loop.stop();
@@ -95,7 +95,7 @@ ZTEST(IdleTimeout, SlowlorisKicked) {
     io.start();
 
     http::SecurityLimits lim;
-    lim.keepAliveIdleSec = 1; // 1 秒空闲踢除
+    lim.keepAliveIdleSec = 1;  // 1 秒空闲踢除
     http::HttpServer server(&loop, &io, lim);
     server.router().get("/hi", [](http::Context& c) { c.text(200, "ok"); });
     (void)server.listen("127.0.0.1", 0);
@@ -107,7 +107,7 @@ ZTEST(IdleTimeout, SlowlorisKicked) {
         "http://127.0.0.1:" + std::to_string(server.port()) + "/hi");
     ZEXPECT_EQ(r1.value().status, 200);
 
-    std::this_thread::sleep_for(2500ms); // 超过 idle 1s + 余量
+    std::this_thread::sleep_for(2500ms);  // 超过 idle 1s + 余量
 
     // 服务端已踢：此时连接若被复用会失败——验证方式为再发一条新请求正常即可
     // （旧连接的关闭由服务端日志/对端 RST 体现，此处验证服务仍健康）
@@ -125,9 +125,8 @@ ZTEST(Expect100, ContinueSupported) {
     net::EventLoopThreadPool io{1};
     io.start();
     http::HttpServer server(&loop, &io);
-    server.router().post("/data", [](http::Context& c) {
-        c.text(200, std::to_string(c.body().size()));
-    });
+    server.router().post("/data",
+                         [](http::Context& c) { c.text(200, std::to_string(c.body().size())); });
     (void)server.listen("127.0.0.1", 0);
     std::thread t([&] { loop.loop(); });
     std::this_thread::sleep_for(150ms);

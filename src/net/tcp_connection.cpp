@@ -41,7 +41,7 @@ bool seekFile(std::FILE* f, uint64_t offset) {
     return fseeko(f, static_cast<off_t>(offset), SEEK_SET) == 0;
 #endif
 }
-} // namespace
+}  // namespace
 
 TcpConnection::TcpConnection(EventLoop* loop, fd_t fd, std::string peer)
     : loop_(loop), fd_(fd), peer_(std::move(peer)), sock_(fd) {}
@@ -54,13 +54,12 @@ TcpConnection::~TcpConnection() {
 void TcpConnection::establish() {
     connected_.store(true, std::memory_order_release);
     auto self = shared_from_this();
-    loop_->registerFd(fd_, kPollReadable, [self](uint16_t revents) {
-        self->handleEvents(revents);
-    });
+    loop_->registerFd(fd_, kPollReadable,
+                      [self](uint16_t revents) { self->handleEvents(revents); });
     if (tls_ != nullptr) {
         // TLS 连接：onConnect 推迟到握手完成（handleTls 推进）
         std::string wire;
-        tls_->encrypt(nullptr, 0, wire); // 触发客户端握手泵
+        tls_->encrypt(nullptr, 0, wire);  // 触发客户端握手泵
         if (!wire.empty()) sockSend(wire);
         return;
     }
@@ -69,7 +68,7 @@ void TcpConnection::establish() {
 
 void TcpConnection::startTls(std::unique_ptr<tls::TlsFilter> filter) {
     tls_ = std::move(filter);
-    if (!connected_.load(std::memory_order_acquire)) return; // establish 时接管
+    if (!connected_.load(std::memory_order_acquire)) return;  // establish 时接管
     std::string wire;
     tls_->encrypt(nullptr, 0, wire);
     if (!wire.empty()) sockSend(wire);
@@ -112,7 +111,9 @@ bool TcpConnection::pumpTls(const char* cipher, size_t n) {
     return true;
 }
 
-void TcpConnection::finalize(CloseCallback hostClose) { hostClose_ = std::move(hostClose); }
+void TcpConnection::finalize(CloseCallback hostClose) {
+    hostClose_ = std::move(hostClose);
+}
 
 void TcpConnection::send(const void* data, size_t n) {
     if (!connected_.load(std::memory_order_acquire) || n == 0) return;
@@ -175,7 +176,7 @@ void TcpConnection::shutdown() {
             !self->fileSendActive()) {
             detail::shutdownWrite(self->fd_);
         } else {
-            self->shutdownPending_ = true; // 排空后再关
+            self->shutdownPending_ = true;  // 排空后再关
         }
     });
 }
@@ -190,7 +191,7 @@ void TcpConnection::sendFile(const std::string& path, uint64_t offset, uint64_t 
 
 void TcpConnection::startFileSend(std::string path, uint64_t offset, uint64_t count) {
     if (!connected_.load(std::memory_order_acquire) || count == 0) return;
-    closeFileSend(); // 防御：正常流程下不会有残留
+    closeFileSend();  // 防御：正常流程下不会有残留
 
     std::FILE* f = openForSend(path);
     if (f == nullptr) {
@@ -223,8 +224,8 @@ bool TcpConnection::pumpFileSend() {
 #if defined(ZENITH_PLATFORM_LINUX) || defined(ZENITH_PLATFORM_MACOS)
     // TLS 连接：sendfile 直接把明文写进 socket 会破坏加密流，必须走回退路径
     if (tls_ == nullptr) {
-        const int ffd = fileno(file_); // NOLINT：sendfile 需要裸 fd
-#  if defined(ZENITH_PLATFORM_LINUX)
+        const int ffd = fileno(file_);  // NOLINT：sendfile 需要裸 fd
+#if defined(ZENITH_PLATFORM_LINUX)
         while (fileRemain_ > 0) {
             off_t off = static_cast<off_t>(fileOffset_);
             const size_t chunk = static_cast<size_t>(std::min<uint64_t>(fileRemain_, 1u << 20));
@@ -234,14 +235,17 @@ bool TcpConnection::pumpFileSend() {
                 fileRemain_ -= static_cast<uint64_t>(n);
                 continue;
             }
-            if (n == 0) { fileRemain_ = 0; break; } // 文件短于声明的长度
+            if (n == 0) {
+                fileRemain_ = 0;
+                break;
+            }  // 文件短于声明的长度
             if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return true; // 等可写
+            if (errno == EAGAIN || errno == EWOULDBLOCK) return true;  // 等可写
             handleClose("sendfile error: " + Socket::lastSystemError());
             closeFileSend();
             return false;
         }
-#  else // macOS：sendfile(fileFd, sockFd, offset, &len, hdtr, flags)
+#else  // macOS：sendfile(fileFd, sockFd, offset, &len, hdtr, flags)
         while (fileRemain_ > 0) {
             off_t len = static_cast<off_t>(std::min<uint64_t>(fileRemain_, 1u << 20));
             const int rc = ::sendfile(ffd, static_cast<int>(fd_), static_cast<off_t>(fileOffset_),
@@ -249,10 +253,13 @@ bool TcpConnection::pumpFileSend() {
             if (rc == 0) {
                 fileOffset_ += static_cast<uint64_t>(len);
                 fileRemain_ -= static_cast<uint64_t>(len);
-                if (len == 0) { fileRemain_ = 0; break; }
+                if (len == 0) {
+                    fileRemain_ = 0;
+                    break;
+                }
                 continue;
             }
-            if (errno == EAGAIN) { // 部分发送：len 为实际发出字节
+            if (errno == EAGAIN) {  // 部分发送：len 为实际发出字节
                 fileOffset_ += static_cast<uint64_t>(len);
                 fileRemain_ -= static_cast<uint64_t>(len);
                 return true;
@@ -262,7 +269,7 @@ bool TcpConnection::pumpFileSend() {
             closeFileSend();
             return false;
         }
-#  endif
+#endif
         closeFileSend();
         return false;
     }
@@ -276,7 +283,7 @@ bool TcpConnection::pumpFileSend() {
     while (fileRemain_ > 0 && outBuf_.readableBytes() == 0) {
         const size_t want = static_cast<size_t>(std::min<uint64_t>(fileRemain_, sizeof(buf)));
         const size_t got = std::fread(buf, 1, want, file_);
-        if (got == 0) { // 提前 EOF（文件被截断）——按实际读到的字节收尾
+        if (got == 0) {  // 提前 EOF（文件被截断）——按实际读到的字节收尾
             fileRemain_ = 0;
             break;
         }
@@ -285,7 +292,7 @@ bool TcpConnection::pumpFileSend() {
         const char* src = buf;
         size_t len = got;
         std::string wire;
-        if (tls_ != nullptr) { // TLS：先加密再写
+        if (tls_ != nullptr) {  // TLS：先加密再写
             tls_->encrypt(buf, got, wire);
             if (tls_->state() == tls::TlsState::Failed) {
                 handleClose("tls error: " + tls_->error());
@@ -298,10 +305,10 @@ bool TcpConnection::pumpFileSend() {
         }
         const int w = sock_.writeSome(src, len);
         if (w > 0 && static_cast<size_t>(w) < len) {
-            outBuf_.append(src + w, len - static_cast<size_t>(w)); // 尾部留待下轮
+            outBuf_.append(src + w, len - static_cast<size_t>(w));  // 尾部留待下轮
             break;
         }
-        if (w == -1) { // 内核满：整块留下，等可写
+        if (w == -1) {  // 内核满：整块留下，等可写
             outBuf_.append(src, len);
             break;
         }
@@ -354,15 +361,15 @@ void TcpConnection::handleRead() {
         const int n = sock_.readSome(buf, sizeof(buf));
         if (n > 0) {
             if (tls_ != nullptr) {
-                if (!pumpTls(buf, static_cast<size_t>(n))) return; // TLS 失败已关
+                if (!pumpTls(buf, static_cast<size_t>(n))) return;  // TLS 失败已关
             } else {
                 inBuf_.append(buf, static_cast<size_t>(n));
             }
-            if (n < static_cast<int>(sizeof(buf))) break; // 读尽本轮
+            if (n < static_cast<int>(sizeof(buf))) break;  // 读尽本轮
             continue;
         }
-        if (n == -1) break;                       // EAGAIN
-        if (n == 0) {                             // 对端关闭
+        if (n == -1) break;  // EAGAIN
+        if (n == 0) {        // 对端关闭
             handleClose("peer closed");
             return;
         }
@@ -386,7 +393,7 @@ void TcpConnection::handleWrite() {
                 outBuf_.consume(static_cast<size_t>(w));
                 continue;
             }
-            if (w == -1) { // 内核缓冲满，等下次可写
+            if (w == -1) {  // 内核缓冲满，等下次可写
                 blocked = true;
                 break;
             }
@@ -402,8 +409,8 @@ void TcpConnection::handleWrite() {
         }
         // 3) 泵文件正文：它必须紧跟头部，且不走 postFileBuf_（那是文件之后的字节）
         if (file_ != nullptr && !filePendingStart_) {
-            if (pumpFileSend()) return; // 内核或文件读满，等下一次可写
-            continue;                   // 文件发完 → 去接文件期间排队的响应
+            if (pumpFileSend()) return;  // 内核或文件读满，等下一次可写
+            continue;                    // 文件发完 → 去接文件期间排队的响应
         }
         // 4) 文件发完：把期间 send() 排到 postFileBuf_ 的字节接上
         if (postFileBuf_.readableBytes() > 0) {
@@ -420,7 +427,7 @@ void TcpConnection::handleWrite() {
 }
 
 void TcpConnection::handleClose(const std::string& reason) {
-    if (!connected_.exchange(false, std::memory_order_acq_rel)) return; // 幂等
+    if (!connected_.exchange(false, std::memory_order_acq_rel)) return;  // 幂等
     closeFileSend();
     // TLS：尽力发送 close_notify（连接即将关闭，一次直写不重试）
     if (tls_ != nullptr) {
@@ -448,7 +455,7 @@ void TcpConnection::handleClose(const std::string& reason) {
         self->onError_ = nullptr;
         self->hostClose_ = nullptr;
     });
-    sock_.close(); // 触发 Socket 析构路径统一关闭
+    sock_.close();  // 触发 Socket 析构路径统一关闭
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

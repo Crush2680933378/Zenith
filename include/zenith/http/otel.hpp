@@ -21,17 +21,17 @@
 namespace zenith::obs {
 
 struct ZENITH_API OtelConfig {
-    std::string endpoint; // OTLP traces 端点，如 http://otel:4318/v1/traces
+    std::string endpoint;  // OTLP traces 端点，如 http://otel:4318/v1/traces
     std::string serviceName = "zenith";
-    std::vector<std::pair<std::string, std::string>> headers; // 如 Authorization
-    int flushIntervalMs = 2000; // 0 = 不启后台线程
-    size_t maxBatch = 64;       // 单次导出上限（余量留下批）
+    std::vector<std::pair<std::string, std::string>> headers;  // 如 Authorization
+    int flushIntervalMs = 2000;                                // 0 = 不启后台线程
+    size_t maxBatch = 64;                                      // 单次导出上限（余量留下批）
 };
 
 struct ZENITH_API OtelSpan {
-    std::string traceId;      // 32 hex
-    std::string spanId;       // 16 hex
-    std::string parentSpanId; // 可空
+    std::string traceId;       // 32 hex
+    std::string spanId;        // 16 hex
+    std::string parentSpanId;  // 可空
     std::string name;
     int64_t startMs = 0;
     int64_t endMs = 0;
@@ -50,12 +50,10 @@ public:
     OtelExporter& operator=(const OtelExporter&) = delete;
 
     /// 开启并返回 span（start=now）；结束调 endSpan
-    [[nodiscard]] OtelSpan beginSpan(const std::string& name,
-                                     const std::string& parentTraceId = {},
+    [[nodiscard]] OtelSpan beginSpan(const std::string& name, const std::string& parentTraceId = {},
                                      const std::string& parentSpanId = {}) const;
     /// 填 endMs + 属性并入队
-    void endSpan(OtelSpan& s,
-                 std::vector<std::pair<std::string, std::string>> attrs = {});
+    void endSpan(OtelSpan& s, std::vector<std::pair<std::string, std::string>> attrs = {});
 
     /// 同步导出一批（测试/关停前调用）；返回本次送出的 span 数
     size_t flushNow();
@@ -67,7 +65,7 @@ public:
 
 private:
     void run();
-    size_t sendBatch(const std::vector<OtelSpan>& batch); // 锁外上传
+    size_t sendBatch(const std::vector<OtelSpan>& batch);  // 锁外上传
 
     OtelConfig cfg_;
     mutable std::mutex mtx_;
@@ -78,4 +76,4 @@ private:
     std::atomic<uint64_t> failed_{0};
 };
 
-} // namespace zenith::obs
+}  // namespace zenith::obs

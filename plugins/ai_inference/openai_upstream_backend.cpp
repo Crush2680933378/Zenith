@@ -24,13 +24,15 @@ namespace {
 using json::JsonValue;
 
 std::string stripTrailingSlash(std::string s) {
-    while (!s.empty() && s.back() == '/') s.pop_back();
+    while (!s.empty() && s.back() == '/')
+        s.pop_back();
     return s;
 }
 
 std::string trimLeft(std::string s) {
     size_t b = 0;
-    while (b < s.size() && (s[b] == ' ' || s[b] == '\t')) ++b;
+    while (b < s.size() && (s[b] == ' ' || s[b] == '\t'))
+        ++b;
     return s.substr(b);
 }
 
@@ -56,8 +58,7 @@ void readTimings(const JsonValue& node, EngineStats& out) {
 
 class OpenAiUpstreamBackend final : public Backend {
 public:
-    OpenAiUpstreamBackend(std::string baseUrl, std::string apiKey, std::string model,
-                          int timeoutMs)
+    OpenAiUpstreamBackend(std::string baseUrl, std::string apiKey, std::string model, int timeoutMs)
         : base_(stripTrailingSlash(std::move(baseUrl))),
           apiKey_(std::move(apiKey)),
           model_(std::move(model)),
@@ -91,7 +92,7 @@ public:
                 }
             }
         }
-        if (out.empty() && !model_.empty()) { // 上游不可达/未实现 /v1/models 时兜底
+        if (out.empty() && !model_.empty()) {  // 上游不可达/未实现 /v1/models 时兜底
             ModelInfo info;
             info.id = model_;
             info.ownedBy = "upstream";
@@ -127,7 +128,8 @@ public:
         if (req.seed >= 0) body["seed"] = req.seed;
         if (!req.stop.empty()) {
             JsonValue stops = JsonValue::array();
-            for (const auto& s : req.stop) stops.push_back(s);
+            for (const auto& s : req.stop)
+                stops.push_back(s);
             body["stop"] = std::move(stops);
         }
 
@@ -150,7 +152,7 @@ public:
                 return true;
             }
             if (onToken == nullptr && onReasoning == nullptr) {
-                errorBody.append(chunk.data(), chunk.size()); // 非流式：正文先攒这里
+                errorBody.append(chunk.data(), chunk.size());  // 非流式：正文先攒这里
                 return true;
             }
             return consumeSse(sseBuffer, chunk, onToken, onReasoning, r, aborted, sawDone);
@@ -196,7 +198,7 @@ public:
             r.finishReason = fr->asString();
         }
         r.content = first["message"]["content"].asString();
-        r.reasoning = first["message"]["reasoning_content"].asString(); // 思考模型
+        r.reasoning = first["message"]["reasoning_content"].asString();  // 思考模型
         if (const JsonValue* timings = root.find("timings"); timings != nullptr) {
             readTimings(*timings, r.stats);
         }
@@ -250,7 +252,8 @@ public:
             return r;
         }
         r.vector.reserve(vec->size());
-        for (const auto& v : *vec) r.vector.push_back(static_cast<float>(v.asDouble()));
+        for (const auto& v : *vec)
+            r.vector.push_back(static_cast<float>(v.asDouble()));
         if (const JsonValue* usage = parsed.value().find("usage"); usage != nullptr) {
             r.usage.promptTokens = readInt((*usage)["prompt_tokens"], 0);
         }
@@ -273,9 +276,9 @@ private:
     }
 
     /// 增量解析 SSE：data: {...} → delta.content 逐片回调
-    static bool consumeSse(std::string& pending, std::string_view chunk, const TokenCallback& onToken,
-                           const TokenCallback& onReasoning, ChatResult& r, bool& aborted,
-                           bool& sawDone) {
+    static bool consumeSse(std::string& pending, std::string_view chunk,
+                           const TokenCallback& onToken, const TokenCallback& onReasoning,
+                           ChatResult& r, bool& aborted, bool& sawDone) {
         pending.append(chunk.data(), chunk.size());
         for (;;) {
             const size_t eol = pending.find('\n');
@@ -283,21 +286,21 @@ private:
             std::string line = pending.substr(0, eol);
             pending.erase(0, eol + 1);
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            if (line.rfind("data:", 0) != 0) continue; // event:/id:/空行/心跳注释
+            if (line.rfind("data:", 0) != 0) continue;  // event:/id:/空行/心跳注释
             std::string payload = trimLeft(line.substr(5));
             if (payload.empty()) continue;
             if (payload == "[DONE]") {
                 sawDone = true;
-                return false; // 收尾：让 httpRequest 关连接
+                return false;  // 收尾：让 httpRequest 关连接
             }
             auto parsed = json::JsonValue::parse(payload);
             if (!parsed) continue;
             const json::JsonValue& v = parsed.value();
             if (const json::JsonValue* timings = v.find("timings"); timings != nullptr) {
-                readTimings(*timings, r.stats); // 流式：末片通常带 timings
+                readTimings(*timings, r.stats);  // 流式：末片通常带 timings
             }
-            if (const json::JsonValue* usage = v.find("usage"); usage != nullptr &&
-                                                              usage->isObject()) {
+            if (const json::JsonValue* usage = v.find("usage");
+                usage != nullptr && usage->isObject()) {
                 r.usage.promptTokens = readInt((*usage)["prompt_tokens"], r.usage.promptTokens);
                 r.usage.completionTokens =
                     readInt((*usage)["completion_tokens"], r.usage.completionTokens);
@@ -339,7 +342,7 @@ private:
     int timeoutMs_;
 };
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<Backend> makeOpenAiUpstreamBackend(std::string baseUrl, std::string apiKey,
                                                    std::string model, int timeoutMs) {
@@ -348,4 +351,4 @@ std::unique_ptr<Backend> makeOpenAiUpstreamBackend(std::string baseUrl, std::str
                                                    std::move(model), timeoutMs);
 }
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

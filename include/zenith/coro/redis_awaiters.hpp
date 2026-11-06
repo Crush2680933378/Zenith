@@ -10,8 +10,8 @@
 #include <utility>
 #include <vector>
 
-#include "zenith/coro/callback_await.hpp"
 #include "zenith/core/result.hpp"
+#include "zenith/coro/callback_await.hpp"
 #include "zenith/redis/redis_client.hpp"
 
 namespace zenith::coro {
@@ -25,4 +25,4 @@ inline Task<redis::RedisReply> redisCommand(redis::RedisClient& client,
         });
 }
 
-} // namespace zenith::coro
+}  // namespace zenith::coro

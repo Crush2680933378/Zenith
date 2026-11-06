@@ -19,8 +19,7 @@ class Buffer {
 public:
     static constexpr size_t kInitialCapacity = 1024;
 
-    explicit Buffer(size_t initialCapacity = kInitialCapacity)
-        : buf_(initialCapacity) {}
+    explicit Buffer(size_t initialCapacity = kInitialCapacity) : buf_(initialCapacity) {}
 
     /* ---- 写入 ---- */
     void append(const void* data, size_t n) {
@@ -48,7 +47,7 @@ public:
         compact();
         const size_t need = kPrependBytes + readableBytes();
         if (buf_.size() - need <= threshold / 2) {
-            buf_.resize(need); // 冗余不多：仅退回逻辑长度，保留已分配内存
+            buf_.resize(need);  // 冗余不多：仅退回逻辑长度，保留已分配内存
             return;
         }
         // 冗余明显（如一次性 8MB 下载排空后）：真正换小缓冲把内存还给分配器
@@ -88,7 +87,7 @@ public:
 
     std::string readAllAsString() { return readString(readableBytes()); }
 
-    uint8_t  readUint8()  { return readIntegralAs<uint8_t>(); }
+    uint8_t readUint8() { return readIntegralAs<uint8_t>(); }
     uint16_t readUint16LE() { return readIntegral<uint16_t, false>(); }
     uint32_t readUint32LE() { return readIntegral<uint32_t, false>(); }
     uint64_t readUint64LE() { return readIntegral<uint64_t, false>(); }
@@ -97,7 +96,7 @@ public:
     uint64_t readUint64BE() { return readIntegral<uint64_t, true>(); }
 
 private:
-    static constexpr size_t kPrependBytes = 8; // 预留前部空间（协议头注入用）
+    static constexpr size_t kPrependBytes = 8;  // 预留前部空间（协议头注入用）
 
     void compact() {
         const size_t n = readableBytes();
@@ -135,4 +134,4 @@ private:
     size_t writerIndex_ = kPrependBytes;
 };
 
-} // namespace zenith::core
+}  // namespace zenith::core

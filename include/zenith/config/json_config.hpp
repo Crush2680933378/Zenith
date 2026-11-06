@@ -24,8 +24,7 @@ public:
     static core::Result<JsonConfig> fromString(const std::string& text);
 
     /// 点路径取值（标量转字符串：字符串原样、数字/布尔转文本）；缺失返回 def。
-    [[nodiscard]] std::string get(const std::string& dottedKey,
-                                  const std::string& def = "") const;
+    [[nodiscard]] std::string get(const std::string& dottedKey, const std::string& def = "") const;
 
     /// 取子对象（返回拷贝；不存在返回 Null）。
     [[nodiscard]] json::JsonValue section(const std::string& dottedKey) const;
@@ -45,4 +44,4 @@ private:
     json::JsonValue root_ = json::JsonValue::object();
 };
 
-} // namespace zenith::config
+}  // namespace zenith::config

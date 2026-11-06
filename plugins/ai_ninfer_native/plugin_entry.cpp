@@ -109,8 +109,7 @@ zenith_status pluginInit(const zenith_host_api* host) {
         static_cast<uint32_t>(cfgU32("ai.ninfer_native.kv_tokens", cfg.max_context));
     cfg.prefill_chunk = static_cast<uint32_t>(cfgU32("ai.ninfer_native.prefill_chunk", 1024));
     cfg.kv_dtype = static_cast<uint32_t>(cfgU32("ai.ninfer_native.kv_dtype", ZENITH_NZ_KV_K8V4));
-    cfg.spec_backend =
-        static_cast<uint32_t>(cfgU32("ai.ninfer_native.spec", ZENITH_NZ_SPEC_MTP));
+    cfg.spec_backend = static_cast<uint32_t>(cfgU32("ai.ninfer_native.spec", ZENITH_NZ_SPEC_MTP));
     cfg.draft_tokens = static_cast<uint32_t>(cfgU32("ai.ninfer_native.draft_tokens", 4));
     cfg.max_concurrency = static_cast<uint32_t>(cfgU32("ai.ninfer_native.max_concurrency", 1));
     cfg.gdn_state_fp16 = static_cast<uint32_t>(cfgU32("ai.ninfer_native.gdn_state_fp16", 0));
@@ -134,13 +133,19 @@ zenith_status pluginInit(const zenith_host_api* host) {
     g_service.runtime = &svcRuntime;
 
     logAt(ZENITH_LOG_INFO, "ai_ninfer_native: engine ready (in-process, no C++ across boundary)");
-    return host->register_service(host->registry_ctx, host->plugin_token, "zenith.ai.INinferCApi", 1,
-                                  static_cast<void*>(&g_service), &destroyService);
+    return host->register_service(host->registry_ctx, host->plugin_token, "zenith.ai.INinferCApi",
+                                  1, static_cast<void*>(&g_service), &destroyService);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -156,6 +161,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

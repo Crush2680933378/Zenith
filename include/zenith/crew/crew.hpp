@@ -24,6 +24,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -36,11 +37,11 @@
 
 namespace zenith::obs {
 class OtelExporter;
-} // namespace zenith::obs
+}  // namespace zenith::obs
 
 namespace zenith::ai {
-class GuardInspector; // 前置声明（选项持引用，定义见 ai/guard_service.hpp）
-} // namespace zenith::ai
+class GuardInspector;  // 前置声明（选项持引用，定义见 ai/guard_service.hpp）
+}  // namespace zenith::ai
 
 namespace zenith::crew {
 
@@ -50,18 +51,18 @@ ZENITH_API std::string personaFromModel(const std::string& model);
 
 enum class CrewPhase : uint8_t {
     Pending = 0,
-    Requirements,   // PM 产 PRD
-    ReviewPrd,      // 全员投票：PRD 是否过关（可多轮辩论）
-    Design,         // 架构师产契约（含技术选型投票）
-    Implement,      // 后端 ∥ 前端（真并行；story 模式下按 story 子环并行）
-    Test,           // 测试产用例并执行（可选真执行验证）
-    Bugfix,         // 结构化 issue 派单修复环（上限 maxBugCycles）
-    Deploy,         // 运维产 CI/CD + 部署
-    Release,        // 交付产 CHANGELOG + 发布 + 质量评分卡
-    AwaitingApproval, // 人工门禁等待
+    Requirements,      // PM 产 PRD
+    ReviewPrd,         // 全员投票：PRD 是否过关（可多轮辩论）
+    Design,            // 架构师产契约（含技术选型投票）
+    Implement,         // 后端 ∥ 前端（真并行；story 模式下按 story 子环并行）
+    Test,              // 测试产用例并执行（可选真执行验证）
+    Bugfix,            // 结构化 issue 派单修复环（上限 maxBugCycles）
+    Deploy,            // 运维产 CI/CD + 部署
+    Release,           // 交付产 CHANGELOG + 发布 + 质量评分卡
+    AwaitingApproval,  // 人工门禁等待
     Done,
     Failed,
-    Cancelled,      // M14：用户主动取消
+    Cancelled,  // M14：用户主动取消
 };
 
 ZENITH_API const char* phaseName(CrewPhase p) noexcept;
@@ -71,21 +72,21 @@ struct CrewEvent {
     int64_t tsMs = 0;
     std::string taskId;
     CrewPhase phase = CrewPhase::Pending;
-    std::string agent;    // 角色名（编排事件为 "orchestrator"）
-    std::string type;     // phase|agent_start|agent_done|artifact|vote|gate|approval|
-                          // error|token|retry|cancelled|human_vote_required|
-                          // exec|memory|cost|webhook
+    std::string agent;  // 角色名（编排事件为 "orchestrator"）
+    std::string type;   // phase|agent_start|agent_done|artifact|vote|gate|approval|
+                        // error|token|retry|cancelled|human_vote_required|
+                        // exec|memory|cost|webhook
     std::string detail;
-    std::string dataJson; // 附加载荷（投票明细/产物摘要/token 增量等）
+    std::string dataJson;  // 附加载荷（投票明细/产物摘要/token 增量等）
 
     [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
 };
 
 struct Artifact {
-    std::string id;       // <type>-v<version>
+    std::string id;  // <type>-v<version>
     std::string taskId;
-    std::string type;     // prd/architecture/contract/backend/frontend/tests/bugs/
-                          // devops/release/scorecard/story-<id>-*/memory
+    std::string type;  // prd/architecture/contract/backend/frontend/tests/bugs/
+                       // devops/release/scorecard/story-<id>-*/memory
     std::string agent;
     int version = 1;
     std::string content;
@@ -99,7 +100,7 @@ struct VoteRecord {
     std::string taskId;
     std::string question;
     std::vector<std::string> options;
-    std::vector<std::pair<std::string, std::string>> votes; // (agent, choice)
+    std::vector<std::pair<std::string, std::string>> votes;  // (agent, choice)
     std::string winner;
     std::string reason;
     int64_t tsMs = 0;
@@ -110,7 +111,7 @@ struct VoteRecord {
 /// 前端状态板单元：一个角色的实时快照
 struct AgentStatus {
     std::string role;
-    std::string state;    // idle|working|voting|waiting|done|failed
+    std::string state;  // idle|working|voting|waiting|done|failed
     std::string detail;
     int64_t updatedMs = 0;
 
@@ -126,25 +127,25 @@ struct RoleUsage {
 };
 
 struct CrewConfig {
-    std::string model;                  // 默认模型（空 = 推理服务默认）
-    std::map<std::string, std::string> roleModels; // 每角色模型覆盖（M14）
+    std::string model;                              // 默认模型（空 = 推理服务默认）
+    std::map<std::string, std::string> roleModels;  // 每角色模型覆盖（M14）
     int maxBugCycles = 2;
     bool requireApproval = false;
     int approvalTimeoutSec = 3600;
     // ---- M14 扩展（默认值保持 M11 行为不变；见各字段注释）----
-    bool parallelImplement = true;      // 后端∥前端真并行
-    bool strictRetest = true;           // 重测提示要求基于修复验证（含 RETEST 关键字）
-    int jsonRetryLimit = 2;             // 结构化输出自修正重试次数（0 = 关）
-    bool streamTokens = true;           // 推理 token 增量入事件流
-    bool execVerify = false;            // 测试命令真执行（opt-in；结果以退出码为准）
-    bool useMemory = true;              // 组织记忆：开工检索/完工归档
-    bool storiesMode = false;           // PRD story 子环并行实现
-    int prdVoteRounds = 1;              // PRD 评审轮数（>1 = revise 后再投票）
-    bool humanVoter = false;            // 人工作为额外投票人（等待 HTTP 投票）
+    bool parallelImplement = true;  // 后端∥前端真并行
+    bool strictRetest = true;       // 重测提示要求基于修复验证（含 RETEST 关键字）
+    int jsonRetryLimit = 2;         // 结构化输出自修正重试次数（0 = 关）
+    bool streamTokens = true;       // 推理 token 增量入事件流
+    bool execVerify = false;        // 测试命令真执行（opt-in；结果以退出码为准）
+    bool useMemory = true;          // 组织记忆：开工检索/完工归档
+    bool storiesMode = false;       // PRD story 子环并行实现
+    int prdVoteRounds = 1;          // PRD 评审轮数（>1 = revise 后再投票）
+    bool humanVoter = false;        // 人工作为额外投票人（等待 HTTP 投票）
     int humanVoteTimeoutSec = 600;
     // ---- P0（M16）：真实模型护栏 ----
-    double costBudgetUsd = 0.0;         // 任务成本预算（$；0=不限。每放行一次追加一倍）
-    int maxPromptChars = 0;             // 提示词字符上限（0=用引擎默认 24000；<0=不限制）
+    double costBudgetUsd = 0.0;  // 任务成本预算（$；0=不限。每放行一次追加一倍）
+    int maxPromptChars = 0;      // 提示词字符上限（0=用引擎默认 24000；<0=不限制）
 
     [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
     ZENITH_API static CrewConfig fromJson(const json::JsonValue& v);
@@ -153,10 +154,10 @@ struct CrewConfig {
 struct CrewTaskInfo {
     std::string id;
     std::string brief;
-    std::string parentTaskId;           // M16：followup 来源任务（空=全新任务）
+    std::string parentTaskId;  // M16：followup 来源任务（空=全新任务）
     CrewPhase phase = CrewPhase::Pending;
     bool running = false;
-    bool resumable = false;             // M14：中断后可 resume
+    bool resumable = false;  // M14：中断后可 resume
     std::string error;
     std::vector<AgentStatus> agents;
     size_t eventCount = 0;
@@ -164,40 +165,39 @@ struct CrewTaskInfo {
     size_t voteCount = 0;
     int64_t createdMs = 0;
     int64_t updatedMs = 0;
-    double costUsd = 0.0;               // M14：任务级成本
+    double costUsd = 0.0;  // M14：任务级成本
     uint64_t tokensIn = 0;
     uint64_t tokensOut = 0;
-    std::map<std::string, RoleUsage> roleUsage; // M14：角色级明细
-    std::map<std::string, std::string> roleModels; // M15：角色→扮演模型（前端立绘）
-    CrewConfig cfg;                     // M15：任务配置（前端决定显示哪些交互）
+    std::map<std::string, RoleUsage> roleUsage;     // M14：角色级明细
+    std::map<std::string, std::string> roleModels;  // M15：角色→扮演模型（前端立绘）
+    CrewConfig cfg;                                 // M15：任务配置（前端决定显示哪些交互）
 
     [[nodiscard]] ZENITH_API json::JsonValue toJson() const;
 };
 
-
 /// 引擎级选项（宿主/插件注入；setOptions 在 createTask 前调用）
 struct EngineOptions {
-    std::string persistDir;             // 任务/记忆落盘目录（空 = 纯内存）
-    int maxConcurrentTasks = 4;         // 受管线程池上限
-    std::string approvalToken;          // 非空 = 写操作需 X-Crew-Token 匹配
-    std::string webhookUrl;             // 终态/待审批回调（POST JSON）
-    std::string rolesJson;              // 角色覆盖 JSON：[{role,prompt,voteWeight,display}]
-    std::string personasJson;           // 形象覆盖 JSON：{"pm":"glm","backend":"kimi"}
-    bool memoryEnabled = true;          // 组织记忆总开关
-    double pricePromptPerM = 0.0;       // 成本估算（$/百万 token；0 = 只记 token）
+    std::string persistDir;        // 任务/记忆落盘目录（空 = 纯内存）
+    int maxConcurrentTasks = 4;    // 受管线程池上限
+    std::string approvalToken;     // 非空 = 写操作需 X-Crew-Token 匹配
+    std::string webhookUrl;        // 终态/待审批回调（POST JSON）
+    std::string rolesJson;         // 角色覆盖 JSON：[{role,prompt,voteWeight,display}]
+    std::string personasJson;      // 形象覆盖 JSON：{"pm":"glm","backend":"kimi"}
+    bool memoryEnabled = true;     // 组织记忆总开关
+    double pricePromptPerM = 0.0;  // 成本估算（$/百万 token；0 = 只记 token）
     double priceCompletionPerM = 0.0;
-    int maxPromptChars = 24000;         // 提示词默认字符上限（任务级可覆盖；<0 关闭）
-    std::vector<std::string> execAllowlist = {"echo"}; // execVerify 允许的可执行名
+    int maxPromptChars = 24000;  // 提示词默认字符上限（任务级可覆盖；<0 关闭）
+    std::vector<std::string> execAllowlist = {"echo"};  // execVerify 允许的可执行名
     // ---- M17：耐久/智能/运营 ----
-    int taskTtlSec = 0;                 // 终态任务保留秒数（0=不淘汰；惰性清扫）
-    int maxRetainedTasks = 0;           // 最大保留终态任务数（0=不限；超出淘汰最旧）
-    std::string memoryEmbedModel;       // 组织记忆 embeddings 模型（空=服务默认；
-                                        // 不可用时回退词哈希向量）
-    std::shared_ptr<ai::GuardInspector> guard; // 输入护栏（注入阻断/PII 掩码）
-    std::string scheduleCron;           // 定时开任务（5 字段 cron；空=不定时）
-    std::string scheduleBrief;          // 定时任务 brief
-    std::string scheduleConfigJson;     // 定时任务 CrewConfig JSON
-    std::shared_ptr<obs::OtelExporter> otel; // 全链路 span 导出
+    int taskTtlSec = 0;                         // 终态任务保留秒数（0=不淘汰；惰性清扫）
+    int maxRetainedTasks = 0;                   // 最大保留终态任务数（0=不限；超出淘汰最旧）
+    std::string memoryEmbedModel;               // 组织记忆 embeddings 模型（空=服务默认；
+                                                // 不可用时回退词哈希向量）
+    std::shared_ptr<ai::GuardInspector> guard;  // 输入护栏（注入阻断/PII 掩码）
+    std::string scheduleCron;                   // 定时开任务（5 字段 cron；空=不定时）
+    std::string scheduleBrief;                  // 定时任务 brief
+    std::string scheduleConfigJson;             // 定时任务 CrewConfig JSON
+    std::shared_ptr<obs::OtelExporter> otel;    // 全链路 span 导出
 };
 
 class ICrewService : public plugin::IService {
@@ -206,9 +206,7 @@ public:
 
     [[nodiscard]] virtual std::string createTask(const std::string& brief,
                                                  const CrewConfig& cfg) = 0;
-    std::string createTask(const std::string& brief) {
-        return createTask(brief, CrewConfig{});
-    }
+    std::string createTask(const std::string& brief) { return createTask(brief, CrewConfig{}); }
     [[nodiscard]] virtual core::Result<CrewTaskInfo> taskInfo(const std::string& id) = 0;
     [[nodiscard]] virtual std::vector<CrewTaskInfo> listTasks() = 0;
     [[nodiscard]] virtual std::vector<CrewEvent> events(const std::string& id,
@@ -231,12 +229,19 @@ public:
         return core::Result<void>::Err(core::Error(304, "resume not supported"));
     }
     /// M14：人工投票（humanVoter 等待中的票）
-    [[nodiscard]] virtual core::Result<void> castHumanVote(const std::string&,
-                                                           const std::string&) {
+    [[nodiscard]] virtual core::Result<void> castHumanVote(const std::string&, const std::string&) {
         return core::Result<void>::Err(core::Error(304, "human vote not supported"));
     }
     /// M14：任务全量导出 JSON 包（task+artifacts+votes+events；空串=不支持）
     [[nodiscard]] virtual std::string exportBundle(const std::string&) { return {}; }
+    /// 流式导出：按段喂给 sink，sink 返回 false 表示中止（对端断开）。
+    /// 默认实现回退到整包；CrewEngine 覆写为逐段序列化，不再把整包拼成一个大字符串。
+    virtual bool exportBundleStream(const std::string& id,
+                                    const std::function<bool(std::string_view)>& sink) {
+        const std::string all = exportBundle(id);
+        if (all.empty()) return false;
+        return sink(all);
+    }
     /// M18：人读 Markdown 交付报告（决策时间线/投票理由/评分卡；空串=不支持）
     [[nodiscard]] virtual std::string exportMarkdown(const std::string&) { return {}; }
     /// M16：增量迭代——基于父任务既有产物开新任务（空串=不支持/父不存在）
@@ -265,10 +270,10 @@ class ZENITH_API CrewEngine : public ICrewService {
 public:
     CrewEngine();
     explicit CrewEngine(EngineOptions opt);
-    ~CrewEngine() override; // 等待受管线程收尾（运行中任务被标记中断）
+    ~CrewEngine() override;  // 等待受管线程收尾（运行中任务被标记中断）
 
     void setInference(std::shared_ptr<ai::IInferenceService> inf) override;
-    void setOptions(EngineOptions opt); // createTask 前调用
+    void setOptions(EngineOptions opt);  // createTask 前调用
 
     using ICrewService::createTask;
     std::string createTask(const std::string& brief, const CrewConfig& cfg) override;
@@ -288,6 +293,8 @@ public:
     core::Result<void> resume(const std::string& id) override;
     core::Result<void> castHumanVote(const std::string& id, const std::string& choice) override;
     std::string exportBundle(const std::string& id) override;
+    bool exportBundleStream(const std::string& id,
+                            const std::function<bool(std::string_view)>& sink) override;
     uint64_t subscribe(const std::string& taskId, EventCallback cb) override;
     void unsubscribe(uint64_t subId) override;
 
@@ -295,15 +302,15 @@ public:
     struct VoteSpec {
         std::string question;
         std::vector<std::string> options;
-        std::vector<std::string> voters; // 角色名/“human”；空 = 全员
-        bool allowAbstain = false; // “abstain” 合法票：记录但不计入 tally（M17）
-        int quorum = 0;            // 最少有效票数；不足 → winner 空 + gate 事件
+        std::vector<std::string> voters;  // 角色名/“human”；空 = 全员
+        bool allowAbstain = false;        // “abstain” 合法票：记录但不计入 tally（M17）
+        int quorum = 0;                   // 最少有效票数；不足 → winner 空 + gate 事件
     };
     [[nodiscard]] VoteRecord runVote(const std::string& taskId, const VoteSpec& spec);
 
     /// 内部状态注入（测试用剧本推理）
-    void setBusy(const std::string& taskId, const std::string& role,
-                 const std::string& state, const std::string& detail);
+    void setBusy(const std::string& taskId, const std::string& role, const std::string& state,
+                 const std::string& detail);
 
     [[nodiscard]] const EngineOptions& options() const noexcept { return opt_; }
 
@@ -318,12 +325,12 @@ private:
         CrewPhase phase = CrewPhase::Pending;
         bool running = false;
         bool resumable = false;
-        bool resumeMode = false;   // resume 跳过已有产物的 chat
-        std::string parentTaskId;  // M16：followup 来源
-        bool followupMode = false; // 各角色提示词携带既有产物做增量更新
-        int budgetApprovals = 0;   // M16：预算放行次数（每次放行限额 ×(n+1)）
-        int64_t lastPersistMs = 0; // M17：持久化去抖
-        bool persistDirty = false; // M17：去抖窗口内被跳过的写（终拍/析构补写）
+        bool resumeMode = false;    // resume 跳过已有产物的 chat
+        std::string parentTaskId;   // M16：followup 来源
+        bool followupMode = false;  // 各角色提示词携带既有产物做增量更新
+        int budgetApprovals = 0;    // M16：预算放行次数（每次放行限额 ×(n+1)）
+        int64_t lastPersistMs = 0;  // M17：持久化去抖
+        bool persistDirty = false;  // M17：去抖窗口内被跳过的写（终拍/析构补写）
         std::string error;
         std::vector<CrewEvent> events;
         std::vector<Artifact> artifacts;
@@ -334,13 +341,13 @@ private:
         bool approved = false;
         std::string approvalComment;
         std::atomic<bool> cancelRequested{false};
-        std::atomic<bool> interrupted{false}; // 引擎关停：可恢复中断（区别于用户取消）
-        std::atomic<bool> budgetPaused{false}; // M16：成本超限 → phase 边界转人工
+        std::atomic<bool> interrupted{false};   // 引擎关停：可恢复中断（区别于用户取消）
+        std::atomic<bool> budgetPaused{false};  // M16：成本超限 → phase 边界转人工
         std::atomic<bool> humanBallotSet{false};
         std::string humanBallot;
         std::map<std::string, RoleUsage> usage;
-        std::map<std::string, int> roleCalls; // 剧本测试按调用序区分轮次
-        std::string lastIssues;               // 缺陷环：上轮结构化 issue 清单
+        std::map<std::string, int> roleCalls;  // 剧本测试按调用序区分轮次
+        std::string lastIssues;                // 缺陷环：上轮结构化 issue 清单
     };
     using TaskPtr = std::shared_ptr<TaskState>;
 
@@ -348,26 +355,25 @@ private:
         std::string role;
         std::string prompt;
         int voteWeight = 1;
-        std::string display; // 展示名（前端工位牌）
+        std::string display;  // 展示名（前端工位牌）
     };
 
     // ---- 编排 ----
     void runPipeline(TaskPtr t);
-    bool phaseImpl(TaskPtr t);          // story 子环并行；false=回退整片实现
-    void phaseTestBugfix(TaskPtr t);    // Test + Bugfix（结构化 issue 环）
+    bool phaseImpl(TaskPtr t);        // story 子环并行；false=回退整片实现
+    void phaseTestBugfix(TaskPtr t);  // Test + Bugfix（结构化 issue 环）
     [[nodiscard]] json::JsonValue buildScorecard(const TaskPtr& t);
     [[nodiscard]] std::vector<std::string> voterListWithHuman();
-    [[nodiscard]] bool checkCancel(const TaskPtr& t); // true = 已取消（置终态）
-    void waitApproval(const TaskPtr& t, const std::string& reason); // 通用人工门禁等待
+    [[nodiscard]] bool checkCancel(const TaskPtr& t);                // true = 已取消（置终态）
+    void waitApproval(const TaskPtr& t, const std::string& reason);  // 通用人工门禁等待
     [[nodiscard]] std::string followupPrefix(const TaskPtr& t, const std::string& type,
-                                             const char* label); // 增量提示词前缀
+                                             const char* label);  // 增量提示词前缀
 
     // ---- 基础设施 ----
-    void emit(TaskPtr t, CrewPhase phase, const std::string& agent,
-              const std::string& type, const std::string& detail,
-              const std::string& dataJson = {});
-    void emitHandoff(const TaskPtr& t, const std::string& from,
-                     const std::string& to, const std::string& item);
+    void emit(TaskPtr t, CrewPhase phase, const std::string& agent, const std::string& type,
+              const std::string& detail, const std::string& dataJson = {});
+    void emitHandoff(const TaskPtr& t, const std::string& from, const std::string& to,
+                     const std::string& item);
     [[nodiscard]] std::string chat(TaskPtr t, const std::string& role,
                                    const std::string& userPrompt);
     /// 结构化调用：解析 + 字段校验 + 自修正重试（带错误反馈）；
@@ -379,17 +385,16 @@ private:
                       const std::string& content);
     [[nodiscard]] std::string latestArtifact(const TaskPtr& t, const std::string& type) const;
     [[nodiscard]] static json::JsonValue extractJson(const std::string& text);
-    void recordUsage(const TaskPtr& t, const std::string& role,
-                     const ai::ChatResult& r);
+    void recordUsage(const TaskPtr& t, const std::string& role, const ai::ChatResult& r);
     void fireWebhook(const TaskPtr& t, const char* event);
     // 受管线程池
     void enqueue(const TaskPtr& t);
     void workerLoop();
     // 持久化（M17：去抖——非立即写合并风暴；immediate=true 绕过去抖）
     void persistTask(const TaskPtr& t, bool immediate = false);
-    void flushDirtyTasks();                    // 析构/终拍前补写
-    void sweepExpiredTasks();                  // 惰性淘汰（createTask 时）
-    std::vector<double> memoryVec(const std::string& text); // 语义向量（回退哈希）
+    void flushDirtyTasks();                                  // 析构/终拍前补写
+    void sweepExpiredTasks();                                // 惰性淘汰（createTask 时）
+    std::vector<double> memoryVec(const std::string& text);  // 语义向量（回退哈希）
     void loadPersisted();
     json::JsonValue taskToJson(const TaskPtr& t);
     // 组织记忆（hash 向量 + 余弦暴力检索）
@@ -405,11 +410,11 @@ private:
 
     EngineOptions opt_;
     std::vector<RoleDef> roles_;
-    std::unique_ptr<concurrency::CronScheduler> cron_; // M17：定时开任务
+    std::unique_ptr<concurrency::CronScheduler> cron_;  // M17：定时开任务
     void startScheduleIfConfigured();
-    std::map<std::string, std::string> personas_; // 角色 → 形象覆盖（roster 用）
+    std::map<std::string, std::string> personas_;  // 角色 → 形象覆盖（roster 用）
     std::shared_ptr<ai::IInferenceService> inference_;
-    std::mutex mtx_;                        // tasks_/subs_/queue_ 保护
+    std::mutex mtx_;  // tasks_/subs_/queue_ 保护
     std::map<std::string, TaskPtr> tasks_;
     uint64_t subSeq_ = 1;
     std::map<uint64_t, std::pair<std::string, EventCallback>> subs_;
@@ -423,4 +428,4 @@ private:
     std::vector<MemoryEntry> memory_;
 };
 
-} // namespace zenith::crew
+}  // namespace zenith::crew

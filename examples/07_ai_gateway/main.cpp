@@ -52,24 +52,27 @@ struct Options {
     int ctx = 4096;
     int threads = 0;
     int gpuLayers = 0;
-    int enginePort = 8123;         ///< 子进程引擎监听端口
-    int spec = 0;                  ///< 0 用插件默认(MTP)，1 MTP，2 DFlash，3 DFlash2
-    int draft = 0;                 ///< 0 用插件默认(4)；DFlash2 建议 12
-    int batch = 0;                 ///< llama.cpp prompt 批大小（0=插件默认 512）
-    int flashAttn = -1;            ///< llama.cpp flash attention（-1=默认）
-    int kvDtype = -1;              ///< NInfer KV 精度（0..8，-1=默认 K8V4）
-    int prefillChunk = 0;          ///< NInfer 预填分块（须为 128 的倍数）
-    int maxConcurrency = 0;        ///< NInfer 并发上限（1..8）
-    int device = -1;               ///< NInfer 设备序号
-    int thinking = 0;              ///< 后端默认思考模式：-1 关 / 0 默认 / 1 开
+    int enginePort = 8123;   ///< 子进程引擎监听端口
+    int spec = 0;            ///< 0 用插件默认(MTP)，1 MTP，2 DFlash，3 DFlash2
+    int draft = 0;           ///< 0 用插件默认(4)；DFlash2 建议 12
+    int batch = 0;           ///< llama.cpp prompt 批大小（0=插件默认 512）
+    int flashAttn = -1;      ///< llama.cpp flash attention（-1=默认）
+    int kvDtype = -1;        ///< NInfer KV 精度（0..8，-1=默认 K8V4）
+    int prefillChunk = 0;    ///< NInfer 预填分块（须为 128 的倍数）
+    int maxConcurrency = 0;  ///< NInfer 并发上限（1..8）
+    int device = -1;         ///< NInfer 设备序号
+    int thinking = 0;        ///< 后端默认思考模式：-1 关 / 0 默认 / 1 开
 };
 
 std::string lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (char& c : s)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s;
 }
 
-std::string extOf(const std::string& p) { return lower(fs::path(p).extension().string()); }
+std::string extOf(const std::string& p) {
+    return lower(fs::path(p).extension().string());
+}
 
 std::string stemOf(const std::string& p) {
     const std::string s = fs::path(p).stem().string();
@@ -197,12 +200,13 @@ void applyBackendConfig(core::KeyValueConfig& cfg, const Options& o, const std::
 
 struct Picked {
     ai::IInferenceService* service = nullptr;
-    std::unique_ptr<ai::IInferenceService> owned; ///< native C ABI 的宿主侧包装
+    std::unique_ptr<ai::IInferenceService> owned;  ///< native C ABI 的宿主侧包装
     std::string how;
 };
 
 /// 按 backend 挑服务；native C ABI 需宿主包一层成 IInferenceService
-Picked pickService(plugin::ServiceRegistry& registry, const std::string& backend, const Options& o) {
+Picked pickService(plugin::ServiceRegistry& registry, const std::string& backend,
+                   const Options& o) {
     Picked p;
     auto take = [&](const char* name, const char* how) -> bool {
         void* raw = registry.queryRaw(name, 1);
@@ -244,7 +248,7 @@ Picked pickService(plugin::ServiceRegistry& registry, const std::string& backend
     return p;
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     // 逐行刷新：这是常驻服务，输出被重定向到文件时不能因为缓冲丢掉关键日志
@@ -289,10 +293,11 @@ int main(int argc, char** argv) {
     ai::IInferenceService& svc = *picked.service;
     std::printf("[gateway] 推理服务: %s\n", picked.how.c_str());
     // 回显生效参数：界面「将执行」和真实执行不一致时，一眼能看出来
-    std::printf("[gateway] 参数: ctx=%d spec=%d draft=%d kv=%d prefill=%d conc=%d dev=%d "
-                "threads=%d gpu_layers=%d batch=%d\n",
-                opt.ctx, opt.spec, opt.draft, opt.kvDtype, opt.prefillChunk, opt.maxConcurrency,
-                opt.device, opt.threads, opt.gpuLayers, opt.batch);
+    std::printf(
+        "[gateway] 参数: ctx=%d spec=%d draft=%d kv=%d prefill=%d conc=%d dev=%d "
+        "threads=%d gpu_layers=%d batch=%d\n",
+        opt.ctx, opt.spec, opt.draft, opt.kvDtype, opt.prefillChunk, opt.maxConcurrency, opt.device,
+        opt.threads, opt.gpuLayers, opt.batch);
     std::printf("[gateway] 思考模式默认: %s\n",
                 opt.thinking < 0 ? "关" : (opt.thinking > 0 ? "开" : "后端默认"));
     std::printf("[gateway] backend=%s  模型=%s\n", svc.backend().c_str(),
@@ -341,7 +346,7 @@ int main(int argc, char** argv) {
 
     ai::OpenAiApiOptions apiOpt;
     apiOpt.pool = &pool;
-    apiOpt.defaultThinking = opt.thinking; // 启动参数定默认，单次请求可覆盖
+    apiOpt.defaultThinking = opt.thinking;  // 启动参数定默认，单次请求可覆盖
     ai::mountOpenAiApi(r, svc, apiOpt);
 
     if (!server.listen("127.0.0.1", opt.port)) {
@@ -354,8 +359,9 @@ int main(int argc, char** argv) {
     }
 
     std::printf("[gateway] 就绪 http://127.0.0.1:%u\n", static_cast<unsigned>(opt.port));
-    std::printf("[gateway] 端点: /v1/models · /v1/chat/completions · /zenith/ai/status · "
-                "/metrics · /healthz\n");
+    std::printf(
+        "[gateway] 端点: /v1/models · /v1/chat/completions · /zenith/ai/status · "
+        "/metrics · /healthz\n");
 
     loop.loop();
 

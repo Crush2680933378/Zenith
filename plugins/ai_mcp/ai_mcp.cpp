@@ -13,8 +13,8 @@
 
 #include "zenith/ai/inference_service.hpp"
 #include "zenith/mcp/mcp.hpp"
-#include "zenith/vector/vector_service.hpp"
 #include "zenith/plugin/service_registry.hpp"
+#include "zenith/vector/vector_service.hpp"
 
 namespace {
 
@@ -56,18 +56,21 @@ zenith_status pluginInit(const zenith_host_api* host) {
     }
     if (auto inf = reg.get<zenith::ai::IInferenceService>()) {
         svc->server->bridgeInference(static_cast<void*>(inf.get()));
-        host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_mcp", 0,
-                        "ai_mcp: bridged chat");
+        host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_mcp", 0, "ai_mcp: bridged chat");
     }
 
     g_svc = svc;  // 所有权归宿主（destroy 回调删除）——此处仅持引用
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  McpGatewayService::kName, McpGatewayService::kVersion,
-                                  static_cast<void*>(svc), &destroyGateway);
+    return host->register_service(host->registry_ctx, host->plugin_token, McpGatewayService::kName,
+                                  McpGatewayService::kVersion, static_cast<void*>(svc),
+                                  &destroyGateway);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
     // 服务实例由宿主 destroyGateway 删除（唯一所有权）；这里只清引用
     g_svc = nullptr;
@@ -88,6 +91,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

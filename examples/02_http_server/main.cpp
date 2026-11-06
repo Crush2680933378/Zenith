@@ -30,9 +30,8 @@ int main() {
     r.use([](http::Context& c) {
         const int64_t t0 = core::steadyMicroseconds();
         c.next();
-        ZLOG_INFO(c.peer(), " ", http::toString(c.method()), " ", c.path(),
-                  " -> ", c.responseStatus(), " (", (core::steadyMicroseconds() - t0) / 1000,
-                  "ms)");
+        ZLOG_INFO(c.peer(), " ", http::toString(c.method()), " ", c.path(), " -> ",
+                  c.responseStatus(), " (", (core::steadyMicroseconds() - t0) / 1000, "ms)");
     });
 
     r.get("/hello", [](http::Context& c) { c.text(200, "Hello, Zenith!"); });
@@ -75,8 +74,8 @@ int main() {
         ZLOG_ERROR("listen failed: ", lr.error().message);
         return 1;
     }
-    ZLOG_INFO("Zenith HTTP server listening on 127.0.0.1:8080 (",
-              server.port(), "), io threads = ", ioPool.size());
+    ZLOG_INFO("Zenith HTTP server listening on 127.0.0.1:8080 (", server.port(),
+              "), io threads = ", ioPool.size());
 
     // 演示自请求（3 秒后，独立线程——fetchBlocking 会阻塞所在线程，
     // 不能放在主 loop 线程上，否则 accept 被卡死导致自死锁）
@@ -95,7 +94,7 @@ int main() {
         fetcher.detach();
     });
 
-    loop.loop(); // 阻塞运行（Ctrl+C 退出由后续里程碑的信号处理补齐）
+    loop.loop();  // 阻塞运行（Ctrl+C 退出由后续里程碑的信号处理补齐）
 
     ioPool.stop();
     facade.flush();

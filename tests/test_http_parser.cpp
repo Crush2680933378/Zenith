@@ -19,7 +19,7 @@ const char* kPostBody =
     "Content-Length: 11\r\n"
     "\r\n"
     "hello world";
-} // namespace
+}  // namespace
 
 ZTEST(ReqParser, SimpleGet) {
     HttpRequestParser p;
@@ -29,12 +29,12 @@ ZTEST(ReqParser, SimpleGet) {
     ZEXPECT_TRUE(r.method == HttpMethod::Get);
     ZEXPECT_EQ(r.path, std::string("/index.html"));
     ZEXPECT_EQ(r.httpMajor * 10 + r.httpMinor, 11);
-    ZEXPECT_EQ(r.header("host"), std::string("example.com")); // 大小写不敏感
+    ZEXPECT_EQ(r.header("host"), std::string("example.com"));  // 大小写不敏感
     ZEXPECT_EQ(r.header("HOST"), std::string("example.com"));
     ZEXPECT_TRUE(r.keepAlive());
     // query 解码
     ZEXPECT_EQ(r.query.at("name"), std::string("zen ith"));
-    ZEXPECT_EQ(r.query.at("q"), std::string("2")); // 重复键后者覆盖
+    ZEXPECT_EQ(r.query.at("q"), std::string("2"));  // 重复键后者覆盖
 }
 
 ZTEST(ReqParser, ByteByByteSplit) {
@@ -86,7 +86,7 @@ ZTEST(ReqParser, Malformed) {
     ZEXPECT_TRUE(p1.feed("GARBAGE\r\n\r\n", 12).failed());
     HttpRequestParser p2;
     ZEXPECT_TRUE(p2.feed("GET /x FOO/1.1\r\n\r\n", 19).failed());
-    HttpRequestParser p3(4); // maxBody=4
+    HttpRequestParser p3(4);  // maxBody=4
     const std::string big = "POST / HTTP/1.1\r\nContent-Length: 10\r\n\r\n0123456789";
     ZEXPECT_TRUE(p3.feed(big.data(), big.size()).failed());
     HttpRequestParser p4;

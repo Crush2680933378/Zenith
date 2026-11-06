@@ -8,19 +8,19 @@ namespace zenith::metrics {
 
 namespace {
 constexpr int64_t kBucketBoundsUs[Histogram::kBucketCount] = {
-    1, 5, 10, 50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000,
-    9223372036854775807LL /* +Inf */
+    1,    5,     10,    50,     100,    500,     1000,
+    5000, 10000, 50000, 100000, 500000, 1000000, 9223372036854775807LL /* +Inf */
 };
 const char* kBucketLabels[Histogram::kBucketCount] = {
     "0.000001", "0.000005", "0.00001", "0.00005", "0.0001", "0.0005", "0.001",
-    "0.005", "0.01", "0.05", "0.1", "0.5", "1.0", "+Inf"};
+    "0.005",    "0.01",     "0.05",    "0.1",     "0.5",    "1.0",    "+Inf"};
 
 const int64_t kProcessStartMs = [] {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }();
-} // namespace
+}  // namespace
 
 void Histogram::observe(int64_t micros) noexcept {
     sum_.fetch_add(micros, std::memory_order_relaxed);
@@ -42,9 +42,7 @@ double Histogram::percentile(double q) const {
         if (static_cast<double>(cumulative) >= target) {
             // 返回该桶的界（秒）——粗粒度但稳定
             const double boundSec =
-                i + 1 < kBucketCount
-                    ? static_cast<double>(kBucketBoundsUs[i]) / 1e6
-                    : 1.0;
+                i + 1 < kBucketCount ? static_cast<double>(kBucketBoundsUs[i]) / 1e6 : 1.0;
             return boundSec;
         }
     }
@@ -100,9 +98,12 @@ Histogram& Registry::histogram(const std::string& name) {
 std::vector<std::string> Registry::names() const {
     std::vector<std::string> out;
     std::lock_guard<std::mutex> lk(mtx_);
-    for (const auto& [n, _] : counters_) out.push_back("c:" + n);
-    for (const auto& [n, _] : gauges_) out.push_back("g:" + n);
-    for (const auto& [n, _] : histograms_) out.push_back("h:" + n);
+    for (const auto& [n, _] : counters_)
+        out.push_back("c:" + n);
+    for (const auto& [n, _] : gauges_)
+        out.push_back("g:" + n);
+    for (const auto& [n, _] : histograms_)
+        out.push_back("h:" + n);
     return out;
 }
 
@@ -132,4 +133,4 @@ int64_t processUptimeMs() noexcept {
     return now - kProcessStartMs;
 }
 
-} // namespace zenith::metrics
+}  // namespace zenith::metrics

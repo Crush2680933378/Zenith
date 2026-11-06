@@ -71,7 +71,8 @@ std::shared_ptr<ChunkWriter> Context::chunkedStream(const std::string& contentTy
     head.status = resp_.status;
     head.chunked = true;
     // 沿用 handler 已设置的响应头（Content-Type 缺省补默认值）
-    for (const auto& [name, value] : resp_.headers.entries()) head.headers.set(name, value);
+    for (const auto& [name, value] : resp_.headers.entries())
+        head.headers.set(name, value);
     if (!head.headers.contains("Content-Type")) head.headers.set("Content-Type", contentType);
 
     auto writer = ChunkWriter::start(conn_, head);
@@ -81,4 +82,4 @@ std::shared_ptr<ChunkWriter> Context::chunkedStream(const std::string& contentTy
     return writer;
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

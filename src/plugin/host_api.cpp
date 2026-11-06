@@ -20,30 +20,34 @@ void hostLogWrite(void* /*log_ctx*/, int level, const char* file, int line, cons
         level > static_cast<int>(log::LogLevel::Fatal)) {
         level = static_cast<int>(log::LogLevel::Info);
     }
-    log::LoggerFacade::instance().writeRaw(static_cast<log::LogLevel>(level),
-                                           file ? file : "?", line, msg);
+    log::LoggerFacade::instance().writeRaw(static_cast<log::LogLevel>(level), file ? file : "?",
+                                           line, msg);
 }
 
-void* hostMemAlloc(size_t size) { return std::malloc(size); }
+void* hostMemAlloc(size_t size) {
+    return std::malloc(size);
+}
 
-void hostMemFree(void* ptr) { std::free(ptr); }
+void hostMemFree(void* ptr) {
+    std::free(ptr);
+}
 
-zenith_status hostRegisterService(void* registry_ctx, void* owner_token,
-                                  const char* interface_name, uint32_t impl_version,
-                                  void* instance, zenith_destroy_fn destroy_instance) {
+zenith_status hostRegisterService(void* registry_ctx, void* owner_token, const char* interface_name,
+                                  uint32_t impl_version, void* instance,
+                                  zenith_destroy_fn destroy_instance) {
     if (registry_ctx == nullptr) return ZENITH_ERR_NOT_INITIALIZED;
     return static_cast<ServiceRegistry*>(registry_ctx)
         ->registerRaw(interface_name, impl_version, instance, destroy_instance, owner_token,
                       /*replace=*/false);
 }
 
-zenith_status hostQueryService(void* registry_ctx, const char* interface_name,
-                               uint32_t min_version, void** out_instance) {
+zenith_status hostQueryService(void* registry_ctx, const char* interface_name, uint32_t min_version,
+                               void** out_instance) {
     if (out_instance == nullptr) return ZENITH_ERR_INVALID_ARGUMENT;
     if (registry_ctx == nullptr) return ZENITH_ERR_NOT_INITIALIZED;
     zenith_status st = ZENITH_OK;
-    *out_instance = static_cast<ServiceRegistry*>(registry_ctx)
-                        ->queryRaw(interface_name, min_version, &st);
+    *out_instance =
+        static_cast<ServiceRegistry*>(registry_ctx)->queryRaw(interface_name, min_version, &st);
     return st;
 }
 
@@ -62,7 +66,7 @@ zenith_status hostConfigGet(void* config_ctx, const char* key, const char* defau
         return ZENITH_OK;
     }
     *out_value = default_value;
-    return ZENITH_OK; // 缺失时回落默认值，不算错误
+    return ZENITH_OK;  // 缺失时回落默认值，不算错误
 }
 
 void hostTaskTrampoline(void* arg) {
@@ -79,32 +83,32 @@ zenith_status hostPostTask(void* pool_ctx, void (*fn)(void*), void* arg) {
     return pool->post([fn, arg] { fn(arg); }) ? ZENITH_OK : ZENITH_ERR_GENERIC;
 }
 
-} // namespace
+}  // namespace
 
 zenith_host_api makeHostApiV1(const HostContext& ctx, void* ownerToken) {
     zenith_host_api api{};
-    api.struct_size    = static_cast<uint32_t>(sizeof(zenith_host_api));
-    api.abi_version    = ZENITH_ABI_VERSION;
-    api.plugin_token   = ownerToken;
+    api.struct_size = static_cast<uint32_t>(sizeof(zenith_host_api));
+    api.abi_version = ZENITH_ABI_VERSION;
+    api.plugin_token = ownerToken;
 
-    api.log_ctx        = nullptr;
-    api.log_write      = &hostLogWrite;
+    api.log_ctx = nullptr;
+    api.log_write = &hostLogWrite;
 
-    api.mem_alloc      = &hostMemAlloc;
-    api.mem_free       = &hostMemFree;
+    api.mem_alloc = &hostMemAlloc;
+    api.mem_free = &hostMemFree;
 
-    api.registry_ctx   = ctx.registry;
+    api.registry_ctx = ctx.registry;
     api.register_service = &hostRegisterService;
-    api.query_service    = &hostQueryService;
+    api.query_service = &hostQueryService;
 
-    api.config_ctx     = ctx.config;
-    api.config_get     = &hostConfigGet;
+    api.config_ctx = ctx.config;
+    api.config_get = &hostConfigGet;
 
-    api.pool_ctx       = ctx.pool;
-    api.post_task      = &hostPostTask;
+    api.pool_ctx = ctx.pool;
+    api.post_task = &hostPostTask;
 
-    (void)hostTaskTrampoline; // 预留：无捕获转发器（M2 EventLoop 唤醒复用）
+    (void)hostTaskTrampoline;  // 预留：无捕获转发器（M2 EventLoop 唤醒复用）
     return api;
 }
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

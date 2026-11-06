@@ -15,13 +15,12 @@ const char* kDefaultSystemPrompt =
     "- After each tool call you will receive its observation; continue reasoning.\n"
     "- Finish with \"final\" as soon as the user's request is satisfied.\n"
     "- Never wrap the JSON in markdown or extra text.";
-} // namespace
+}  // namespace
 
 Agent::Agent(std::shared_ptr<ai::IInferenceService> inference, AgentConfig cfg)
     : inference_(std::move(inference)), cfg_(std::move(cfg)) {}
 
-void Agent::registerTool(const std::string& name, const std::string& description,
-                         ToolFn fn) {
+void Agent::registerTool(const std::string& name, const std::string& description, ToolFn fn) {
     tools_[name] = std::move(fn);
     toolDescs_[name] = description;
 }
@@ -42,7 +41,8 @@ core::Result<size_t> Agent::addMcpTools(mcp::McpClient client, const std::string
 
 std::vector<std::pair<std::string, std::string>> Agent::toolList() const {
     std::vector<std::pair<std::string, std::string>> out;
-    for (const auto& [name, desc] : toolDescs_) out.emplace_back(name, desc);
+    for (const auto& [name, desc] : toolDescs_)
+        out.emplace_back(name, desc);
     return out;
 }
 
@@ -71,8 +71,7 @@ std::vector<ai::ChatMessage> Agent::sessionHistory(const std::string& sid) {
     return out;
 }
 
-void Agent::pushTurn(const std::string& sid, const std::string& role,
-                     const std::string& content) {
+void Agent::pushTurn(const std::string& sid, const std::string& role, const std::string& content) {
     if (sid.empty()) return;
     auto& hist = sessions_[sid];
     hist.emplace_back(role, content);
@@ -204,8 +203,8 @@ AgentResult Agent::run(const std::string& userMessage, const std::string& sessio
                 auto rit = remoteTools_.find(parsed.tool);
                 if (rit != remoteTools_.end()) {
                     auto call = rit->second.second->callTool(rit->second.first, parsed.args);
-                    observation = call ? call.value() : ("remote tool error: " +
-                                                         call.error().message);
+                    observation =
+                        call ? call.value() : ("remote tool error: " + call.error().message);
                 } else {
                     observation = "unknown tool: " + parsed.tool;
                 }
@@ -236,4 +235,4 @@ AgentResult Agent::run(const std::string& userMessage, const std::string& sessio
     return result;
 }
 
-} // namespace zenith::agent
+}  // namespace zenith::agent

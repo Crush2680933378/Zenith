@@ -52,8 +52,12 @@ void logAt(zenith_log_level level, const std::string& m) {
         g_host->log_write(g_host->log_ctx, level, "ai_llama", 0, m.c_str());
     }
 }
-void logInfo(const std::string& m) { logAt(ZENITH_LOG_INFO, m); }
-void logError(const std::string& m) { logAt(ZENITH_LOG_ERROR, m); }
+void logInfo(const std::string& m) {
+    logAt(ZENITH_LOG_INFO, m);
+}
+void logError(const std::string& m) {
+    logAt(ZENITH_LOG_ERROR, m);
+}
 
 std::string cfgStr(const char* key, const char* fallback) {
     const char* v = nullptr;
@@ -89,8 +93,8 @@ std::string pieceOf(const llama_vocab* vocab, llama_token id) {
     const int n = llama_token_to_piece(vocab, id, buf, static_cast<int32_t>(sizeof(buf)), 0, false);
     if (n >= 0) return std::string(buf, static_cast<size_t>(n));
     std::string big(static_cast<size_t>(-n), '\0');
-    const int m = llama_token_to_piece(vocab, id, big.data(), static_cast<int32_t>(big.size()), 0,
-                                       false);
+    const int m =
+        llama_token_to_piece(vocab, id, big.data(), static_cast<int32_t>(big.size()), 0, false);
     return m > 0 ? big.substr(0, static_cast<size_t>(m)) : std::string();
 }
 
@@ -117,11 +121,11 @@ public:
         llama_context_params cp = llama_context_default_params();
         cp.n_ctx = static_cast<uint32_t>(nCtx > 0 ? nCtx : 4096);
         cp.n_batch = static_cast<uint32_t>(nBatch > 0 ? nBatch : 512);
-        cp.n_threads = threads > 0 ? threads : std::max(1, static_cast<int>(
-                                                              std::thread::hardware_concurrency() / 2));
+        cp.n_threads = threads > 0
+                           ? threads
+                           : std::max(1, static_cast<int>(std::thread::hardware_concurrency() / 2));
         cp.n_threads_batch = cp.n_threads;
-        cp.flash_attn_type =
-            flashAttn ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_AUTO;
+        cp.flash_attn_type = flashAttn ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_AUTO;
 
         ctx_ = llama_init_from_model(model_, cp);
         if (ctx_ == nullptr) return false;
@@ -131,9 +135,9 @@ public:
         char desc[256] = {0};
         if (llama_model_desc(model_, desc, sizeof(desc)) < 0) desc[0] = '\0';
         desc_ = desc;
-        const double ms = std::chrono::duration<double, std::milli>(
-                              std::chrono::steady_clock::now() - t0)
-                              .count();
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                .count();
         logInfo("ai_llama: model loaded in " + std::to_string(static_cast<int>(ms)) +
                 " ms | n_ctx=" + std::to_string(nCtx_) + " | " + desc_);
         return true;
@@ -164,7 +168,7 @@ public:
     zenith::ai::ChatResult chat(const zenith::ai::ChatRequest& req,
                                 const zenith::ai::TokenCallback& onToken,
                                 const zenith::ai::TokenCallback& onReasoning) override {
-        (void)onReasoning; // llama.cpp 不做 reasoning 分离（思考在模板里）
+        (void)onReasoning;  // llama.cpp 不做 reasoning 分离（思考在模板里）
         zenith::ai::ChatResult r;
         r.model = req.model.empty() ? modelId_ : req.model;
 
@@ -228,8 +232,8 @@ public:
         const int nBatch = 512;
         for (size_t off = 0; off < tokens.size(); off += static_cast<size_t>(nBatch)) {
             const size_t chunk = std::min<size_t>(static_cast<size_t>(nBatch), tokens.size() - off);
-            llama_batch batch = llama_batch_get_one(tokens.data() + off,
-                                                    static_cast<int32_t>(chunk));
+            llama_batch batch =
+                llama_batch_get_one(tokens.data() + off, static_cast<int32_t>(chunk));
             if (llama_decode(ctx_, batch) != 0) {
                 r.error = "prompt decode failed";
                 return r;
@@ -250,7 +254,8 @@ public:
             llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
         } else {
             llama_sampler_chain_add(smpl, llama_sampler_init_top_k(40));
-            llama_sampler_chain_add(smpl, llama_sampler_init_top_p(static_cast<float>(req.topP), 1));
+            llama_sampler_chain_add(smpl,
+                                    llama_sampler_init_top_p(static_cast<float>(req.topP), 1));
             llama_sampler_chain_add(smpl,
                                     llama_sampler_init_temp(static_cast<float>(req.temperature)));
             const uint32_t seed = req.seed >= 0 ? static_cast<uint32_t>(req.seed) : 0xC0FFEEu;
@@ -330,7 +335,9 @@ private:
     std::mutex mtx_;
 };
 
-void destroyService(void* p) { delete static_cast<LlamaService*>(p); }
+void destroyService(void* p) {
+    delete static_cast<LlamaService*>(p);
+}
 
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
@@ -362,9 +369,15 @@ zenith_status pluginInit(const zenith_host_api* host) {
                                   &destroyService);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
-void pluginShutdown(void) { g_host = nullptr; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
+void pluginShutdown(void) {
+    g_host = nullptr;
+}
 
 zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
@@ -380,6 +393,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

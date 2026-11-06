@@ -25,7 +25,7 @@ uint32_t rdU32(const char* p) {
 
 /// 单样本归一化到 [-1,1]
 float sampleAt(const char* p, int bits, int tag) {
-    if (tag == 3) { // IEEE float
+    if (tag == 3) {  // IEEE float
         if (bits == 32) {
             float v = 0.0f;
             std::memcpy(&v, p, sizeof(v));
@@ -50,7 +50,7 @@ float sampleAt(const char* p, int bits, int tag) {
             int32_t v = static_cast<int32_t>(static_cast<unsigned char>(p[0])) |
                         (static_cast<int32_t>(static_cast<unsigned char>(p[1])) << 8) |
                         (static_cast<int32_t>(static_cast<unsigned char>(p[2])) << 16);
-            if ((v & 0x800000) != 0) v |= static_cast<int32_t>(0xFF000000); // 符号扩展
+            if ((v & 0x800000) != 0) v |= static_cast<int32_t>(0xFF000000);  // 符号扩展
             return static_cast<float>(v) / 8388608.0f;
         }
         case 32: {
@@ -65,8 +65,8 @@ float sampleAt(const char* p, int bits, int tag) {
 std::vector<float> resampleLinear(const std::vector<float>& in, int srcRate, int dstRate) {
     if (srcRate <= 0 || dstRate <= 0 || in.empty()) return {};
     if (srcRate == dstRate) return in;
-    const size_t outN = static_cast<size_t>(
-        std::llround(static_cast<double>(in.size()) * dstRate / srcRate));
+    const size_t outN =
+        static_cast<size_t>(std::llround(static_cast<double>(in.size()) * dstRate / srcRate));
     std::vector<float> out(outN);
     const double step = static_cast<double>(srcRate) / dstRate;
     for (size_t i = 0; i < outN; ++i) {
@@ -88,7 +88,7 @@ PcmAudio fail(PcmAudio r, std::string err) {
     return r;
 }
 
-} // namespace
+}  // namespace
 
 WavInfo parseWavHeader(std::string_view bytes) {
     WavInfo w;
@@ -96,7 +96,8 @@ WavInfo parseWavHeader(std::string_view bytes) {
         w.error = "too short for RIFF header";
         return w;
     }
-    if (std::memcmp(bytes.data(), "RIFF", 4) != 0 || std::memcmp(bytes.data() + 8, "WAVE", 4) != 0) {
+    if (std::memcmp(bytes.data(), "RIFF", 4) != 0 ||
+        std::memcmp(bytes.data() + 8, "WAVE", 4) != 0) {
         w.error = "not a RIFF/WAVE stream";
         return w;
     }
@@ -150,7 +151,8 @@ PcmAudio decodeAudioTo16kMono(std::string_view bytes, const std::string& format)
     if (bytes.empty()) return fail(std::move(out), "empty audio");
 
     std::string fmt = format;
-    for (char& c : fmt) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (char& c : fmt)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (fmt.empty()) {
         fmt = (bytes.size() >= 12 && std::memcmp(bytes.data(), "RIFF", 4) == 0) ? "wav" : "pcm16";
     }
@@ -172,8 +174,8 @@ PcmAudio decodeAudioTo16kMono(std::string_view bytes, const std::string& format)
     const WavInfo w = parseWavHeader(bytes);
     if (!w.ok) return fail(std::move(out), "wav: " + w.error);
     if (w.formatTag != 1 && w.formatTag != 3) {
-        return fail(std::move(out),
-                    "wav: unsupported format tag " + std::to_string(w.formatTag) + " (need PCM/IEEE float)");
+        return fail(std::move(out), "wav: unsupported format tag " + std::to_string(w.formatTag) +
+                                        " (need PCM/IEEE float)");
     }
     const int bytesPer = w.bitsPerSample / 8;
     if (bytesPer <= 0) return fail(std::move(out), "wav: invalid bits per sample");
@@ -189,7 +191,8 @@ PcmAudio decodeAudioTo16kMono(std::string_view bytes, const std::string& format)
         const char* frame = base + i * frameBytes;
         float sum = 0.0f;
         for (int c = 0; c < w.channels; ++c) {
-            sum += sampleAt(frame + static_cast<size_t>(c) * bytesPer, w.bitsPerSample, w.formatTag);
+            sum +=
+                sampleAt(frame + static_cast<size_t>(c) * bytesPer, w.bitsPerSample, w.formatTag);
         }
         mono[i] = sum / static_cast<float>(w.channels);
     }
@@ -202,4 +205,4 @@ PcmAudio decodeAudioTo16kMono(std::string_view bytes, const std::string& format)
     return out;
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

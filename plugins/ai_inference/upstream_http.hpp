@@ -19,16 +19,16 @@ namespace zenith::ai::detail {
 
 struct UpstreamCall {
     std::string method = "POST";
-    std::string url; // http://host[:port]/path
+    std::string url;  // http://host[:port]/path
     std::string body;
     std::vector<std::pair<std::string, std::string>> headers;
     int timeoutMs = 300000;
 };
 
 struct UpstreamResult {
-    bool transportOk = false; // 连接/收包是否成功（不代表 2xx）
+    bool transportOk = false;  // 连接/收包是否成功（不代表 2xx）
     int status = 0;
-    std::string body; // 未走流式回调时的完整正文（chunked 已解码）
+    std::string body;  // 未走流式回调时的完整正文（chunked 已解码）
     std::string error;
 };
 
@@ -38,4 +38,4 @@ using UpstreamSink = std::function<bool(std::string_view)>;
 /// 执行一次请求。onData 为空 → 完整读入 out.body；非空 → 逐片回调。
 bool httpRequest(const UpstreamCall& call, const UpstreamSink& onData, UpstreamResult& out);
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

@@ -22,17 +22,17 @@
 namespace zenith::http::oauth {
 
 struct ZENITH_API OAuthClientConfig {
-    std::string authorizeUrl; // IdP 授权端点
-    std::string tokenUrl;     // IdP 换令牌端点
+    std::string authorizeUrl;  // IdP 授权端点
+    std::string tokenUrl;      // IdP 换令牌端点
     std::string clientId;
-    std::string clientSecret; // 公共客户端（PKCE only）可空
+    std::string clientSecret;  // 公共客户端（PKCE only）可空
     std::string redirectUri;
     std::string scope;
 };
 
 struct ZENITH_API Pkce {
-    std::string verifier;    // 43-128 urlsafe 字符
-    std::string challenge;   // base64url(SHA256(verifier)) 无填充（S256）
+    std::string verifier;   // 43-128 urlsafe 字符
+    std::string challenge;  // base64url(SHA256(verifier)) 无填充（S256）
     bool valid() const { return verifier.size() >= 43 && challenge.size() == 43; }
 };
 
@@ -60,13 +60,11 @@ ZENITH_API std::string buildAuthorizeUrl(
 
 /// 授权码换令牌（POST tokenUrl，application/x-www-form-urlencoded）。
 /// timeoutMs 默认 15s。
-ZENITH_API TokenResponse exchangeCode(const OAuthClientConfig& cfg,
-                                      const std::string& code, const Pkce& pkce,
-                                      int timeoutMs = 15000);
+ZENITH_API TokenResponse exchangeCode(const OAuthClientConfig& cfg, const std::string& code,
+                                      const Pkce& pkce, int timeoutMs = 15000);
 
 /// refresh_token 换新 access_token
-ZENITH_API TokenResponse refresh(const OAuthClientConfig& cfg,
-                                 const std::string& refreshToken,
+ZENITH_API TokenResponse refresh(const OAuthClientConfig& cfg, const std::string& refreshToken,
                                  int timeoutMs = 15000);
 
-} // namespace zenith::http::oauth
+}  // namespace zenith::http::oauth

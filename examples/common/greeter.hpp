@@ -43,5 +43,5 @@ public:
     [[nodiscard]] virtual std::string greet(const std::string& name) const = 0;
 };
 
-} // namespace zenith::example
+}  // namespace zenith::example
 #endif

@@ -38,7 +38,7 @@ private:
     int v_;
 };
 
-} // namespace
+}  // namespace
 
 /* ---------------- DynLib ---------------- */
 
@@ -117,14 +117,15 @@ ZTEST(HostApi, PostTaskRunsOnPool) {
     plugin::ServiceRegistry reg;
     core::KeyValueConfig cfg;
 
-    zenith_host_api api = plugin::makeHostApiV1(
-        plugin::HostContext{&reg, &pool, &cfg}, /*ownerToken=*/nullptr);
+    zenith_host_api api =
+        plugin::makeHostApiV1(plugin::HostContext{&reg, &pool, &cfg}, /*ownerToken=*/nullptr);
 
     std::atomic<int> ran{0};
     // C 风格 fn/arg 转发
-    struct Ctx { std::atomic<int>* ran; } ctx{&ran};
-    api.post_task(api.pool_ctx,
-                  [](void* p) { static_cast<Ctx*>(p)->ran->fetch_add(1); }, &ctx);
+    struct Ctx {
+        std::atomic<int>* ran;
+    } ctx{&ran};
+    api.post_task(api.pool_ctx, [](void* p) { static_cast<Ctx*>(p)->ran->fetch_add(1); }, &ctx);
 
     for (int i = 0; i < 100 && ran.load() == 0; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -138,8 +139,7 @@ ZTEST(HostApi, ConfigGetFallsBackToDefault) {
     core::KeyValueConfig cfg;
     cfg.set("test.key", "value1");
 
-    zenith_host_api api = plugin::makeHostApiV1(
-        plugin::HostContext{&reg, &pool, &cfg}, nullptr);
+    zenith_host_api api = plugin::makeHostApiV1(plugin::HostContext{&reg, &pool, &cfg}, nullptr);
 
     const char* out = nullptr;
     ZEXPECT_EQ(api.config_get(api.config_ctx, "test.key", "def", &out), ZENITH_OK);
@@ -151,14 +151,13 @@ ZTEST(HostApi, ConfigGetFallsBackToDefault) {
 
 ZTEST(HostApi, RegisterQueryThroughC) {
     plugin::ServiceRegistry reg;
-    static int ownerDummy = 0; // 任意稳定指针作 owner 令牌
-    zenith_host_api api = plugin::makeHostApiV1(
-        plugin::HostContext{&reg, nullptr, nullptr}, &ownerDummy);
+    static int ownerDummy = 0;  // 任意稳定指针作 owner 令牌
+    zenith_host_api api =
+        plugin::makeHostApiV1(plugin::HostContext{&reg, nullptr, nullptr}, &ownerDummy);
 
     CounterImpl inst(5);
-    ZEXPECT_EQ(api.register_service(api.registry_ctx, api.plugin_token,
-                                    ICounter::service_name(), ICounter::service_version(),
-                                    &inst, nullptr),
+    ZEXPECT_EQ(api.register_service(api.registry_ctx, api.plugin_token, ICounter::service_name(),
+                                    ICounter::service_version(), &inst, nullptr),
                ZENITH_OK);
     void* out = nullptr;
     ZEXPECT_EQ(api.query_service(api.registry_ctx, ICounter::service_name(),
@@ -181,8 +180,7 @@ ZTEST(PluginManager, LoadStartQueryUnload) {
     plugin::PluginManager mgr(reg, &pool, &config);
     auto loaded = mgr.loadDirectory(ZENITH_TEST_PLUGIN_DIR);
     if (!loaded) {
-        ztest::reportFail(__FILE__, __LINE__,
-                          "loadDirectory failed: " + loaded.error().message);
+        ztest::reportFail(__FILE__, __LINE__, "loadDirectory failed: " + loaded.error().message);
     }
     ZEXPECT_TRUE(loaded.value() >= 1);
 
@@ -215,7 +213,8 @@ ZTEST(PluginManager, LoadStartQueryUnload) {
         const char* s = cg->vt->greet(craw, "Zenith", buf, sizeof(buf));
         ZEXPECT_TRUE(s != nullptr);
         if (s != nullptr) {
-            ZEXPECT_EQ(std::string(s), std::string("Bonjour, Zenith! (from hello_c plugin, pure C)"));
+            ZEXPECT_EQ(std::string(s),
+                       std::string("Bonjour, Zenith! (from hello_c plugin, pure C)"));
         }
     }
 
@@ -234,7 +233,7 @@ ZTEST(PluginManager, LoadNonPluginFails) {
 #else
 
 ZTEST(PluginManager, SkippedNoPluginDir) {
-    ZEXPECT_TRUE(true); // ZENITH_BUILD_PLUGINS=OFF 时占位
+    ZEXPECT_TRUE(true);  // ZENITH_BUILD_PLUGINS=OFF 时占位
 }
 
 #endif

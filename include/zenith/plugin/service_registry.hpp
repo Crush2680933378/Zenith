@@ -38,8 +38,7 @@ public:
 
     template <typename T>
     zenith_status put(std::shared_ptr<T> service, bool replace = false) {
-        static_assert(std::is_base_of_v<IService, T>,
-                      "typed 服务需继承 zenith::plugin::IService");
+        static_assert(std::is_base_of_v<IService, T>, "typed 服务需继承 zenith::plugin::IService");
         return registerTyped(T::service_name(), T::service_version(),
                              std::static_pointer_cast<void>(std::move(service)), replace);
     }
@@ -47,17 +46,14 @@ public:
     /// 查询 typed 服务；未注册或版本不足返回空 shared_ptr。
     template <typename T>
     [[nodiscard]] std::shared_ptr<T> get(uint32_t minVersion = T::service_version()) const {
-        static_assert(std::is_base_of_v<IService, T>,
-                      "typed 服务需继承 zenith::plugin::IService");
-        return std::static_pointer_cast<T>(
-            queryTyped(T::service_name(), minVersion));
+        static_assert(std::is_base_of_v<IService, T>, "typed 服务需继承 zenith::plugin::IService");
+        return std::static_pointer_cast<T>(queryTyped(T::service_name(), minVersion));
     }
 
     /* ---- raw（插件经 C ABI 注册） ---- */
 
-    zenith_status registerRaw(const char* interfaceName, uint32_t implVersion,
-                              void* instance, zenith_destroy_fn destroy, void* ownerToken,
-                              bool replace = false);
+    zenith_status registerRaw(const char* interfaceName, uint32_t implVersion, void* instance,
+                              zenith_destroy_fn destroy, void* ownerToken, bool replace = false);
 
     /// 返回裸指针（不转移所有权；生命周期由注册方/注册表管理）。
     [[nodiscard]] void* queryRaw(const char* interfaceName, uint32_t minVersion,
@@ -74,11 +70,11 @@ public:
 
 private:
     struct Entry {
-        uint32_t             version = 0;
-        std::shared_ptr<void> typed;                    // typed 条目非空
-        void*                rawInstance = nullptr;     // raw 条目非空
-        zenith_destroy_fn    rawDestroy  = nullptr;
-        void*                owner       = nullptr;
+        uint32_t version = 0;
+        std::shared_ptr<void> typed;  // typed 条目非空
+        void* rawInstance = nullptr;  // raw 条目非空
+        zenith_destroy_fn rawDestroy = nullptr;
+        void* owner = nullptr;
     };
 
     zenith_status registerTyped(const char* interfaceName, uint32_t implVersion,
@@ -90,4 +86,4 @@ private:
     std::map<std::string, Entry> entries_;
 };
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

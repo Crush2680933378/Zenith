@@ -21,7 +21,7 @@ bool parseNum(const std::string& s, int& out) {
     out = std::atoi(s.c_str());
     return true;
 }
-} // namespace
+}  // namespace
 
 bool CronExpr::fieldParse(const std::string& s, int lo, int hi, Field& out) {
     out.lo = lo;
@@ -30,9 +30,10 @@ bool CronExpr::fieldParse(const std::string& s, int lo, int hi, Field& out) {
     size_t pos = 0;
     auto token = [&]() -> std::string {
         size_t start = pos;
-        while (pos < s.size() && s[pos] != ',') ++pos;
+        while (pos < s.size() && s[pos] != ',')
+            ++pos;
         std::string t = s.substr(start, pos - start);
-        if (pos < s.size()) ++pos; // 跳过 ','
+        if (pos < s.size()) ++pos;  // 跳过 ','
         return t;
     };
     if (s.empty()) return false;
@@ -51,18 +52,18 @@ bool CronExpr::fieldParse(const std::string& s, int lo, int hi, Field& out) {
         } else {
             size_t dash = t.find('-');
             if (dash != std::string::npos) {
-                if (!parseNum(t.substr(0, dash), a) ||
-                    !parseNum(t.substr(dash + 1), b)) {
+                if (!parseNum(t.substr(0, dash), a) || !parseNum(t.substr(dash + 1), b)) {
                     return false;
                 }
             } else {
                 if (!parseNum(t, a)) return false;
                 b = a;
-                if (step != 1) b = hi; // "N/step" 形态：N 起到域顶按步长
+                if (step != 1) b = hi;  // "N/step" 形态：N 起到域顶按步长
             }
         }
         if (a < lo || b > hi || a > b) return false;
-        for (int v = a; v <= b; v += step) out.bits |= 1ULL << v;
+        for (int v = a; v <= b; v += step)
+            out.bits |= 1ULL << v;
         if (pos >= s.size()) break;
     }
     return out.bits != 0;
@@ -81,8 +82,8 @@ core::Result<CronExpr> CronExpr::parse(const std::string& expr) {
     }
     if (!cur.empty()) f.push_back(cur);
     if (f.size() != 5) {
-        return core::Result<CronExpr>::Err(core::Error(
-            400, "cron expr needs 5 fields (min hour dom month dow): " + expr));
+        return core::Result<CronExpr>::Err(
+            core::Error(400, "cron expr needs 5 fields (min hour dom month dow): " + expr));
     }
     CronExpr e;
     const char* names[5] = {"minute", "hour", "day-of-month", "month", "day-of-week"};
@@ -98,9 +99,8 @@ core::Result<CronExpr> CronExpr::parse(const std::string& expr) {
             }
         }
         if (!fieldParse(s, lo[i], hi[i], *fields[static_cast<size_t>(i)])) {
-            return core::Result<CronExpr>::Err(
-                core::Error(400, std::string("bad cron field ") + names[i] + ": " +
-                                     f[static_cast<size_t>(i)]));
+            return core::Result<CronExpr>::Err(core::Error(
+                400, std::string("bad cron field ") + names[i] + ": " + f[static_cast<size_t>(i)]));
         }
     }
     e.text_ = expr;
@@ -124,8 +124,8 @@ int64_t CronExpr::nextAfter(int64_t fromEpochSec) const {
         const int dow = lt.tm_wday;
         if (!match(month_, month)) continue;
         // 日/周语义（Vixie cron）：两字段同时受限 → 任一匹配即触发
-        const bool domRestricted = dom_.bits != 0xFFFFFFFEULL; // bits 1..31 全置位
-        const bool dowRestricted = dow_.bits != 0x7FULL;       // bits 0..6 全置位
+        const bool domRestricted = dom_.bits != 0xFFFFFFFEULL;  // bits 1..31 全置位
+        const bool dowRestricted = dow_.bits != 0x7FULL;        // bits 0..6 全置位
         const bool dayOk = (domRestricted && dowRestricted)
                                ? (match(dom_, dom) || match(dow_, dow))
                                : (match(dom_, dom) && match(dow_, dow));
@@ -194,8 +194,7 @@ void CronScheduler::run() {
                              std::chrono::system_clock::now().time_since_epoch())
                              .count();
         if (soonest < 0 || soonest > nowSec) {
-            const int64_t waitMs =
-                soonest < 0 ? 500 : (soonest - nowSec) * 1000 + 50;
+            const int64_t waitMs = soonest < 0 ? 500 : (soonest - nowSec) * 1000 + 50;
             cv_.wait_for(lk, std::chrono::milliseconds(waitMs));
             continue;
         }
@@ -225,4 +224,4 @@ void CronScheduler::stop() {
     if (thread_.joinable()) thread_.join();
 }
 
-} // namespace zenith::concurrency
+}  // namespace zenith::concurrency

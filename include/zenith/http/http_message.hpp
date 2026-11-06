@@ -63,12 +63,12 @@ struct HttpRequest {
     HttpMethod method = HttpMethod::Get;
     int httpMajor = 1;
     int httpMinor = 1;
-    std::string path;                 // 已 percent 解码
-    std::string rawQuery;             // 原始 query（无 '?'）
-    std::unordered_map<std::string, std::string> query; // 已解码
+    std::string path;                                    // 已 percent 解码
+    std::string rawQuery;                                // 原始 query（无 '?'）
+    std::unordered_map<std::string, std::string> query;  // 已解码
     HttpHeaders headers;
     std::string body;
-    std::string peer;                 // "ip:port"
+    std::string peer;  // "ip:port"
 
     [[nodiscard]] bool keepAlive() const noexcept {
         const std::string conn = core::string_util::toLower(headers.get("Connection"));
@@ -83,7 +83,7 @@ struct HttpRequest {
         for (char c : v) {
             if (c < '0' || c > '9') return 0;
             n = n * 10 + static_cast<size_t>(c - '0');
-            if (n > (1ull << 40)) return n; // 防溢出，交上层按上限拒绝
+            if (n > (1ull << 40)) return n;  // 防溢出，交上层按上限拒绝
         }
         return n;
     }
@@ -132,4 +132,4 @@ struct HttpResponse {
     [[nodiscard]] std::string serialize(bool includeBody, bool connKeepAlive) const;
 };
 
-} // namespace zenith::http
+}  // namespace zenith::http

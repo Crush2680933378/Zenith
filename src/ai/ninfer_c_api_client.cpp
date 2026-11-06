@@ -1,9 +1,9 @@
 #include "zenith/ai/ninfer_c_api_client.hpp"
 
 #include <chrono>
-#include <cstring>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -14,8 +14,8 @@ namespace {
 
 /// 回调上下文：C 函数指针 + user 指针，跨 DLL 只传这两个
 struct CallbackCtx {
-    const TokenCallback* onToken = nullptr;     ///< 正文
-    const TokenCallback* onReasoning = nullptr; ///< 思考过程（ABI v2）
+    const TokenCallback* onToken = nullptr;      ///< 正文
+    const TokenCallback* onReasoning = nullptr;  ///< 思考过程（ABI v2）
     bool aborted = false;
 };
 
@@ -36,10 +36,10 @@ int32_t NZ_CALL tokenTrampoline(const char* piece, int32_t len, int32_t channel,
     if (ctx == nullptr || len <= 0) return 0;
     const bool isReasoning = channel == ZENITH_NZ_CHANNEL_REASONING;
     const TokenCallback* sink = isReasoning ? ctx->onReasoning : ctx->onToken;
-    if (sink == nullptr || !(*sink)) return 0; // 这一路没人要，继续跑但丢弃
+    if (sink == nullptr || !(*sink)) return 0;  // 这一路没人要，继续跑但丢弃
     if (!(*sink)(std::string_view(piece, static_cast<size_t>(len)))) {
         ctx->aborted = true;
-        return 1; // 请求引擎中止
+        return 1;  // 请求引擎中止
     }
     return 0;
 }
@@ -47,18 +47,20 @@ int32_t NZ_CALL tokenTrampoline(const char* piece, int32_t len, int32_t channel,
 class NinferCAbiService final : public IInferenceService {
 public:
     NinferCAbiService(const zenith_nz_service* svc, std::string modelId, std::string artifactPath)
-        : svc_(svc), modelId_(std::move(modelId)), artifact_(std::move(artifactPath)),
+        : svc_(svc),
+          modelId_(std::move(modelId)),
+          artifact_(std::move(artifactPath)),
           abiVersion_(svc != nullptr ? svc->version : 0u) {}
 
     [[nodiscard]] std::vector<ModelInfo> models() override {
         ModelInfo info;
         info.id = modelId_;
         info.ownedBy = "zenith";
-        info.createdAt = static_cast<int64_t>(
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch())
-                .count());
-        info.contextSize = 0; // shim 未暴露实际 n_ctx；参看 artifact
+        info.createdAt =
+            static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                     std::chrono::system_clock::now().time_since_epoch())
+                                     .count());
+        info.contextSize = 0;  // shim 未暴露实际 n_ctx；参看 artifact
         info.backend = "ninfer-c-abi";
         return {info};
     }
@@ -94,7 +96,7 @@ public:
         sampling.struct_size = sizeof(zenith_nz_sampling);
         sampling.temperature = static_cast<float>(req.temperature);
         sampling.top_p = static_cast<float>(req.topP);
-        sampling.top_k = 0; // 用引擎默认
+        sampling.top_k = 0;  // 用引擎默认
         sampling.seed = req.seed >= 0 ? static_cast<uint32_t>(req.seed) : 0;
         sampling.enable_thinking = req.thinking;
 
@@ -102,7 +104,7 @@ public:
         out.struct_size = sizeof(zenith_nz_result);
         CallbackCtx ctx;
         ctx.onToken = &onToken;
-        ctx.onReasoning = &onReasoning; // ABI v2：思考过程实时回调
+        ctx.onReasoning = &onReasoning;  // ABI v2：思考过程实时回调
 
         // v1 插件的回调只接受 (piece,len,user)；把 3 参数函数传进 4 参数槽是安全的
         // —— Win64 下被调方忽略多余的 channel 实参。v2 则走带 channel 的版本。
@@ -159,13 +161,13 @@ public:
         uint64_t drafted = 0;
         uint64_t accepted = 0;
         if (svc_->stats(svc_->engine, &reqs, nullptr, nullptr, &accepted, &drafted) == 0) {
-            st.supervised = false; // 不是子进程，是进程内引擎
+            st.supervised = false;  // 不是子进程，是进程内引擎
             st.running = true;
             st.requests = static_cast<int64_t>(reqs);
             st.draftAccepted = static_cast<int64_t>(accepted);
             st.draftTotal = static_cast<int64_t>(drafted);
-            st.lastLine = artifact_.empty() ? std::string("in-process engine")
-                                            : ("in-process: " + artifact_);
+            st.lastLine =
+                artifact_.empty() ? std::string("in-process engine") : ("in-process: " + artifact_);
         }
         // 最近一次请求占用的上下文（v1/v2 插件只有这个数）
         st.lastContextTokens = lastContextTokens_;
@@ -187,12 +189,18 @@ public:
 private:
     static std::string finishReasonText(int32_t code) {
         switch (code) {
-            case 1: return "length";
-            case 2: return "context_capacity";
-            case 3: return "stop";
-            case 4: return "stop";
-            case 5: return "cancelled";
-            default: return "stop";
+            case 1:
+                return "length";
+            case 2:
+                return "context_capacity";
+            case 3:
+                return "stop";
+            case 4:
+                return "stop";
+            case 5:
+                return "cancelled";
+            default:
+                return "stop";
         }
     }
 
@@ -203,7 +211,7 @@ private:
     std::string artifact_;
 };
 
-} // namespace
+}  // namespace
 
 std::unique_ptr<IInferenceService> wrapNinferCAbiService(const void* serviceTable,
                                                          std::string modelId,
@@ -212,17 +220,15 @@ std::unique_ptr<IInferenceService> wrapNinferCAbiService(const void* serviceTabl
     const auto* svc = static_cast<const zenith_nz_service*>(serviceTable);
     // 兼容 v1（只有正文回调，思考内容走聚合结果）与 v2（思考也实时流式）
     if (svc->version < 1 || svc->version > ZENITH_NINFER_C_API_VERSION) {
-        std::fprintf(stderr,
-                     "[ninfer-c-abi] 不支持的 ABI 版本：插件 v%u，宿主支持 v1..v%u\n",
+        std::fprintf(stderr, "[ninfer-c-abi] 不支持的 ABI 版本：插件 v%u，宿主支持 v1..v%u\n",
                      svc->version, ZENITH_NINFER_C_API_VERSION);
         return nullptr;
     }
-    if (svc->engine == nullptr ||
-        svc->generate == nullptr) {
+    if (svc->engine == nullptr || svc->generate == nullptr) {
         return nullptr;
     }
     if (modelId.empty()) modelId = "ninfer-native";
     return std::make_unique<NinferCAbiService>(svc, std::move(modelId), std::move(artifactPath));
 }
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

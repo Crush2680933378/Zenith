@@ -14,7 +14,7 @@ namespace zenith::core {
 
 /// 通用错误类型：code 由各模块自定义，message 供日志/展示。
 struct Error {
-    int         code{0};
+    int code{0};
     std::string message;
 
     Error() = default;
@@ -31,20 +31,20 @@ public:
     [[nodiscard]] bool isErr() const noexcept { return !value_.has_value(); }
     [[nodiscard]] explicit operator bool() const noexcept { return isOk(); }
 
-    T&       value() &          { return value_.value(); }
-    const T& value() const&     { return value_.value(); }
-    T&&      value() &&         { return std::move(value_).value(); }
+    T& value() & { return value_.value(); }
+    const T& value() const& { return value_.value(); }
+    T&& value() && { return std::move(value_).value(); }
 
     [[nodiscard]] const Error& error() const { return error_.value(); }
 
     T valueOr(T fallback) const& { return value_.value_or(std::move(fallback)); }
-    T valueOr(T fallback) &&     { return std::move(value_).value_or(std::move(fallback)); }
+    T valueOr(T fallback) && { return std::move(value_).value_or(std::move(fallback)); }
 
 private:
     Result(T value) : value_(std::move(value)) {}
     Result(Error e) : error_(std::move(e)) {}
 
-    std::optional<T>     value_;
+    std::optional<T> value_;
     std::optional<Error> error_;
 };
 
@@ -65,8 +65,8 @@ private:
     explicit Result(bool ok) : ok_(ok) {}
     explicit Result(Error e) : ok_(false), error_(std::move(e)) {}
 
-    bool                 ok_;
+    bool ok_;
     std::optional<Error> error_;
 };
 
-} // namespace zenith::core
+}  // namespace zenith::core

@@ -19,7 +19,7 @@ struct User {
     std::string name;
     int age = 0;
 };
-} // namespace
+}  // namespace
 
 // uORM 反射注册（表名 User，主键 id 自增）
 UORM_REFLECTION(User, id, name, age)
@@ -64,7 +64,7 @@ ZTEST(Db, SqliteCrudAndServiceRegistry) {
     User u2{0, "bob", 18};
     ZEXPECT_TRUE(db.save(u1));
     ZEXPECT_TRUE(db.save(u2));
-    ZEXPECT_TRUE(u1.id > 0); // 自增主键写回
+    ZEXPECT_TRUE(u1.id > 0);  // 自增主键写回
 
     // 查询
     auto found = db.findById<User>(u1.id);
@@ -117,10 +117,11 @@ ZTEST(Db, AsyncPostRunsOffCallerThread) {
         done.store(true);
     });
 
-    for (int i = 0; i < 300 && !done.load(); ++i) std::this_thread::sleep_for(10ms);
+    for (int i = 0; i < 300 && !done.load(); ++i)
+        std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(done.load());
     ZEXPECT_TRUE(savedId > 0);
-    ZEXPECT_TRUE(dbThread != std::this_thread::get_id()); // 在工作线程执行
+    ZEXPECT_TRUE(dbThread != std::this_thread::get_id());  // 在工作线程执行
     auto found = svc.database().findById<User>(savedId);
     ZEXPECT_TRUE(found.has_value());
 

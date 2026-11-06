@@ -36,17 +36,17 @@ enum class Metric : uint8_t {
 };
 
 struct HnswConfig {
-    int dim = 0;             // 向量维度（必填）
+    int dim = 0;  // 向量维度（必填）
     Metric metric = Metric::Cosine;
-    int m = 16;              // 每层最大邻居数（层 0 为 2m）
+    int m = 16;  // 每层最大邻居数（层 0 为 2m）
     int efConstruction = 200;
-    int efSearch = 64;       // 查询束宽（≥ k）
-    uint64_t seed = 0;       // 0 = 随机
+    int efSearch = 64;  // 查询束宽（≥ k）
+    uint64_t seed = 0;  // 0 = 随机
 };
 
 struct SearchHit {
     uint64_t id = 0;
-    float score = 0;   // 相似度语义：越大越近（Cosine/Dot=相似度；L2=负距离）
+    float score = 0;  // 相似度语义：越大越近（Cosine/Dot=相似度；L2=负距离）
     bool operator<(const SearchHit& o) const noexcept { return score > o.score; }
 };
 
@@ -63,7 +63,7 @@ public:
 
     // ---- 读 ----
     [[nodiscard]] std::vector<SearchHit> search(const float* q, int k,
-                                                int efSearch = 0) const; // 0 = cfg 默认
+                                                int efSearch = 0) const;  // 0 = cfg 默认
     [[nodiscard]] bool get(uint64_t id, std::vector<float>& out) const;
     [[nodiscard]] size_t size() const noexcept;
     [[nodiscard]] const HnswConfig& config() const noexcept { return cfg_; }
@@ -75,9 +75,9 @@ public:
 private:
     struct Node {
         uint64_t id = 0;
-        int level = 0;                                  // 最高层号
-        std::vector<float> vec;                          // 已按度量预处理（Cosine 归一化）
-        std::vector<std::vector<uint64_t>> links;        // links[layer] → 邻居 id
+        int level = 0;                             // 最高层号
+        std::vector<float> vec;                    // 已按度量预处理（Cosine 归一化）
+        std::vector<std::vector<uint64_t>> links;  // links[layer] → 邻居 id
     };
 
     // 内部搜索条目（按距离升序的小顶堆 / 结果大顶堆共用）
@@ -96,18 +96,18 @@ private:
                                                 int ef, int layer,
                                                 const std::unordered_set<uint64_t>& dead) const;
     /// 启发式选邻（离 q 更近且互相不冗余）；keepPruned=true 时用被拒候选补满 M
-    [[nodiscard]] std::vector<uint64_t> selectNeighbors(
-        const float* q, std::vector<Cand> cands, int m, bool keepPruned) const;
+    [[nodiscard]] std::vector<uint64_t> selectNeighbors(const float* q, std::vector<Cand> cands,
+                                                        int m, bool keepPruned) const;
 
     HnswConfig cfg_;
-    float multLevel_;                    // 1/ln(M)
-    mutable std::shared_mutex mtx_;      // nodes_/entry_/dead_ 保护
+    float multLevel_;                // 1/ln(M)
+    mutable std::shared_mutex mtx_;  // nodes_/entry_/dead_ 保护
     std::unordered_map<uint64_t, Node> nodes_;
     std::unordered_set<uint64_t> dead_;  // 墓碑（upsert 复用 id 时清除）
     uint64_t entryPoint_ = 0;
     int maxLevel_ = -1;
     std::mt19937_64 rng_;
-    std::mutex insertMtx_;               // 串行化插入（图结构修改）
+    std::mutex insertMtx_;  // 串行化插入（图结构修改）
 };
 
-} // namespace zenith::vector
+}  // namespace zenith::vector

@@ -7,15 +7,15 @@
 #pragma once
 
 #if defined(_WIN32)
-  #if defined(ZENITH_BUILDING_LIBRARY)
-    #define ZENITH_API __declspec(dllexport)
-  #elif defined(ZENITH_STATIC)
-    #define ZENITH_API
-  #else
-    #define ZENITH_API __declspec(dllimport)
-  #endif
-  #define ZENITH_LOCAL
+#if defined(ZENITH_BUILDING_LIBRARY)
+#define ZENITH_API __declspec(dllexport)
+#elif defined(ZENITH_STATIC)
+#define ZENITH_API
 #else
-  #define ZENITH_API __attribute__((visibility("default")))
-  #define ZENITH_LOCAL __attribute__((visibility("hidden")))
+#define ZENITH_API __declspec(dllimport)
+#endif
+#define ZENITH_LOCAL
+#else
+#define ZENITH_API __attribute__((visibility("default")))
+#define ZENITH_LOCAL __attribute__((visibility("hidden")))
 #endif

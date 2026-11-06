@@ -42,9 +42,15 @@ std::string repr(const T& v) {
     os << v;
     return os.str();
 }
-inline std::string repr(const std::string& v) { return '"' + v + '"'; }
-inline std::string repr(bool v) { return v ? "true" : "false"; }
-inline std::string repr(const char* v) { return v ? '"' + std::string(v) + '"' : std::string("(null)"); }
+inline std::string repr(const std::string& v) {
+    return '"' + v + '"';
+}
+inline std::string repr(bool v) {
+    return v ? "true" : "false";
+}
+inline std::string repr(const char* v) {
+    return v ? '"' + std::string(v) + '"' : std::string("(null)");
+}
 
 inline int runAll() {
     int total = 0, failed = 0;
@@ -70,27 +76,25 @@ inline int runAll() {
     return failed == 0 ? 0 : 1;
 }
 
-} // namespace ztest
+}  // namespace ztest
 
 // ---------------------------------------------------------------------------
 // 宏
 // ---------------------------------------------------------------------------
-#define ZTEST(suite_, name_)                                                         \
-    static void ztest_fn_##suite_##_##name_();                                       \
-    static bool ztest_reg_##suite_##_##name_ =                                       \
-        ::ztest::add(#suite_, #name_, &ztest_fn_##suite_##_##name_);                 \
+#define ZTEST(suite_, name_)                                         \
+    static void ztest_fn_##suite_##_##name_();                       \
+    static bool ztest_reg_##suite_##_##name_ =                       \
+        ::ztest::add(#suite_, #name_, &ztest_fn_##suite_##_##name_); \
     static void ztest_fn_##suite_##_##name_()
 
-#define ZEXPECT_TRUE(expr_)                                                           \
-    do {                                                                              \
-        if (!(expr_))                                                                \
-            ::ztest::reportFail(__FILE__, __LINE__, "expected true: " #expr_);        \
+#define ZEXPECT_TRUE(expr_)                                                              \
+    do {                                                                                 \
+        if (!(expr_)) ::ztest::reportFail(__FILE__, __LINE__, "expected true: " #expr_); \
     } while (0)
 
-#define ZEXPECT_FALSE(expr_)                                                          \
-    do {                                                                              \
-        if (expr_)                                                                    \
-            ::ztest::reportFail(__FILE__, __LINE__, "expected false: " #expr_);       \
+#define ZEXPECT_FALSE(expr_)                                                           \
+    do {                                                                               \
+        if (expr_) ::ztest::reportFail(__FILE__, __LINE__, "expected false: " #expr_); \
     } while (0)
 
 // 断言宏用**值语义**绑定实参（auto 而非 auto&&）。
@@ -98,39 +102,39 @@ inline int runAll() {
 // auto&& 会绑到临时对象内部的成员上，绑定语句结束后临时对象即销毁，
 // 比较时读的是已释放内存（ASan 报 heap-use-after-free；macOS 上直接段错误）。
 // 值语义会先拷贝出结果，临时对象可以安全销毁。
-#define ZEXPECT_EQ(a_, b_)                                                            \
-    do {                                                                              \
-        const auto za_ = (a_);                                                        \
-        const auto zb_ = (b_);                                                        \
-        if (!(za_ == zb_))                                                            \
-            ::ztest::reportFail(__FILE__, __LINE__,                                   \
-                                "expected " #a_ " == " #b_ "; got " +                 \
-                                    ::ztest::repr(za_) + " vs " +                     \
-                                    ::ztest::repr(zb_));                              \
+#define ZEXPECT_EQ(a_, b_)                                                                 \
+    do {                                                                                   \
+        const auto za_ = (a_);                                                             \
+        const auto zb_ = (b_);                                                             \
+        if (!(za_ == zb_))                                                                 \
+            ::ztest::reportFail(__FILE__, __LINE__,                                        \
+                                "expected " #a_ " == " #b_ "; got " + ::ztest::repr(za_) + \
+                                    " vs " + ::ztest::repr(zb_));                          \
     } while (0)
 
-#define ZEXPECT_NE(a_, b_)                                                            \
-    do {                                                                              \
-        const auto za_ = (a_);                                                        \
-        const auto zb_ = (b_);                                                        \
-        if (!(za_ != zb_))                                                            \
-            ::ztest::reportFail(__FILE__, __LINE__,                                   \
-                                "expected " #a_ " != " #b_ "; both " +                \
-                                    ::ztest::repr(za_));                              \
+#define ZEXPECT_NE(a_, b_)                                                                  \
+    do {                                                                                    \
+        const auto za_ = (a_);                                                              \
+        const auto zb_ = (b_);                                                              \
+        if (!(za_ != zb_))                                                                  \
+            ::ztest::reportFail(__FILE__, __LINE__,                                         \
+                                "expected " #a_ " != " #b_ "; both " + ::ztest::repr(za_)); \
     } while (0)
 
-#define ZEXPECT_THROW(expr_, exType_)                                                 \
-    do {                                                                              \
-        bool zcaught_ = false;                                                        \
-        try {                                                                         \
-            (void)(expr_);                                                            \
-        } catch (const exType_&) {                                                    \
-            zcaught_ = true;                                                          \
-        }                                                                             \
-        if (!zcaught_)                                                                \
-            ::ztest::reportFail(__FILE__, __LINE__,                                   \
-                                "expected exception " #exType_ " from " #expr_);      \
+#define ZEXPECT_THROW(expr_, exType_)                                            \
+    do {                                                                         \
+        bool zcaught_ = false;                                                   \
+        try {                                                                    \
+            (void)(expr_);                                                       \
+        } catch (const exType_&) {                                               \
+            zcaught_ = true;                                                     \
+        }                                                                        \
+        if (!zcaught_)                                                           \
+            ::ztest::reportFail(__FILE__, __LINE__,                              \
+                                "expected exception " #exType_ " from " #expr_); \
     } while (0)
 
-#define ZTEST_MAIN                                                                   \
-    int main() { return ::ztest::runAll(); }
+#define ZTEST_MAIN                \
+    int main() {                  \
+        return ::ztest::runAll(); \
+    }

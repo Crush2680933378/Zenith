@@ -53,9 +53,9 @@
 namespace zenith::ai {
 
 enum class ProviderApi : uint8_t {
-    OpenAiChat = 0,   // OpenAI Chat Completions（DeepSeek 等）
-    Anthropic,        // Anthropic Messages
-    Gemini,           // Google generateContent
+    OpenAiChat = 0,  // OpenAI Chat Completions（DeepSeek 等）
+    Anthropic,       // Anthropic Messages
+    Gemini,          // Google generateContent
 };
 
 ZENITH_API const char* providerApiName(ProviderApi api) noexcept;
@@ -64,15 +64,15 @@ ZENITH_API core::Result<ProviderApi> providerApiFrom(const std::string& s);
 struct ProviderConfig {
     std::string name;
     ProviderApi api = ProviderApi::OpenAiChat;
-    std::string baseURL;         // 含到版本段（openai: .../v1；anthropic: ...根；gemini: .../v1beta）
-    std::string apiKey;          // 支持 "$ENV:VAR" 引用
+    std::string baseURL;  // 含到版本段（openai: .../v1；anthropic: ...根；gemini: .../v1beta）
+    std::string apiKey;   // 支持 "$ENV:VAR" 引用
     std::vector<std::string> models;
     int timeoutMs = 120000;
-    bool insecure = false;       // 跳过证书校验（自签/测试网关）
-    std::string fallbackTo;      // 失败转移目标厂商名（M13 第二批）
+    bool insecure = false;   // 跳过证书校验（自签/测试网关）
+    std::string fallbackTo;  // 失败转移目标厂商名（M13 第二批）
     // ---- 熔断（M13 第二批；failThreshold=0 关闭）----
-    int cbFailThreshold = 3;     // 连续失败 N 次后熔断
-    int cbOpenMs = 30000;        // 熔断冷却（半开试探前）
+    int cbFailThreshold = 3;  // 连续失败 N 次后熔断
+    int cbOpenMs = 30000;     // 熔断冷却（半开试探前）
     // ---- 成本记账（美元 / 每百万 token；0 = 不计价）----
     double pricePromptPerM = 0.0;
     double priceCompletionPerM = 0.0;
@@ -80,8 +80,8 @@ struct ProviderConfig {
 
 struct RouterConfig {
     std::vector<ProviderConfig> providers;
-    std::map<std::string, std::string> routes; // 通配 "claude-*" → 厂商名
-    std::string defaultProvider;               // 空 = 无兜底（未知模型报错）
+    std::map<std::string, std::string> routes;  // 通配 "claude-*" → 厂商名
+    std::string defaultProvider;                // 空 = 无兜底（未知模型报错）
 
     /// 解析配置 JSON（失败容忍：单条 provider 非法跳过）
     static core::Result<RouterConfig> fromJson(const json::JsonValue& v);
@@ -92,7 +92,7 @@ struct RouterConfig {
 class ZENITH_API ProviderRouter final : public IInferenceService {
 public:
     explicit ProviderRouter(RouterConfig cfg);
-    ~ProviderRouter() override; // rt_（pimpl）在 .cpp 完成析构
+    ~ProviderRouter() override;  // rt_（pimpl）在 .cpp 完成析构
 
     // ---- IInferenceService ----
     std::vector<ModelInfo> models() override;
@@ -112,13 +112,13 @@ public:
 
     // ---- 可观测（M13 第二批：failover/熔断/成本）----
     struct ProviderStat {
-        uint64_t calls = 0;        // 实际打到该厂商的请求数
+        uint64_t calls = 0;  // 实际打到该厂商的请求数
         uint64_t failures = 0;
-        uint64_t fallbacks = 0;    // 因该厂商失败而转移走的次数
+        uint64_t fallbacks = 0;  // 因该厂商失败而转移走的次数
         uint64_t tokensIn = 0;
         uint64_t tokensOut = 0;
         double costUsd = 0.0;
-        const char* cbState = "closed"; // closed / open / half-open
+        const char* cbState = "closed";  // closed / open / half-open
     };
     /// 各厂商运行统计快照（含熔断状态）
     [[nodiscard]] std::map<std::string, ProviderStat> statsSnapshot() const;
@@ -135,8 +135,8 @@ private:
                           const TokenCallback& onToken, const TokenCallback& onReasoning);
 
     RouterConfig cfg_;
-    std::map<std::string, size_t> byName_; // 厂商名 → 下标
-    struct Rt;                             // 运行态（熔断/统计，pimpl 隐藏锁与时钟）
+    std::map<std::string, size_t> byName_;  // 厂商名 → 下标
+    struct Rt;                              // 运行态（熔断/统计，pimpl 隐藏锁与时钟）
     std::unique_ptr<Rt> rt_;
 };
 
@@ -145,11 +145,11 @@ private:
 /// 供 ProviderRouter 调用厂商端点（https 上游经前置反代或本机代理转 http）。
 struct ZENITH_API SimpleHttpCall {
     std::string method = "POST";
-    std::string url; // http:// 或 https://host[:port]/path[?query]
+    std::string url;  // http:// 或 https://host[:port]/path[?query]
     std::string body;
     std::vector<std::pair<std::string, std::string>> headers;
     int timeoutMs = 120000;
-    bool insecureTls = false;                    // 跳过证书校验
+    bool insecureTls = false;  // 跳过证书校验
     /// 流式回调：逐片喂正文（chunked 已解码；TLS 同样生效）；
     /// 返回 false 中止。为空 → 整包读入 body。
     std::function<bool(std::string_view)> onData;
@@ -157,10 +157,10 @@ struct ZENITH_API SimpleHttpCall {
 struct ZENITH_API SimpleHttpResult {
     bool ok = false;
     int status = 0;
-    std::string body;    // 未用 onData 时的完整正文
+    std::string body;  // 未用 onData 时的完整正文
     std::string error;
-    std::string peer;    // "host:port"（诊断）
+    std::string peer;  // "host:port"（诊断）
 };
 ZENITH_API SimpleHttpResult simpleHttpRequest(const SimpleHttpCall& call);
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

@@ -12,19 +12,19 @@
 #include <vector>
 
 #if defined(_WIN32)
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
-  using socket_t = SOCKET;
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+using socket_t = SOCKET;
 #else
-  #include <arpa/inet.h>
-  #include <netinet/in.h>
-  #include <sys/select.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
-  using socket_t = int;
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using socket_t = int;
 #endif
 
 #include "ztest.hpp"
@@ -51,23 +51,23 @@ ZTEST(M7Buffer, ShrinkKeepsUnreadData) {
     b.consume(8100);
     ZEXPECT_EQ(b.readableBytes(), size_t{92});
 
-    b.shrinkIfBloated(1024); // 8192 > 1024 且 92 < 256 → 触发缩容
+    b.shrinkIfBloated(1024);  // 8192 > 1024 且 92 < 256 → 触发缩容
 
     ZEXPECT_EQ(b.readableBytes(), size_t{92});
     const std::string rest = b.readAllAsString();
     ZEXPECT_EQ(rest, payload.substr(8100));
     ZEXPECT_TRUE(rest.back() == 'Z');
-    ZEXPECT_TRUE(b.capacity() < 8192 / 2); // 容量确实降下来了
+    ZEXPECT_TRUE(b.capacity() < 8192 / 2);  // 容量确实降下来了
 }
 
 ZTEST(M7Buffer, ShrinkReleasesBigCapacity) {
     core::Buffer b;
     b.appendString(std::string(4 * 1024 * 1024, 'x'));
-    b.consume(4 * 1024 * 1024 - 16); // 只剩 16 字节
+    b.consume(4 * 1024 * 1024 - 16);  // 只剩 16 字节
 
     b.shrinkIfBloated(256 * 1024);
     ZEXPECT_EQ(b.readableBytes(), size_t{16});
-    ZEXPECT_EQ(b.capacity(), core::Buffer::kInitialCapacity); // 归还到大缓冲以下
+    ZEXPECT_EQ(b.capacity(), core::Buffer::kInitialCapacity);  // 归还到大缓冲以下
 }
 
 ZTEST(M7Buffer, ShrinkNoopWhenIdleOrSmall) {
@@ -75,7 +75,7 @@ ZTEST(M7Buffer, ShrinkNoopWhenIdleOrSmall) {
     small.appendString("hello");
     const size_t cap = small.capacity();
     small.shrinkIfBloated(256 * 1024);
-    ZEXPECT_EQ(small.capacity(), cap); // 未超阈值：不动
+    ZEXPECT_EQ(small.capacity(), cap);  // 未超阈值：不动
     ZEXPECT_EQ(small.readAllAsString(), std::string("hello"));
 
     // 容量大但仍有大量堆积：不该缩（否则刚写满的缓冲马上又要扩容）
@@ -169,14 +169,17 @@ bool parseResponses(const std::string& raw, size_t want,
         const std::string head = raw.substr(pos, headEnd - pos);
         // 小写拷贝里找 content-length
         std::string lower = head;
-        for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (char& c : lower)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         size_t len = 0;
         const size_t cl = lower.find("content-length:");
         if (cl != std::string::npos) {
             size_t b = cl + 15;
-            while (b < lower.size() && (lower[b] == ' ' || lower[b] == '\t')) ++b; // 跳过冒号后的空格
+            while (b < lower.size() && (lower[b] == ' ' || lower[b] == '\t'))
+                ++b;  // 跳过冒号后的空格
             size_t e = b;
-            while (e < lower.size() && lower[e] >= '0' && lower[e] <= '9') ++e;
+            while (e < lower.size() && lower[e] >= '0' && lower[e] <= '9')
+                ++e;
             if (e > b) len = static_cast<size_t>(std::stoull(lower.substr(b, e - b)));
         }
         const size_t bodyStart = headEnd + 4;
@@ -241,7 +244,7 @@ struct M7Fixture {
     }
 };
 
-} // namespace
+}  // namespace
 
 /* ============================ M7.3 零拷贝 ============================ */
 
@@ -251,7 +254,7 @@ ZTEST(M7ZeroCopy, BigFileIntegrity) {
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 200);
     ZEXPECT_EQ(r.value().body.size(), f.bigBody.size());
-    ZEXPECT_TRUE(r.value().body == f.bigBody); // 逐字节一致（含尾部零散字节）
+    ZEXPECT_TRUE(r.value().body == f.bigBody);  // 逐字节一致（含尾部零散字节）
     ZEXPECT_EQ(r.value().headers.get("Content-Type"), std::string("image/png"));
     ZEXPECT_EQ(r.value().headers.get("Content-Length"), std::to_string(f.bigBody.size()));
 }
@@ -287,7 +290,7 @@ ZTEST(M7ZeroCopy, TextWithGzipAcceptFallsBackToBuffer) {
     M7Fixture f;
     http::ClientRequest rq;
     rq.url = f.url("/assets/big.txt");
-    rq.headers.set("Accept-Encoding", "gzip"); // 可压缩类型 → 不走零拷贝，避免跳过压缩
+    rq.headers.set("Accept-Encoding", "gzip");  // 可压缩类型 → 不走零拷贝，避免跳过压缩
     auto r = http::HttpClient::fetchBlocking(rq);
     ZEXPECT_TRUE(static_cast<bool>(r));
     ZEXPECT_EQ(r.value().status, 200);
@@ -311,18 +314,19 @@ ZTEST(M7ZeroCopy, PipelinedResponseQueuesBehindFileBody) {
 
     const std::string raw = c.readAtLeast(f.bigBody.size() + 512, 15000);
     std::vector<std::pair<std::string, std::string>> rs;
-    ZEXPECT_TRUE(parseResponses(raw, 2, rs)); // 两条都完整，说明没有交错
+    ZEXPECT_TRUE(parseResponses(raw, 2, rs));  // 两条都完整，说明没有交错
     if (rs.size() == 2) {
         ZEXPECT_EQ(rs[0].first.rfind("HTTP/1.1 200", 0), size_t{0});
         ZEXPECT_TRUE(rs[0].second.size() == f.bigBody.size());
-        ZEXPECT_TRUE(rs[0].second == f.bigBody); // 正文一个字节都不能被污染
+        ZEXPECT_TRUE(rs[0].second == f.bigBody);  // 正文一个字节都不能被污染
         ZEXPECT_EQ(rs[1].second, std::string("second"));
     }
 }
 
 /* ============================ M7.2a Context 池化隔离 ============================ */
 
-ZTEST(M7ContextPool, KeepAliveReuseDoesNotLeakResponseState) {    M7Fixture f;
+ZTEST(M7ContextPool, KeepAliveReuseDoesNotLeakResponseState) {
+    M7Fixture f;
     RawConn c;
     ZEXPECT_TRUE(c.open(f.server.port()));
     // 同一个连接上连发两条请求（HTTP/1.1 keep-alive）：第二条不得继承

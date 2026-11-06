@@ -41,8 +41,7 @@ ZENITH_API std::string urlDecode(const std::string& s, bool plusAsSpace = false)
 ZENITH_API std::string urlEncode(const std::string& s);
 
 /// 解析 "a=1&b=2" 形式（值已 urlDecode）。
-ZENITH_API std::vector<std::pair<std::string, std::string>>
-parseQuery(const std::string& query);
+ZENITH_API std::vector<std::pair<std::string, std::string>> parseQuery(const std::string& query);
 
 /// 大小写不敏感相等（header 名比较用）。
 ZENITH_API bool iequals(const std::string& a, const std::string& b) noexcept;
@@ -53,7 +52,7 @@ struct Url {
     std::string scheme = "http";
     std::string host;
     uint16_t port = 80;
-    std::string pathAndQuery = "/"; // 以 / 开头，可含 ?query
+    std::string pathAndQuery = "/";  // 以 / 开头，可含 ?query
     bool tls = false;
 };
 ZENITH_API core::Result<Url> parseUrl(const std::string& url);
@@ -62,4 +61,4 @@ ZENITH_API core::Result<Url> parseUrl(const std::string& url);
 /// "hex(长度)\r\n" + data + "\r\n"；data 为空返回空串（终止块另行写出 0\r\n\r\n）。
 ZENITH_API std::string chunkEncode(std::string_view data);
 
-} // namespace zenith::http
+}  // namespace zenith::http

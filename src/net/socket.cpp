@@ -5,30 +5,30 @@
 #include "zenith/core/platform.hpp"
 
 #if !defined(ZENITH_PLATFORM_WINDOWS)
-  #include <csignal> // SIGPIPE 忽略（见下方 SigpipeGuard）
+#include <csignal>  // SIGPIPE 忽略（见下方 SigpipeGuard）
 #endif
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
-  #ifndef _WIN32_WINNT
-    #define _WIN32_WINNT 0x0601
-  #endif
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <winsock2.h>
-  #include <ws2tcpip.h>
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #else
-  #include <arpa/inet.h>
-  #include <errno.h>
-  #include <fcntl.h>
-  #include <netdb.h>
-  #include <netinet/in.h>
-  #include <netinet/tcp.h>
-  #include <sys/socket.h>
-  #include <unistd.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 namespace zenith::net {
@@ -44,13 +44,17 @@ struct WsaGuard {
     }
 };
 const WsaGuard g_wsaGuard;
-} // namespace
+}  // namespace
 
 using NativeSocket = SOCKET;
 constexpr NativeSocket kInvalidNative = INVALID_SOCKET;
 
-inline int sockErr() noexcept { return WSAGetLastError(); }
-constexpr bool wouldBlock(int e) noexcept { return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS; }
+inline int sockErr() noexcept {
+    return WSAGetLastError();
+}
+constexpr bool wouldBlock(int e) noexcept {
+    return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS;
+}
 inline void closeNative(fd_t fd) noexcept {
     if (fd != kInvalidFd) closesocket(static_cast<NativeSocket>(fd));
 }
@@ -67,10 +71,14 @@ struct SigpipeGuard {
     SigpipeGuard() { std::signal(SIGPIPE, SIG_IGN); }
 };
 const SigpipeGuard g_sigpipeGuard;
-} // namespace
+}  // namespace
 
-inline int sockErr() noexcept { return errno; }
-constexpr bool wouldBlock(int e) noexcept { return e == EAGAIN || e == EWOULDBLOCK || e == EINPROGRESS; }
+inline int sockErr() noexcept {
+    return errno;
+}
+constexpr bool wouldBlock(int e) noexcept {
+    return e == EAGAIN || e == EWOULDBLOCK || e == EINPROGRESS;
+}
 inline void closeNative(fd_t fd) noexcept {
     if (fd != kInvalidFd) ::close(static_cast<int>(fd));
 }
@@ -81,10 +89,9 @@ std::string Socket::lastSystemError() {
     const int e = sockErr();
 #if defined(ZENITH_PLATFORM_WINDOWS)
     char buf[256];
-    const DWORD len = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                     nullptr, static_cast<DWORD>(e),
-                                     MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                     buf, sizeof(buf), nullptr);
+    const DWORD len = FormatMessageA(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, static_cast<DWORD>(e),
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf, sizeof(buf), nullptr);
     return "wsa error " + std::to_string(e) + ": " +
            (len > 0 ? std::string(buf, len) : std::string("unknown"));
 #else
@@ -92,7 +99,9 @@ std::string Socket::lastSystemError() {
 #endif
 }
 
-Socket::Socket(Socket&& other) noexcept : fd_(other.fd_) { other.fd_ = kInvalidFd; }
+Socket::Socket(Socket&& other) noexcept : fd_(other.fd_) {
+    other.fd_ = kInvalidFd;
+}
 
 Socket& Socket::operator=(Socket&& other) noexcept {
     if (this != &other) {
@@ -102,7 +111,9 @@ Socket& Socket::operator=(Socket&& other) noexcept {
     return *this;
 }
 
-Socket::~Socket() { close(); }
+Socket::~Socket() {
+    close();
+}
 
 core::Result<Socket> Socket::createTcp() {
 #if defined(ZENITH_PLATFORM_WINDOWS)
@@ -111,7 +122,7 @@ core::Result<Socket> Socket::createTcp() {
         return core::Result<Socket>::Err(core::Error(10, "socket() failed: " + lastSystemError()));
     }
     Socket sock(static_cast<fd_t>(s));
-    sock.setNonBlocking(true); // Reactor 一律非阻塞
+    sock.setNonBlocking(true);  // Reactor 一律非阻塞
     return core::Result<Socket>::Ok(std::move(sock));
 #else
     const NativeSocket s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -141,12 +152,11 @@ core::Result<uint32_t> resolveHostIpv4(const std::string& host) {
     addrinfo* res = nullptr;
     const int rc = ::getaddrinfo(host.c_str(), nullptr, &hints, &res);
     if (rc != 0 || res == nullptr) {
-        return core::Result<uint32_t>::Err(
-            core::Error(11, "resolve failed for '" + host + "': " +
+        return core::Result<uint32_t>::Err(core::Error(11, "resolve failed for '" + host + "': " +
 #if defined(ZENITH_PLATFORM_WINDOWS)
-                                std::to_string(rc)));
+                                                               std::to_string(rc)));
 #else
-                                gai_strerror(rc)));
+                                                               gai_strerror(rc)));
 #endif
     }
     uint32_t ip = 0;
@@ -158,8 +168,7 @@ core::Result<uint32_t> resolveHostIpv4(const std::string& host) {
     }
     ::freeaddrinfo(res);
     if (ip == 0) {
-        return core::Result<uint32_t>::Err(
-            core::Error(11, "no IPv4 address for '" + host + "'"));
+        return core::Result<uint32_t>::Err(core::Error(11, "no IPv4 address for '" + host + "'"));
     }
     return core::Result<uint32_t>::Ok(ip);
 }
@@ -173,7 +182,8 @@ core::Result<void> Socket::bind(const std::string& host, uint16_t port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = ip.value();
-    if (::bind(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+    if (::bind(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) !=
+        0) {
         return core::Result<void>::Err(core::Error(12, "bind failed: " + lastSystemError()));
     }
     return core::Result<void>::Ok();
@@ -224,11 +234,11 @@ core::Result<bool> Socket::connect(const std::string& host, uint16_t port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = ip.value();
-    const int rc = ::connect(static_cast<NativeSocket>(fd_),
-                             reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-    if (rc == 0) return core::Result<bool>::Ok(true); // 立即成功（如 loopback）
+    const int rc =
+        ::connect(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    if (rc == 0) return core::Result<bool>::Ok(true);  // 立即成功（如 loopback）
     const int e = sockErr();
-    if (wouldBlock(e)) return core::Result<bool>::Ok(false); // 进行中
+    if (wouldBlock(e)) return core::Result<bool>::Ok(false);  // 进行中
     return core::Result<bool>::Err(core::Error(15, "connect failed: " + lastSystemError()));
 }
 
@@ -236,8 +246,10 @@ core::Result<uint16_t> Socket::localPort() const {
     if (!valid()) return core::Result<uint16_t>::Err(core::Error(16, "localPort: invalid socket"));
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
-    if (::getsockname(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-        return core::Result<uint16_t>::Err(core::Error(16, "getsockname failed: " + lastSystemError()));
+    if (::getsockname(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), &len) !=
+        0) {
+        return core::Result<uint16_t>::Err(
+            core::Error(16, "getsockname failed: " + lastSystemError()));
     }
     return core::Result<uint16_t>::Ok(ntohs(addr.sin_port));
 }
@@ -247,7 +259,8 @@ Endpoint Socket::peerEndpoint() const {
     if (!valid()) return ep;
     sockaddr_in addr{};
     socklen_t len = sizeof(addr);
-    if (::getpeername(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), &len) == 0) {
+    if (::getpeername(static_cast<NativeSocket>(fd_), reinterpret_cast<sockaddr*>(&addr), &len) ==
+        0) {
         char buf[INET_ADDRSTRLEN] = {0};
         ::inet_ntop(AF_INET, &addr.sin_addr, buf, sizeof(buf));
         ep.host = buf;
@@ -291,7 +304,7 @@ void Socket::setKeepAlive(bool on) {
 int Socket::readSome(char* buf, size_t cap) {
     const int n = ::recv(static_cast<NativeSocket>(fd_), buf, static_cast<int>(cap), 0);
     if (n > 0) return n;
-    if (n == 0) return 0; // 对端有序关闭
+    if (n == 0) return 0;  // 对端有序关闭
     const int e = sockErr();
     if (wouldBlock(e)) return -1;
     return -2;
@@ -312,4 +325,4 @@ void Socket::close() {
     }
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

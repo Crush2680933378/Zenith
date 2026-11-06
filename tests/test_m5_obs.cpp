@@ -30,12 +30,13 @@ ZTEST(Metrics, CounterGaugeHistogram) {
     metrics::Histogram h;
     ZEXPECT_EQ(h.count(), int64_t{0});
     ZEXPECT_EQ(h.percentile(0.99), 0.0);
-    for (int i = 0; i < 100; ++i) h.observe(100 + i); // 100~199μs → 0.0001 桶
+    for (int i = 0; i < 100; ++i)
+        h.observe(100 + i);  // 100~199μs → 0.0001 桶
     ZEXPECT_EQ(h.count(), int64_t{100});
-    ZEXPECT_EQ(h.sumMicros(), int64_t{100 * 100 + 99 * 100 / 2}); // Σ(100+i)
-    ZEXPECT_TRUE(h.percentile(0.5) <= 0.0006); // P50 落 0.0001~0.0005 桶界（粗粒度语义）
+    ZEXPECT_EQ(h.sumMicros(), int64_t{100 * 100 + 99 * 100 / 2});  // Σ(100+i)
+    ZEXPECT_TRUE(h.percentile(0.5) <= 0.0006);  // P50 落 0.0001~0.0005 桶界（粗粒度语义）
     auto lines = h.bucketsForExport("test_lat");
-    ZEXPECT_EQ(lines.size(), size_t{16}); // 14 桶 + sum + count
+    ZEXPECT_EQ(lines.size(), size_t{16});  // 14 桶 + sum + count
     ZEXPECT_TRUE(lines[0].find("test_lat_bucket{le=\"0.000001\"}") != std::string::npos);
     ZEXPECT_TRUE(lines.back().find("test_lat_count 100") != std::string::npos);
 }
@@ -94,15 +95,14 @@ ZTEST(ObsE2E, MetricsRequestIdStatus) {
     ZEXPECT_TRUE(reg.httpRequests().value() - before >= 4);
     ZEXPECT_TRUE(reg.httpErrors().value() >= 1);
     ZEXPECT_TRUE(reg.httpLatency().count() >= 4);
-    ZEXPECT_EQ(reg.httpInflight().value(), int64_t{0}); // 全部完成
+    ZEXPECT_EQ(reg.httpInflight().value(), int64_t{0});  // 全部完成
 
     // /metrics 导出合法
     auto m = http::HttpClient::fetchBlockingUrl(
         "http://127.0.0.1:" + std::to_string(server.port()) + "/metrics");
     ZEXPECT_EQ(m.value().status, 200);
     ZEXPECT_TRUE(m.value().body.find("zenith_http_requests_total") != std::string::npos);
-    ZEXPECT_TRUE(m.value().body.find("zenith_http_request_latency_us_bucket") !=
-                 std::string::npos);
+    ZEXPECT_TRUE(m.value().body.find("zenith_http_request_latency_us_bucket") != std::string::npos);
     ZEXPECT_TRUE(m.value().body.find("# TYPE zenith_http_requests_total counter") !=
                  std::string::npos);
 

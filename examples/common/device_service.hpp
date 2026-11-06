@@ -21,8 +21,8 @@ namespace zenith::edge {
 
 struct DeviceInfo {
     std::string id;
-    std::string transport;   // "tcp" / "serial"
-    std::string address;     // ip:port 或 COM 名
+    std::string transport;  // "tcp" / "serial"
+    std::string address;    // ip:port 或 COM 名
     bool online = false;
     int64_t lastSeenMs = 0;  // 最后心跳（宿主单调时钟）
 };
@@ -46,11 +46,11 @@ public:
                          const std::string& argsJson, RpcCallback cb, int timeoutMs = 4000) = 0;
 
     /// 事件订阅（hello/hb/event）
-    using EventHandler = std::function<void(const std::string& deviceId,
-                                            const std::string& eventJson)>;
+    using EventHandler =
+        std::function<void(const std::string& deviceId, const std::string& eventJson)>;
     virtual void setEventHandler(EventHandler h) = 0;
 
     virtual void stop() = 0;
 };
 
-} // namespace zenith::edge
+}  // namespace zenith::edge

@@ -22,7 +22,7 @@ std::string serializeRequest(const ClientRequest& req) {
     out += "\r\n";
     for (const auto& [k, v] : req.headers.entries()) {
         if (iequals(k, "Host") || iequals(k, "Content-Length") || iequals(k, "Connection")) {
-            continue; // 由本函数统一控制
+            continue;  // 由本函数统一控制
         }
         out += k;
         out += ": ";
@@ -75,10 +75,9 @@ std::string poolKeyOf(const ClientRequest& req) {
     return (req.tls ? "T:" : "") + req.host + ":" + std::to_string(req.port);
 }
 
-} // namespace
+}  // namespace
 
-void HttpClient::finishState(const std::shared_ptr<AsyncState>& st,
-                              core::Result<HttpResponse> r) {
+void HttpClient::finishState(const std::shared_ptr<AsyncState>& st, core::Result<HttpResponse> r) {
     if (st->done) return;
     st->done = true;
     if (st->timerId != 0 && st->loop != nullptr) st->loop->cancel(st->timerId);
@@ -86,8 +85,8 @@ void HttpClient::finishState(const std::shared_ptr<AsyncState>& st,
     // keep-alive 成功响应 → 解除回调、归还连接池；否则关闭。
     // 注意：正在消息回调内执行—— setMessageCallback 会销毁持有 st 的当前闭包，
     // 同步继续访问即 UAF（M3 5d 规则）→ 解除动作投递到回调返回之后。
-    const bool reuse = r && r.value().keepAlive() && st->reusable && st->conn &&
-                       st->conn->connected();
+    const bool reuse =
+        r && r.value().keepAlive() && st->reusable && st->conn && st->conn->connected();
     if (st->conn) {
         if (reuse) {
             st->loop->queueInLoop([this, st] {
@@ -138,7 +137,8 @@ HttpClient::HttpClient(net::EventLoop* loop) : loop_(loop) {}
 void HttpClient::clearPool() {
     std::lock_guard<std::mutex> lk(poolMtx_);
     for (auto& [k, vec] : pool_) {
-        for (auto& c : vec) c->forceClose();
+        for (auto& c : vec)
+            c->forceClose();
     }
     pool_.clear();
 }
@@ -146,25 +146,23 @@ void HttpClient::clearPool() {
 size_t HttpClient::pooledConnections() const {
     std::lock_guard<std::mutex> lk(poolMtx_);
     size_t n = 0;
-    for (const auto& [k, vec] : pool_) n += vec.size();
+    for (const auto& [k, vec] : pool_)
+        n += vec.size();
     return n;
 }
 
 void HttpClient::issueOn(const net::TcpConnection::Ptr& conn, const ClientRequest& req,
-                          const std::shared_ptr<AsyncState>& st) {
+                         const std::shared_ptr<AsyncState>& st) {
     st->conn = conn;
     st->reusable = req.keepAlive;
-    st->timerId = st->loop->scheduleAfter(std::chrono::milliseconds(req.timeoutMs),
-                                          [this, st] {
-                                              finishState(st, core::Result<HttpResponse>::Err(
-                                                                   core::Error(30,
-                                                                               "http response timeout")));
-                                          });
+    st->timerId = st->loop->scheduleAfter(std::chrono::milliseconds(req.timeoutMs), [this, st] {
+        finishState(st, core::Result<HttpResponse>::Err(core::Error(30, "http response timeout")));
+    });
     conn->setMessageCallback([this, st](const net::TcpConnection::Ptr&, core::Buffer& buf) {
         const ParseOutcome out = st->parser.feed(buf);
         if (out.failed()) {
-            finishState(st, core::Result<HttpResponse>::Err(
-                                 core::Error(31, "bad response: " + out.error)));
+            finishState(
+                st, core::Result<HttpResponse>::Err(core::Error(31, "bad response: " + out.error)));
             return;
         }
         if (out.complete()) {
@@ -181,7 +179,7 @@ void HttpClient::issueOn(const net::TcpConnection::Ptr& conn, const ClientReques
             finishState(st, core::Result<HttpResponse>::Ok(st->parser.response()));
         } else {
             finishState(st, core::Result<HttpResponse>::Err(
-                                 core::Error(32, "connection closed before response")));
+                                core::Error(32, "connection closed before response")));
         }
     });
     conn->send(serializeRequest(req));
@@ -244,8 +242,8 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
                 auto ctx = tlsContextFor(req);
                 SSL* ssl = ctx != nullptr ? ctx->newClientSession(req.host) : nullptr;
                 if (ssl == nullptr) {
-                    finishState(st, core::Result<HttpResponse>::Err(
-                                         core::Error(94, "tls setup failed")));
+                    finishState(
+                        st, core::Result<HttpResponse>::Err(core::Error(94, "tls setup failed")));
                     conn->forceClose();
                     return;
                 }
@@ -254,14 +252,14 @@ void HttpClient::request(const ClientRequest& reqIn, ResponseCallback cb) {
             issueOn(conn, req, st);
         },
         [this, st](const std::string& reason) {
-            finishState(st,
-                        core::Result<HttpResponse>::Err(core::Error(33, "connect failed: " + reason)));
+            finishState(
+                st, core::Result<HttpResponse>::Err(core::Error(33, "connect failed: " + reason)));
         });
     // client：成功/失败回调由 TcpClient 内部 shared_from_this 保活至判定完成
 }
 
 core::Result<HttpResponse> HttpClient::fetchBlocking(const ClientRequest& req) {
-    net::EventLoop loop; // 在调用线程上运行的临时 loop
+    net::EventLoop loop;  // 在调用线程上运行的临时 loop
 
     core::Result<HttpResponse> result =
         core::Result<HttpResponse>::Err(core::Error(40, "not started"));
@@ -285,8 +283,8 @@ core::Result<HttpResponse> HttpClient::fetchBlocking(const ClientRequest& req) {
     return result;
 }
 
-core::Result<HttpResponse> HttpClient::fetchBlockingUrl(const std::string& url,
-                                                          HttpMethod m, std::string body) {
+core::Result<HttpResponse> HttpClient::fetchBlockingUrl(const std::string& url, HttpMethod m,
+                                                        std::string body) {
     ClientRequest rq;
     rq.url = url;
     rq.method = m;
@@ -295,4 +293,4 @@ core::Result<HttpResponse> HttpClient::fetchBlockingUrl(const std::string& url,
     return fetchBlocking(rq);
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

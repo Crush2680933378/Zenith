@@ -37,4 +37,4 @@ std::unique_ptr<Backend> makeMockBackend(std::string modelId, int embeddingDim);
 std::unique_ptr<Backend> makeOpenAiUpstreamBackend(std::string baseUrl, std::string apiKey,
                                                    std::string model, int timeoutMs);
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

@@ -12,9 +12,9 @@
 using namespace zenith;
 
 namespace {
-constexpr int64_t kNow = 1790000000; // 固定时间基准，避免时钟敏感
+constexpr int64_t kNow = 1790000000;  // 固定时间基准，避免时钟敏感
 const std::string kPayload = R"({"sub":"u-1","scope":"admin"})";
-} // namespace
+}  // namespace
 
 ZTEST(JwtAsym, Rsa256RoundTrip) {
     auto kp = http::jwt::asym::generateRsa(2048);
@@ -103,7 +103,7 @@ ZTEST(JwtAsym, WrongPublicKeyRejected) {
     if (token.isErr()) return;
 
     auto r = http::jwt::asym::verify(b.value().publicPem, token.value(), kNow);
-    ZEXPECT_FALSE(r.ok); // 另一把公钥验不过
+    ZEXPECT_FALSE(r.ok);  // 另一把公钥验不过
 }
 
 ZTEST_MAIN

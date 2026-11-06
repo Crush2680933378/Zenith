@@ -4,8 +4,8 @@
 #include <thread>
 
 #include <openssl/evp.h>
-#include <openssl/x509v3.h>
 #include <openssl/pem.h>
+#include <openssl/x509v3.h>
 
 #include "ztest.hpp"
 
@@ -45,8 +45,7 @@ struct TmpCert {
         // 版本直接暴露该签名），故显式构造名字对象——1.1/3.x/LibreSSL 通吃。
         X509_NAME* n = X509_NAME_new();
         X509_NAME_add_entry_by_txt(n, "CN", MBSTRING_ASC,
-                                   reinterpret_cast<const unsigned char*>("127.0.0.1"), -1,
-                                   -1, 0);
+                                   reinterpret_cast<const unsigned char*>("127.0.0.1"), -1, -1, 0);
         X509_set_subject_name(x, n);
         X509_set_issuer_name(x, n);
         X509_NAME_free(n);
@@ -73,7 +72,7 @@ struct TmpCert {
         std::filesystem::remove_all(dir, ec);
     }
 };
-} // namespace
+}  // namespace
 
 #ifdef ZENITH_TLS_OPENSSL
 ZTEST(RouterTls, HttpsDirectToSelfSignedServer) {
@@ -102,10 +101,12 @@ ZTEST(RouterTls, HttpsDirectToSelfSignedServer) {
     std::this_thread::sleep_for(200ms);
 
     // https 路由（insecure 跳过自签校验）
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"local","api":"openai-chat","baseURL":"https://127.0.0.1:)")
-        + std::to_string(srv.port())
-        + R"(/v1","apiKey":"k","insecure":true,"models":["m"]}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(
+                R"({"providers":[{"name":"local","api":"openai-chat","baseURL":"https://127.0.0.1:)") +
+            std::to_string(srv.port()) + R"(/v1","apiKey":"k","insecure":true,"models":["m"]}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
     ai::ChatRequest req;
     req.model = "m";
@@ -130,15 +131,18 @@ ZTEST(RouterTls, VerifiedCertRejectedWhenNotInsecure) {
     io.start();
     auto ctx = tls::OpenSslContext::createServer(tls::TlsServerConfig{tc.cert, tc.key, ""});
     http::HttpServer srv(&loop, &io);
-    srv.router().post("/v1/chat/completions", [](http::Context& c) { c.json(200, json::JsonValue()); });
+    srv.router().post("/v1/chat/completions",
+                      [](http::Context& c) { c.json(200, json::JsonValue()); });
     (void)srv.listenTls(ctx.value(), "127.0.0.1", 0);
     std::thread t([&] { loop.loop(); });
     std::this_thread::sleep_for(200ms);
 
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"local","api":"openai-chat","baseURL":"https://127.0.0.1:)")
-        + std::to_string(srv.port())
-        + R"(/v1","apiKey":"k","models":["m"]}]})").value(); // 无 insecure → 校验自签必失败
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(
+                R"({"providers":[{"name":"local","api":"openai-chat","baseURL":"https://127.0.0.1:)") +
+            std::to_string(srv.port()) + R"(/v1","apiKey":"k","models":["m"]}]})")
+            .value();  // 无 insecure → 校验自签必失败
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
     ai::ChatRequest req;
     req.model = "m";
@@ -147,7 +151,7 @@ ZTEST(RouterTls, VerifiedCertRejectedWhenNotInsecure) {
     u.content = "hi";
     req.messages.push_back(u);
     auto r = router.chat(req);
-    ZEXPECT_FALSE(r.ok); // 证书不受信 → 握手失败 → 明确报错
+    ZEXPECT_FALSE(r.ok);  // 证书不受信 → 握手失败 → 明确报错
     ZEXPECT_TRUE(r.error.find("tls") != std::string::npos);
 
     loop.stop();
@@ -155,7 +159,9 @@ ZTEST(RouterTls, VerifiedCertRejectedWhenNotInsecure) {
     io.stop();
 }
 #else
-ZTEST(RouterTls, SkippedNoOpenSsl) { ZEXPECT_TRUE(true); }
+ZTEST(RouterTls, SkippedNoOpenSsl) {
+    ZEXPECT_TRUE(true);
+}
 #endif
 
 /* ---------------- M13.2 向量持久化 ---------------- */
@@ -202,15 +208,15 @@ struct SseMock {
     net::EventLoopThreadPool io{1};
     http::HttpServer srv{&loop, &io};
     std::thread t;
-    std::vector<std::string> seenBodies; // 收到的请求体（验证 stream:true）
+    std::vector<std::string> seenBodies;  // 收到的请求体（验证 stream:true）
 
-    void start(const std::string& path,
-               std::vector<std::pair<std::string, std::string>> events) {
+    void start(const std::string& path, std::vector<std::pair<std::string, std::string>> events) {
         io.start();
         srv.router().post(path, [this, events](http::Context& c) {
             seenBodies.push_back(c.request().body);
             auto s = c.sse();
-            for (const auto& [ev, data] : events) s->send(data, ev);
+            for (const auto& [ev, data] : events)
+                s->send(data, ev);
             s->close();
         });
         (void)srv.listen("127.0.0.1", 0);
@@ -223,7 +229,7 @@ struct SseMock {
         io.stop();
     }
 };
-} // namespace
+}  // namespace
 
 ZTEST(SseTranslate, OpenAiDialect) {
     SseMock m;
@@ -235,10 +241,12 @@ ZTEST(SseTranslate, OpenAiDialect) {
              {"", R"({"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2}})"},
              {"", "[DONE]"}});
 
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"o","api":"openai-chat","baseURL":"http://127.0.0.1:)")
-        + std::to_string(m.srv.port())
-        + R"(/v1","apiKey":"k","models":["m"]}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(
+                R"({"providers":[{"name":"o","api":"openai-chat","baseURL":"http://127.0.0.1:)") +
+            std::to_string(m.srv.port()) + R"(/v1","apiKey":"k","models":["m"]}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
 
     std::vector<std::string> tokens;
@@ -255,7 +263,7 @@ ZTEST(SseTranslate, OpenAiDialect) {
                          });
     ZEXPECT_TRUE(r.ok);
     ZEXPECT_EQ(r.content, std::string("Hello!"));
-    ZEXPECT_EQ(tokens.size(), size_t{3}); // 逐 token：Hel / lo / !
+    ZEXPECT_EQ(tokens.size(), size_t{3});  // 逐 token：Hel / lo / !
     ZEXPECT_EQ(tokens[0], std::string("Hel"));
     ZEXPECT_EQ(r.finishReason, std::string("stop"));
     ZEXPECT_EQ(r.usage.promptTokens, 3);
@@ -266,17 +274,23 @@ ZTEST(SseTranslate, OpenAiDialect) {
 
 ZTEST(SseTranslate, AnthropicDialect) {
     SseMock m;
-    m.start("/v1/messages",
-            {{"message_start", R"({"type":"message_start","message":{"usage":{"input_tokens":7}}})"},
-             {"content_block_delta", R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Wor"}})"},
-             {"content_block_delta", R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ld"}})"},
-             {"message_delta", R"({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}})"},
-             {"message_stop", R"({"type":"message_stop"})"}});
+    m.start(
+        "/v1/messages",
+        {{"message_start", R"({"type":"message_start","message":{"usage":{"input_tokens":7}}})"},
+         {"content_block_delta",
+          R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Wor"}})"},
+         {"content_block_delta",
+          R"({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ld"}})"},
+         {"message_delta",
+          R"({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}})"},
+         {"message_stop", R"({"type":"message_stop"})"}});
 
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"a","api":"anthropic","baseURL":"http://127.0.0.1:)")
-        + std::to_string(m.srv.port())
-        + R"(","apiKey":"k","models":["m"]}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(
+                R"({"providers":[{"name":"a","api":"anthropic","baseURL":"http://127.0.0.1:)") +
+            std::to_string(m.srv.port()) + R"(","apiKey":"k","models":["m"]}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
 
     std::vector<std::string> tokens;
@@ -299,15 +313,19 @@ ZTEST(SseTranslate, AnthropicDialect) {
 
 ZTEST(SseTranslate, GeminiDialect) {
     SseMock m;
-    m.start("/v1beta/models/m:streamGenerateContent",
-            {{"", R"({"candidates":[{"content":{"parts":[{"text":"Fo"}],"role":"model"},"index":0}]})"},
-             {"", R"({"candidates":[{"content":{"parts":[{"text":"od"}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":5}})"},
-             {"", R"({"candidates":[{"content":{"parts":[{"text":"!"}],"role":"model"},"finishReason":"STOP","index":0}]})"}});
+    m.start(
+        "/v1beta/models/m:streamGenerateContent",
+        {{"", R"({"candidates":[{"content":{"parts":[{"text":"Fo"}],"role":"model"},"index":0}]})"},
+         {"",
+          R"({"candidates":[{"content":{"parts":[{"text":"od"}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":5}})"},
+         {"",
+          R"({"candidates":[{"content":{"parts":[{"text":"!"}],"role":"model"},"finishReason":"STOP","index":0}]})"}});
 
     auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"g","api":"gemini","baseURL":"http://127.0.0.1:)")
-        + std::to_string(m.srv.port())
-        + R"(/v1beta","apiKey":"k","models":["m"]}]})").value();
+                   std::string(
+                       R"({"providers":[{"name":"g","api":"gemini","baseURL":"http://127.0.0.1:)") +
+                   std::to_string(m.srv.port()) + R"(/v1beta","apiKey":"k","models":["m"]}]})")
+                   .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
 
     std::vector<std::string> tokens;
@@ -330,12 +348,14 @@ ZTEST(SseTranslate, GeminiDialect) {
 ZTEST(SseTranslate, NonStreamPathUnchanged) {
     // onToken 为空 → 走整包非流式（stream:false；mock 只回 SSE 流 → 解析失败但零崩溃）
     SseMock m;
-    m.start("/v1/chat/completions", {{ "", "[DONE]" }});
+    m.start("/v1/chat/completions", {{"", "[DONE]"}});
 
-    auto cfg = json::JsonValue::parse(
-        std::string(R"({"providers":[{"name":"o","api":"openai-chat","baseURL":"http://127.0.0.1:)")
-        + std::to_string(m.srv.port())
-        + R"(/v1","apiKey":"k","models":["m"]}]})").value();
+    auto cfg =
+        json::JsonValue::parse(
+            std::string(
+                R"({"providers":[{"name":"o","api":"openai-chat","baseURL":"http://127.0.0.1:)") +
+            std::to_string(m.srv.port()) + R"(/v1","apiKey":"k","models":["m"]}]})")
+            .value();
     ai::ProviderRouter router(ai::RouterConfig::fromJson(cfg).value());
     ai::ChatRequest req;
     req.model = "m";
@@ -343,7 +363,7 @@ ZTEST(SseTranslate, NonStreamPathUnchanged) {
     u.role = "user";
     u.content = "hi";
     req.messages.push_back(u);
-    auto r = router.chat(req); // 无回调 → 非流式
+    auto r = router.chat(req);  // 无回调 → 非流式
     // mock 只回 SSE 流，非流式解析必然失败——验证的是没有崩溃且走了整包路径
     ZEXPECT_FALSE(r.ok);
     ZEXPECT_TRUE(m.seenBodies.at(0).find("\"stream\":false") != std::string::npos);

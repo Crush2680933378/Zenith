@@ -1,7 +1,7 @@
 #include "engine_supervisor.hpp"
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -11,21 +11,21 @@
 #include <vector>
 
 #if defined(_WIN32)
-  #ifndef NOMINMAX
-    #define NOMINMAX
-  #endif
-  #ifndef WIN32_LEAN_AND_MEAN
-    #define WIN32_LEAN_AND_MEAN
-  #endif
-  #include <windows.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #else
-  #include <fcntl.h>
-  #include <signal.h>
-  #include <sys/types.h>
-  #include <sys/wait.h>
-  #include <unistd.h>
-  #include <cerrno>
-  #include <vector>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <cerrno>
+#include <vector>
 #endif
 
 namespace zenith::ai::detail {
@@ -41,8 +41,10 @@ void sleepMs(int ms) {
 std::string trimCopy(const std::string& s) {
     size_t b = 0;
     size_t e = s.size();
-    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n')) ++b;
-    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n')) --e;
+    while (b < e && (s[b] == ' ' || s[b] == '\t' || s[b] == '\r' || s[b] == '\n'))
+        ++b;
+    while (e > b && (s[e - 1] == ' ' || s[e - 1] == '\t' || s[e - 1] == '\r' || s[e - 1] == '\n'))
+        --e;
     return s.substr(b, e - b);
 }
 
@@ -63,7 +65,7 @@ double valueAfter(const std::string& line, const char* prefix) {
     return parseNumber(line.c_str() + pos + std::strlen(prefix));
 }
 
-} // namespace
+}  // namespace
 
 // ===========================================================================
 //  Impl
@@ -95,8 +97,8 @@ struct EngineSupervisor::Impl {
 
     static std::wstring utf8ToWide(const std::string& s) {
         if (s.empty()) return std::wstring();
-        const int n = ::MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()),
-                                            nullptr, 0);
+        const int n =
+            ::MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()), nullptr, 0);
         std::wstring out(static_cast<size_t>(n), L'\0');
         ::MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()), out.data(), n);
         return out;
@@ -163,7 +165,7 @@ struct EngineSupervisor::Impl {
         for (;;) {
             DWORD got = 0;
             const BOOL ok = ::ReadFile(pipeRead, tmp, sizeof(tmp), &got, nullptr);
-            if (!ok || got == 0) break; // 引擎退出或管道断开
+            if (!ok || got == 0) break;  // 引擎退出或管道断开
 #else
         for (;;) {
             const ssize_t got = ::read(pipeRead, tmp, sizeof(tmp));
@@ -176,11 +178,11 @@ struct EngineSupervisor::Impl {
                     handleLine(buf.substr(0, nl));
                     buf.erase(0, nl + 1);
                 }
-                if (buf.size() > (1u << 20)) buf.clear(); // 防御：异常超长行
+                if (buf.size() > (1u << 20)) buf.clear();  // 防御：异常超长行
             }
         }
         if (!buf.empty()) handleLine(buf);
-        if (!stopRequested.load()) running.store(false); // 非主动停止 → 退出
+        if (!stopRequested.load()) running.store(false);  // 非主动停止 → 退出
     }
 
     // ---- 启动 ---------------------------------------------------------------
@@ -189,8 +191,8 @@ struct EngineSupervisor::Impl {
     /// （连父进程自己的 GetEnvironmentStringsW() 指针也不行，见 2026-10-21 探针）。
     /// 因此改为「临时设置父进程环境变量 → 以 NULL 环境块继承 → 立刻还原」。
     /// 全程持锁，避免并发 spawn 互相看到对方的临时变量。
-    bool spawnWithEnvOverride(std::wstring& cmdBuf, const std::wstring& wdir,
-                              STARTUPINFOW& si, PROCESS_INFORMATION& pi, std::string& error) {
+    bool spawnWithEnvOverride(std::wstring& cmdBuf, const std::wstring& wdir, STARTUPINFOW& si,
+                              PROCESS_INFORMATION& pi, std::string& error) {
         static std::mutex envMtx;
         std::lock_guard<std::mutex> lk(envMtx);
 
@@ -206,8 +208,7 @@ struct EngineSupervisor::Impl {
             DWORD need = ::GetEnvironmentVariableW(s.key.c_str(), nullptr, 0);
             if (need > 0) {
                 s.oldValue.resize(need);
-                const DWORD got =
-                    ::GetEnvironmentVariableW(s.key.c_str(), s.oldValue.data(), need);
+                const DWORD got = ::GetEnvironmentVariableW(s.key.c_str(), s.oldValue.data(), need);
                 s.oldValue.resize(got);
                 s.existed = true;
             }
@@ -219,7 +220,7 @@ struct EngineSupervisor::Impl {
                                          CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP, nullptr,
                                          wdir.empty() ? nullptr : wdir.c_str(), &si, &pi);
 
-        for (const auto& s : saved) { // 还原
+        for (const auto& s : saved) {  // 还原
             ::SetEnvironmentVariableW(s.key.c_str(), s.existed ? s.oldValue.c_str() : nullptr);
         }
         if (!ok) {
@@ -254,9 +255,9 @@ struct EngineSupervisor::Impl {
         // stdin 必须是一个**可继承的有效句柄**：进程自身的 stdin 被重定向/关闭时
         // （CI、管道、GUI 宿主）GetStdHandle 可能返回 INVALID_HANDLE_VALUE，
         // 带着 STARTF_USESTDHANDLES 传给 CreateProcess 会直接失败。
-        HANDLE nulIn = ::CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE,
-                                     FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0,
-                                     nullptr);
+        HANDLE nulIn =
+            ::CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          &sa, OPEN_EXISTING, 0, nullptr);
         si.hStdInput = nulIn;
 
         PROCESS_INFORMATION pi{};
@@ -275,7 +276,7 @@ struct EngineSupervisor::Impl {
             pipeWrite = nullptr;
             return false;
         }
-        ::CloseHandle(pipeWrite); // 子进程独占写端
+        ::CloseHandle(pipeWrite);  // 子进程独占写端
         pipeWrite = nullptr;
         process = pi.hProcess;
         pid = pi.dwProcessId;
@@ -312,7 +313,7 @@ struct EngineSupervisor::Impl {
             pipeRead = nullptr;
         }
     }
-#else // POSIX
+#else  // POSIX
     bool spawn(std::string& error) {
         int fds[2];
         if (::pipe(fds) != 0) {
@@ -326,18 +327,20 @@ struct EngineSupervisor::Impl {
             ::close(fds[1]);
             return false;
         }
-        if (child == 0) { // 子进程
+        if (child == 0) {  // 子进程
             ::close(fds[0]);
             ::dup2(fds[1], STDOUT_FILENO);
             ::dup2(fds[1], STDERR_FILENO);
             ::close(fds[1]);
-            for (const auto& [k, v] : spec.env) ::setenv(k.c_str(), v.c_str(), 1);
+            for (const auto& [k, v] : spec.env)
+                ::setenv(k.c_str(), v.c_str(), 1);
             if (!spec.workDir.empty()) {
                 if (::chdir(spec.workDir.c_str()) != 0) ::_exit(126);
             }
             std::vector<char*> argv;
             argv.push_back(const_cast<char*>(spec.exe.c_str()));
-            for (const auto& a : spec.args) argv.push_back(const_cast<char*>(a.c_str()));
+            for (const auto& a : spec.args)
+                argv.push_back(const_cast<char*>(a.c_str()));
             argv.push_back(nullptr);
             ::execv(spec.exe.c_str(), argv.data());
             ::_exit(127);
@@ -357,7 +360,7 @@ struct EngineSupervisor::Impl {
     void terminate() {
         if (pid > 0) {
             ::kill(pid, SIGTERM);
-            for (int i = 0; i < 30; ++i) { // 最多等 3 秒
+            for (int i = 0; i < 30; ++i) {  // 最多等 3 秒
                 int status = 0;
                 if (::waitpid(pid, &status, WNOHANG) == pid) {
                     pid = -1;
@@ -461,4 +464,4 @@ EngineState EngineSupervisor::snapshot() const {
     return st;
 }
 
-} // namespace zenith::ai::detail
+}  // namespace zenith::ai::detail

@@ -18,15 +18,16 @@ using namespace zenith::concurrency;
 
 ZTEST(MpscQueue, FifoSingleThread) {
     MpscRingQueue<int, 8> q;
-    for (int i = 0; i < 8; ++i) ZEXPECT_TRUE(q.push(i));
-    ZEXPECT_FALSE(q.push(99)); // 满
+    for (int i = 0; i < 8; ++i)
+        ZEXPECT_TRUE(q.push(i));
+    ZEXPECT_FALSE(q.push(99));  // 满
     for (int i = 0; i < 8; ++i) {
         int v = -1;
         ZEXPECT_TRUE(q.pop(v));
-        ZEXPECT_EQ(v, i); // 严格 FIFO
+        ZEXPECT_EQ(v, i);  // 严格 FIFO
     }
     int v;
-    ZEXPECT_FALSE(q.pop(v)); // 空
+    ZEXPECT_FALSE(q.pop(v));  // 空
 }
 
 ZTEST(MpscQueue, Wraparound) {
@@ -48,14 +49,17 @@ ZTEST(MpscQueue, ConcurrentProducersNoLossNoDup) {
     for (int p = 0; p < kProducers; ++p) {
         producers.emplace_back([&q, p] {
             for (int i = 0; i < kPerProducer; ++i) {
-                const uint64_t v = static_cast<uint64_t>(p) * kPerProducer + static_cast<uint64_t>(i);
-                while (!q.push(v)) std::this_thread::yield(); // 自旋重试
+                const uint64_t v =
+                    static_cast<uint64_t>(p) * kPerProducer + static_cast<uint64_t>(i);
+                while (!q.push(v))
+                    std::this_thread::yield();  // 自旋重试
             }
         });
     }
 
     std::vector<std::atomic<int>> counts(kProducers * kPerProducer);
-    for (auto& c : counts) c.store(0, std::memory_order_relaxed);
+    for (auto& c : counts)
+        c.store(0, std::memory_order_relaxed);
 
     uint64_t popped = 0;
     uint64_t v;
@@ -67,12 +71,12 @@ ZTEST(MpscQueue, ConcurrentProducersNoLossNoDup) {
             std::this_thread::yield();
         }
     }
-    for (auto& t : producers) t.join();
+    for (auto& t : producers)
+        t.join();
 
     for (size_t i = 0; i < counts.size(); ++i) {
         if (counts[i].load() != 1) {
-            ztest::reportFail(__FILE__, __LINE__,
-                              "item seen != 1 time: " + std::to_string(i));
+            ztest::reportFail(__FILE__, __LINE__, "item seen != 1 time: " + std::to_string(i));
         }
     }
 }
@@ -91,8 +95,7 @@ ZTEST(ThreadPool, ExecutesAllTasks) {
     }
     pool.post([&] { done.set_value(); });
 
-    ZEXPECT_TRUE(doneFuture.wait_for(std::chrono::seconds(10)) ==
-                 std::future_status::ready);
+    ZEXPECT_TRUE(doneFuture.wait_for(std::chrono::seconds(10)) == std::future_status::ready);
     // 哨兵任务只保证「它自己跑过了」——4 个 worker 并发，哨兵完成时其余任务
     // 可能仍在执行（CI 上偶发 499/500 就是这个竞态，不是线程池丢任务）。
     // 等计数追平再断言，语义仍是「500 个任务全部执行」。
@@ -108,7 +111,7 @@ ZTEST(ThreadPool, PostAfterShutdownFails) {
     ThreadPool pool(2);
     pool.shutdown();
     ZEXPECT_FALSE(pool.post([] {}));
-    pool.shutdown(); // 幂等
+    pool.shutdown();  // 幂等
 }
 
 ZTEST(ThreadPool, DestructorDrainsQueue) {
@@ -122,12 +125,12 @@ ZTEST(ThreadPool, DestructorDrainsQueue) {
                 done.push_back(i);
             });
         }
-    } // 析构：排空队列后 join
+    }  // 析构：排空队列后 join
     ZEXPECT_EQ(done.size(), size_t{200});
 }
 
 ZTEST(ThreadPool, DefaultThreadCount) {
-    ThreadPool pool; // hardware_concurrency 自动
+    ThreadPool pool;  // hardware_concurrency 自动
     ZEXPECT_TRUE(pool.threadCount() > 0);
 }
 

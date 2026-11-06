@@ -24,16 +24,16 @@ ZTEST(Task, NestedAwait) {
 
 ZTEST(Task, VoidTask) {
     auto t = []() -> Task<void> { co_return; };
-    syncWait(t()); // 编译 + 运行即通过（异常路径由下例覆盖）
+    syncWait(t());  // 编译 + 运行即通过（异常路径由下例覆盖）
     ZEXPECT_TRUE(true);
 }
 
 ZTEST(Task, MultipleAwaitsChain) {
     auto step = [](int x) -> Task<int> { co_return x + 1; };
     auto all = [&]() -> Task<int> {
-        int a = co_await step(0); // 1
-        int b = co_await step(a); // 2
-        int c = co_await step(b); // 3
+        int a = co_await step(0);  // 1
+        int b = co_await step(a);  // 2
+        int c = co_await step(b);  // 3
         co_return a + b + c;
     };
     ZEXPECT_EQ(syncWait(all()), 6);

@@ -5,10 +5,10 @@
 
 #if defined(ZENITH_PLATFORM_LINUX)
 
-  #include <errno.h>
-  #include <map>
-  #include <sys/epoll.h>
-  #include <unistd.h>
+#include <errno.h>
+#include <sys/epoll.h>
+#include <unistd.h>
+#include <map>
 
 namespace zenith::net {
 
@@ -27,7 +27,7 @@ uint16_t fromNativeEvents(uint32_t revents) {
     if ((revents & EPOLLHUP) != 0) r |= kPollHangup;
     return r;
 }
-} // namespace
+}  // namespace
 
 class EpollPoller final : public Poller {
 public:
@@ -65,8 +65,8 @@ public:
     int poll(std::vector<PollResult>& out, int timeoutMs) override {
         if (epfd_ < 0) return -1;
         events_.resize(kMaxEvents);
-        const int n = ::epoll_wait(epfd_, events_.data(),
-                                   static_cast<int>(events_.size()), timeoutMs);
+        const int n =
+            ::epoll_wait(epfd_, events_.data(), static_cast<int>(events_.size()), timeoutMs);
         if (n <= 0) return n == 0 ? 0 : -1;
         for (int i = 0; i < n; ++i) {
             out.push_back(PollResult{static_cast<fd_t>(events_[i].data.fd),
@@ -83,8 +83,10 @@ private:
     std::vector<epoll_event> events_;
 };
 
-std::unique_ptr<Poller> createEpollPoller() { return std::make_unique<EpollPoller>(); }
+std::unique_ptr<Poller> createEpollPoller() {
+    return std::make_unique<EpollPoller>();
+}
 
-} // namespace zenith::net
+}  // namespace zenith::net
 
-#endif // ZENITH_PLATFORM_LINUX
+#endif  // ZENITH_PLATFORM_LINUX

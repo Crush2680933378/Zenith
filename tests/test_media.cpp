@@ -2,8 +2,8 @@
 // 流程：ffmpeg testsrc 生成 2 秒测试视频 → 宿主加载插件 → probe/snapshot/transcode → 验证产物
 #include <atomic>
 #include <chrono>
-#include <cstdlib>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <thread>
 
@@ -18,7 +18,9 @@
 using namespace zenith;
 
 #ifndef ZENITH_HAS_MEDIA
-ZTEST(Media, SkippedNoSdk) { ZEXPECT_TRUE(true); }
+ZTEST(Media, SkippedNoSdk) {
+    ZEXPECT_TRUE(true);
+}
 ZTEST_MAIN
 #else
 
@@ -35,7 +37,7 @@ bool genTestVideo(const std::string& out) {
     const int rc = std::system(cmd.c_str());
     return rc == 0 && std::filesystem::exists(out);
 }
-} // namespace
+}  // namespace
 
 ZTEST(MediaPlugin, LoadProbeSnapshotTranscode) {
     const std::string dir = "zmedia.tmp";
@@ -56,10 +58,10 @@ ZTEST(MediaPlugin, LoadProbeSnapshotTranscode) {
     plugin::ServiceRegistry registry;
     plugin::PluginManager mgr(registry, &pool, nullptr);
     auto loaded = mgr.loadDirectory(ZENITH_TEST_PLUGIN_DIR);
-    ZEXPECT_TRUE(loaded.value() >= 3); // hello_cpp + hello_c + media_ffmpeg
+    ZEXPECT_TRUE(loaded.value() >= 3);  // hello_cpp + hello_c + media_ffmpeg
 
     void* raw = registry.queryRaw(media::IMediaService::service_name(),
-                                   media::IMediaService::service_version());
+                                  media::IMediaService::service_version());
     ZEXPECT_TRUE(raw != nullptr);
     if (raw == nullptr) return;
     auto* svc = static_cast<media::IMediaService*>(raw);
@@ -93,11 +95,11 @@ ZTEST(MediaPlugin, LoadProbeSnapshotTranscode) {
     // ---- transcode（缩到 160x120，进度回调）----
     std::atomic<double> lastProgress{0};
     ZEXPECT_TRUE(svc->transcode(src, dst,
-                                 media::TranscodeOptions{"libx264", "copy", 28, 160, 120, true, ""},
-                                 [&](double p) { lastProgress.store(p); }));
+                                media::TranscodeOptions{"libx264", "copy", 28, 160, 120, true, ""},
+                                [&](double p) { lastProgress.store(p); }));
     ZEXPECT_TRUE(std::filesystem::exists(dst));
     ZEXPECT_TRUE(std::filesystem::file_size(dst) > 1000);
-    ZEXPECT_TRUE(lastProgress.load() > 0.5); // 至少推进过半
+    ZEXPECT_TRUE(lastProgress.load() > 0.5);  // 至少推进过半
 
     // 产物可再次 probe（结构合法）
     media::MediaInfo outInfo;

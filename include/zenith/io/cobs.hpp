@@ -75,13 +75,13 @@ public:
     [[nodiscard]] bool healthy() const noexcept { return healthy_; }
     void reset();
 
-    static constexpr size_t kMaxFrameBytes = 1 << 20; // 1MB
+    static constexpr size_t kMaxFrameBytes = 1 << 20;  // 1MB
 
 private:
     std::string buf_;
     bool healthy_ = true;
 };
 
-} // namespace frame
+}  // namespace frame
 
-} // namespace zenith::io
+}  // namespace zenith::io

@@ -26,8 +26,7 @@ public:
     int64_t usageIn = 0, usageOut = 0;
     bool countUsage = false;
 
-    ai::ChatResult chat(const ai::ChatRequest& req,
-                        const ai::TokenCallback& = nullptr,
+    ai::ChatResult chat(const ai::ChatRequest& req, const ai::TokenCallback& = nullptr,
                         const ai::TokenCallback& = nullptr) override {
         const std::string& sys = req.messages.front().content;
         const std::string& user = req.messages.back().content;
@@ -53,15 +52,19 @@ public:
                 r.content = R"({"choice":"sqlite","reason":"z"})";
             }
         } else if (role == "pm") {
-            r.content = R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"}]}})";
+            r.content =
+                R"({"prd":{"summary":"d","stories":[{"id":"S1","title":"a","given":"e","when":"p","then":"c"}]}})";
         } else if (role == "architect") {
-            r.content = R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
+            r.content =
+                R"({"architecture":{"api":[{"method":"GET","path":"/a","desc":"d"}],"storage":"sqlite"}})";
         } else if (role == "backend" || role == "frontend") {
             r.content = R"({"files":[{"path":"x","content":"y"}],"notes":"n"})";
         } else if (role == "tester") {
-            r.content = (user.find("RETEST") == std::string::npos && !ret_)
-                ? (ret_ = true, R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})")
-                : R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
+            r.content =
+                (user.find("RETEST") == std::string::npos && !ret_)
+                    ? (ret_ = true,
+                       R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"fail","detail":"500","component":"backend"}]})")
+                    : R"({"cases":[{"id":"T1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})";
         } else if (role == "devops") {
             r.content = R"({"files":[{"path":"D","content":"x"}],"deploy":{"strategy":"d"}})";
         } else if (role == "delivery") {
@@ -93,8 +96,7 @@ private:
 
 using RecPtr = std::shared_ptr<Rec>;
 
-crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
-                                int maxSec = 30) {
+crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id, int maxSec = 30) {
     for (int i = 0; i < maxSec * 20; ++i) {
         auto info = eng.taskInfo(id);
         if (info && !info.value().running &&
@@ -107,8 +109,7 @@ crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id,
     return info ? info.value() : crew::CrewTaskInfo{};
 }
 
-crew::CrewTaskInfo waitApproval(crew::CrewEngine& eng, const std::string& id,
-                                int maxSec = 20) {
+crew::CrewTaskInfo waitApproval(crew::CrewEngine& eng, const std::string& id, int maxSec = 20) {
     for (int i = 0; i < maxSec * 20; ++i) {
         auto info = eng.taskInfo(id);
         if (info && info.value().phase == crew::CrewPhase::AwaitingApproval) {
@@ -119,17 +120,17 @@ crew::CrewTaskInfo waitApproval(crew::CrewEngine& eng, const std::string& id,
     auto info = eng.taskInfo(id);
     return info ? info.value() : crew::CrewTaskInfo{};
 }
-} // namespace
+}  // namespace
 
 /* ---------------- #1 上下文截断 ---------------- */
 
 ZTEST(CrewP0, PromptTruncation) {
     crew::EngineOptions opt;
-    opt.maxPromptChars = 500; // 压小预算强制触发
+    opt.maxPromptChars = 500;  // 压小预算强制触发
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
     eng.setInference(rec);
-    const std::string id = eng.createTask(std::string(2000, 'x')); // 巨长 brief
+    const std::string id = eng.createTask(std::string(2000, 'x'));  // 巨长 brief
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));
 
@@ -156,7 +157,7 @@ ZTEST(CrewP0, TruncationDisabledByTask) {
     RecPtr rec = std::make_shared<Rec>();
     eng.setInference(rec);
     crew::CrewConfig cfg;
-    cfg.maxPromptChars = -1; // 任务级关闭
+    cfg.maxPromptChars = -1;  // 任务级关闭
     const std::string id = eng.createTask(std::string(2000, 'y'), cfg);
     waitTerminal(eng, id);
     int truncEvents = 0;
@@ -175,11 +176,11 @@ ZTEST(CrewP0, CostBudgetGateAndExtend) {
     crew::CrewEngine eng(opt);
     RecPtr rec = std::make_shared<Rec>();
     rec->countUsage = true;
-    rec->usageIn = 200000;  // 每次 chat 0.2$
-    rec->usageOut = 100000; // +0.1$ → 0.3$/次
+    rec->usageIn = 200000;   // 每次 chat 0.2$
+    rec->usageOut = 100000;  // +0.1$ → 0.3$/次
     eng.setInference(rec);
     crew::CrewConfig cfg;
-    cfg.costBudgetUsd = 0.5; // 2 次 chat 即超
+    cfg.costBudgetUsd = 0.5;  // 2 次 chat 即超
     cfg.approvalTimeoutSec = 4;
     const std::string id = eng.createTask("budgeted task", cfg);
 
@@ -188,8 +189,7 @@ ZTEST(CrewP0, CostBudgetGateAndExtend) {
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("awaiting_approval"));
     bool sawBudgetGate = false;
     for (const crew::CrewEvent& e : eng.events(id)) {
-        if (e.type == "gate" &&
-            e.detail.find("cost budget") != std::string::npos) {
+        if (e.type == "gate" && e.detail.find("cost budget") != std::string::npos) {
             sawBudgetGate = true;
         }
     }
@@ -213,7 +213,7 @@ ZTEST(CrewP0, CostBudgetGateAndExtend) {
             end = ph;
             break;
         }
-        if (ph == crew::CrewPhase::AwaitingApproval) { // 再次熔断等待
+        if (ph == crew::CrewPhase::AwaitingApproval) {  // 再次熔断等待
             end = ph;
             break;
         }
@@ -229,7 +229,7 @@ ZTEST(CrewP0, CostBudgetGateAndExtend) {
         }
     }
     ZEXPECT_TRUE(sawExtend);
-    if (end == crew::CrewPhase::AwaitingApproval) eng.cancel(id); // 收尾
+    if (end == crew::CrewPhase::AwaitingApproval) eng.cancel(id);  // 收尾
 }
 
 /* ---------------- #3 cancel-during-approval 的 webhook ---------------- */
@@ -261,8 +261,8 @@ ZTEST(CrewP0, CancelDuringApprovalFiresWebhook) {
     cfg.approvalTimeoutSec = 60;
     const std::string id = eng.createTask("gated then cancelled", cfg);
 
-    waitApproval(eng, id);       // 停在人工门禁
-    eng.cancel(id);              // 在审批等待中取消（throw 路径）
+    waitApproval(eng, id);  // 停在人工门禁
+    eng.cancel(id);         // 在审批等待中取消（throw 路径）
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("cancelled"));
 
@@ -315,7 +315,7 @@ ZTEST(CrewP0, FollowupInheritsArtifactsAndPrefixes) {
         types.insert(a.type);
         if (a.agent == "inherited" && a.version == 1) ++inheritedCount;
     }
-    ZEXPECT_TRUE(inheritedCount >= 6); // prd/architecture/contract/backend/frontend/…
+    ZEXPECT_TRUE(inheritedCount >= 6);  // prd/architecture/contract/backend/frontend/…
     ZEXPECT_TRUE(types.count("prd") > 0);
 
     // PM 提示词带既有 PRD 前缀（增量语义）
@@ -375,8 +375,8 @@ ZTEST(CrewP0, HttpFollowupEndpoint) {
 
     ai::SimpleHttpCall call;
     call.method = "POST";
-    call.url = "http://127.0.0.1:" + std::to_string(srv.port()) +
-               "/crew/tasks/" + parent + "/followup";
+    call.url =
+        "http://127.0.0.1:" + std::to_string(srv.port()) + "/crew/tasks/" + parent + "/followup";
     call.body = R"({"brief":"v2 with export"})";
     call.headers = {{"Content-Type", "application/json"}};
     auto res = ai::simpleHttpRequest(call);
@@ -387,8 +387,7 @@ ZTEST(CrewP0, HttpFollowupEndpoint) {
     // 父不存在 → 404
     ai::SimpleHttpCall bad;
     bad.method = "POST";
-    bad.url = "http://127.0.0.1:" + std::to_string(srv.port()) +
-              "/crew/tasks/nope/followup";
+    bad.url = "http://127.0.0.1:" + std::to_string(srv.port()) + "/crew/tasks/nope/followup";
     bad.body = R"({"brief":"x"})";
     bad.headers = {{"Content-Type", "application/json"}};
     auto badRes = ai::simpleHttpRequest(bad);

@@ -25,14 +25,14 @@ bool acceptsGzip(const std::string& acceptEncoding) {
         const std::string params = semi == std::string::npos ? "" : item.substr(semi);
         if (token != "gzip" && token != "*") continue;
         if (params.find("q=0") != std::string::npos && params.find("q=0.") == std::string::npos) {
-            continue; // 明确拒绝
+            continue;  // 明确拒绝
         }
         return true;
     }
     return false;
 }
 
-} // namespace
+}  // namespace
 
 #if defined(ZENITH_HAS_ZLIB)
 
@@ -83,22 +83,26 @@ std::optional<std::string> gzipDecompress(std::string_view data) {
             return std::nullopt;
         }
         if (zs.avail_out == 0) out.resize(out.size() * 2);
-        if (zs.avail_in == 0 && zs.avail_out != 0) { // 数据耗尽但未收尾
+        if (zs.avail_in == 0 && zs.avail_out != 0) {  // 数据耗尽但未收尾
             inflateEnd(&zs);
             return std::nullopt;
         }
     }
 }
 
-#else // !ZENITH_HAS_ZLIB —— 无 zlib 时整体降级
+#else  // !ZENITH_HAS_ZLIB —— 无 zlib 时整体降级
 
-std::optional<std::string> gzipCompress(std::string_view, int) { return std::nullopt; }
-std::optional<std::string> gzipDecompress(std::string_view) { return std::nullopt; }
+std::optional<std::string> gzipCompress(std::string_view, int) {
+    return std::nullopt;
+}
+std::optional<std::string> gzipDecompress(std::string_view) {
+    return std::nullopt;
+}
 
-#endif // ZENITH_HAS_ZLIB
+#endif  // ZENITH_HAS_ZLIB
 
 bool applyGzip(const HttpRequest& req, HttpResponse& resp, size_t minBytes) {
-    if (resp.chunked) return false;                      // 流式响应不做整包压缩
+    if (resp.chunked) return false;  // 流式响应不做整包压缩
     if (resp.status == 204 || resp.status == 304) return false;
     if (resp.headers.contains("Content-Encoding")) return false;
     if (resp.body.size() < minBytes) return false;
@@ -111,7 +115,7 @@ bool applyGzip(const HttpRequest& req, HttpResponse& resp, size_t minBytes) {
     resp.body = std::move(*packed);
     resp.headers.set("Content-Encoding", "gzip");
     resp.headers.set("Vary", "Accept-Encoding");
-    resp.headers.remove("Content-Length"); // 由 serialize 按新长度重算
+    resp.headers.remove("Content-Length");  // 由 serialize 按新长度重算
     return true;
 }
 
@@ -122,4 +126,4 @@ Middleware gzipMiddleware(size_t minBytes) {
     };
 }
 
-} // namespace zenith::http
+}  // namespace zenith::http

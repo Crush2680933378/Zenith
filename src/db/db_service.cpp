@@ -41,4 +41,4 @@ void DbServiceImpl::post(std::function<void(uORM::Database&)> fn) {
     workers_->post([db, f = std::move(fn)] { f(*db); });
 }
 
-} // namespace zenith::db
+}  // namespace zenith::db

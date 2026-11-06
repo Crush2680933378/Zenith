@@ -14,4 +14,4 @@ namespace zenith::net {
 /// 安装一次性处理器（幂等：重复安装覆盖前次）。返回是否成功。
 ZENITH_API bool installSignalHandler(std::function<void()> handler);
 
-} // namespace zenith::net
+}  // namespace zenith::net

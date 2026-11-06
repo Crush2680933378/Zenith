@@ -59,4 +59,4 @@ private:
     std::map<std::string, std::string> map_;
 };
 
-} // namespace zenith::core
+}  // namespace zenith::core

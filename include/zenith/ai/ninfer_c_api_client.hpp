@@ -18,7 +18,7 @@ namespace zenith::ai {
 /// serviceTable：注册表里查到的 void*（指向 zenith_nz_service）。
 /// 版本不符或表为空 → 返回 nullptr。
 ZENITH_API std::unique_ptr<IInferenceService> wrapNinferCAbiService(const void* serviceTable,
-                                                                   std::string modelId,
-                                                                   std::string artifactPath = {});
+                                                                    std::string modelId,
+                                                                    std::string artifactPath = {});
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

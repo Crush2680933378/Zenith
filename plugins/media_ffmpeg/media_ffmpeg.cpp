@@ -16,8 +16,8 @@
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
 
@@ -64,8 +64,8 @@ public:
         }
         out = {};
         out.path = path;
-        out.durationSec = fmt->duration > 0 ? fmt->duration / static_cast<double>(AV_TIME_BASE)
-                                            : 0.0;
+        out.durationSec =
+            fmt->duration > 0 ? fmt->duration / static_cast<double>(AV_TIME_BASE) : 0.0;
         out.bitrate = fmt->bit_rate;
 
         const AVStream* vs = nullptr;
@@ -77,8 +77,7 @@ public:
             if (s->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && as == nullptr) as = s;
         }
         if (vs != nullptr && vs->codecpar != nullptr) {
-            const AVCodecDescriptor* d =
-                avcodec_descriptor_get(vs->codecpar->codec_id);
+            const AVCodecDescriptor* d = avcodec_descriptor_get(vs->codecpar->codec_id);
             out.vcodec = d != nullptr ? d->name : "";
             out.width = vs->codecpar->width;
             out.height = vs->codecpar->height;
@@ -87,16 +86,15 @@ public:
             }
         }
         if (as != nullptr && as->codecpar != nullptr) {
-            const AVCodecDescriptor* d =
-                avcodec_descriptor_get(as->codecpar->codec_id);
+            const AVCodecDescriptor* d = avcodec_descriptor_get(as->codecpar->codec_id);
             out.acodec = d != nullptr ? d->name : "";
         }
         avformat_close_input(&fmt);
         return true;
     }
 
-    bool snapshot(const std::string& input, double timeSec, const std::string& outputJpg,
-                  int w, int h) override {
+    bool snapshot(const std::string& input, double timeSec, const std::string& outputJpg, int w,
+                  int h) override {
         AVFormatContext* fmt = nullptr;
         if (avformat_open_input(&fmt, input.c_str(), nullptr, nullptr) != 0) {
             logError("snapshot: open failed: " + input);
@@ -123,9 +121,8 @@ public:
         }
 
         // 定位目标时间（seek 后必须 flush 解码器，否则返回陈旧帧）
-        av_seek_frame(fmt, vIdx,
-                       static_cast<int64_t>(timeSec / av_q2d(vs->time_base)),
-                       AVSEEK_FLAG_BACKWARD);
+        av_seek_frame(fmt, vIdx, static_cast<int64_t>(timeSec / av_q2d(vs->time_base)),
+                      AVSEEK_FLAG_BACKWARD);
         avcodec_flush_buffers(dc);
 
         AVPacket* pkt = av_packet_alloc();
@@ -157,8 +154,8 @@ public:
             AVPixelFormat inFmt = static_cast<AVPixelFormat>(frame->format);
             if (inFmt == AV_PIX_FMT_YUVJ420P) inFmt = AV_PIX_FMT_YUV420P;
             SwsContext* sws =
-                sws_getContext(frame->width, frame->height, inFmt, ow, oh,
-                               AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr);
+                sws_getContext(frame->width, frame->height, inFmt, ow, oh, AV_PIX_FMT_YUV420P,
+                               SWS_BILINEAR, nullptr, nullptr, nullptr);
             if (sws != nullptr) {
                 av_image_alloc(rgb->data, rgb->linesize, ow, oh, AV_PIX_FMT_YUV420P, 1);
                 sws_scale(sws, frame->data, frame->linesize, 0, frame->height, rgb->data,
@@ -308,9 +305,9 @@ public:
                     if (sws == nullptr) {
                         AVPixelFormat inFmt = static_cast<AVPixelFormat>(frame->format);
                         if (inFmt == AV_PIX_FMT_YUVJ420P) inFmt = AV_PIX_FMT_YUV420P;
-                        sws = sws_getContext(frame->width, frame->height, inFmt,
-                                             ec->width, ec->height, AV_PIX_FMT_YUV420P,
-                                             SWS_BILINEAR, nullptr, nullptr, nullptr);
+                        sws = sws_getContext(frame->width, frame->height, inFmt, ec->width,
+                                             ec->height, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr,
+                                             nullptr, nullptr);
                         av_image_alloc(cvt->data, cvt->linesize, ec->width, ec->height,
                                        AV_PIX_FMT_YUV420P, 1);
                         cvt->width = ec->width;
@@ -371,8 +368,8 @@ void destroyMediaService(void* p) {
 zenith_status pluginInit(const zenith_host_api* host) {
     g_host = host;
     const std::string ver = "media_ffmpeg: init (libavformat " +
-        std::to_string(LIBAVFORMAT_VERSION_MAJOR) + "." +
-        std::to_string(LIBAVFORMAT_VERSION_MINOR) + ")";
+                            std::to_string(LIBAVFORMAT_VERSION_MAJOR) + "." +
+                            std::to_string(LIBAVFORMAT_VERSION_MINOR) + ")";
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "media_ffmpeg", 0, ver.c_str());
 
     auto* svc = new (std::nothrow) MediaServiceImpl();
@@ -412,6 +409,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

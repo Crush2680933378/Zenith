@@ -7,8 +7,7 @@
 
 namespace zenith::net {
 
-core::Result<void> WorkerSupervisor::run(int, const std::string&, uint16_t, SetupCallback,
-                                         int) {
+core::Result<void> WorkerSupervisor::run(int, const std::string&, uint16_t, SetupCallback, int) {
     return core::Result<void>::Err(
         core::Error(120, "WorkerSupervisor: POSIX only (fork/SO_REUSEPORT)"));
 }
@@ -17,14 +16,14 @@ void WorkerSupervisor::shutdown() {}
 
 void WorkerSupervisor::reapAndRespawn(bool) {}
 
-} // namespace zenith::net
+}  // namespace zenith::net
 
-#else // ----------------------------------------------------------------------
+#else  // ----------------------------------------------------------------------
 
-#include <csignal>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <csignal>
 
 #include <cstring>
 
@@ -63,11 +62,10 @@ int makeReusePortListener(const std::string& host, uint16_t port, int backlog) {
     }
     return fd;
 }
-} // namespace
+}  // namespace
 
-core::Result<void> WorkerSupervisor::run(int workers, const std::string& host,
-                                          uint16_t port, SetupCallback workerSetup,
-                                          int backlog) {
+core::Result<void> WorkerSupervisor::run(int workers, const std::string& host, uint16_t port,
+                                         SetupCallback workerSetup, int backlog) {
     if (workers <= 0) {
         const unsigned hw = std::thread::hardware_concurrency();
         workers = hw > 0 ? static_cast<int>(hw) : 2;
@@ -81,7 +79,7 @@ core::Result<void> WorkerSupervisor::run(int workers, const std::string& host,
     sa.sa_handler = [](int) { /* 主循环由 g_supervisorStop 置位退出 */ };
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGINT, &sa, nullptr);
-    signal(SIGCHLD, SIG_DFL); // waitpid 主动收割
+    signal(SIGCHLD, SIG_DFL);  // waitpid 主动收割
 
     for (int i = 0; i < workers; ++i) {
         const int pid = spawnWorker(host, port, backlog, i);
@@ -91,21 +89,20 @@ core::Result<void> WorkerSupervisor::run(int workers, const std::string& host,
         }
     }
     if (pids_.empty()) {
-        return core::Result<void>::Err(
-            core::Error(121, "no worker spawned (listen failed?)"));
+        return core::Result<void>::Err(core::Error(121, "no worker spawned (listen failed?)"));
     }
     ZLOG_INFO("supervisor: ", pids_.size(), " workers on ", host, ":", port);
 
     // 主循环：收割 + 补齐
     while (running_ && !pids_.empty()) {
-        reapAndRespawn(true); // 阻塞等待任一子进程事件
+        reapAndRespawn(true);  // 阻塞等待任一子进程事件
     }
     shutdown();
     return core::Result<void>::Ok();
 }
 
 int WorkerSupervisor::spawnWorker(const std::string& host, uint16_t port, int backlog,
-                                     int workerId) {
+                                  int workerId) {
     const int listenFd = makeReusePortListener(host, port, backlog);
     if (listenFd < 0) return -1;
 
@@ -174,6 +171,6 @@ void WorkerSupervisor::shutdown() {
     stats_.alive = 0;
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net
 
-#endif // POSIX
+#endif  // POSIX

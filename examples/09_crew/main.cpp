@@ -58,28 +58,31 @@ public:
                        {"method":"GET","path":"/api/polls/:id","desc":"live result"}],
                 "notes":"polling over REST + WS push"}})";
         } else if (sys.find("ROLE: BACKEND") != std::string::npos) {
-            r.content = R"({"files":[{"path":"src/polls.cpp","content":"// 3 endpoints"}],"notes":"done"})";
+            r.content =
+                R"({"files":[{"path":"src/polls.cpp","content":"// 3 endpoints"}],"notes":"done"})";
         } else if (sys.find("ROLE: FRONTEND") != std::string::npos) {
-            r.content = R"({"files":[{"path":"web/app.html","content":"<!-- poll UI -->"}],"notes":"done"})";
+            r.content =
+                R"({"files":[{"path":"web/app.html","content":"<!-- poll UI -->"}],"notes":"done"})";
         } else if (sys.find("ROLE: TESTER") != std::string::npos) {
-            const bool retest = req.messages.back().content.find("RETEST") !=
-                                std::string::npos;
-            r.content = retest
-                ? R"({"cases":[{"id":"T1","story":"S1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})"
-                : R"({"cases":[{"id":"T1","story":"S1"},{"id":"T2","story":"S2"}],
+            const bool retest = req.messages.back().content.find("RETEST") != std::string::npos;
+            r.content =
+                retest
+                    ? R"({"cases":[{"id":"T1","story":"S1"}],"results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"}]})"
+                    : R"({"cases":[{"id":"T1","story":"S1"},{"id":"T2","story":"S2"}],
                      "results":[{"case":"T1","status":"pass","detail":"ok","component":"backend"},
                                 {"case":"T2","status":"fail","detail":"race on count","component":"backend"}]})";
         } else if (sys.find("ROLE: DEVOPS") != std::string::npos) {
-            r.content = R"({"files":[{"path":"Dockerfile","content":"FROM zenith"}],"deploy":{"strategy":"docker","smoke":"GET /api/polls/x"}})";
+            r.content =
+                R"({"files":[{"path":"Dockerfile","content":"FROM zenith"}],"deploy":{"strategy":"docker","smoke":"GET /api/polls/x"}})";
         } else if (sys.find("ROLE: DELIVERY") != std::string::npos) {
-            r.content = R"({"changelog":"# v0.1.0 poll app","release_notes":"crew-built","version":"0.1.0"})";
+            r.content =
+                R"({"changelog":"# v0.1.0 poll app","release_notes":"crew-built","version":"0.1.0"})";
         } else {
             r.content = "{}";
         }
         return r;
     }
-    zenith::ai::EmbeddingResult embeddings(const std::string&,
-                                           const std::string&) override {
+    zenith::ai::EmbeddingResult embeddings(const std::string&, const std::string&) override {
         zenith::ai::EmbeddingResult e;
         e.ok = false;
         return e;
@@ -103,18 +106,18 @@ int main() {
     engine->setInference(std::make_shared<MockCrewInference>());
     crew::mountCrewApi(server.router(), engine);
     crew::mountCrewDashboard(server.router());
-    crew::mountCrewWs(server, engine); // /crew/ws：ZenithDesk 强交互通道
+    crew::mountCrewWs(server, engine);  // /crew/ws：ZenithDesk 强交互通道
 
     if (!server.listen("0.0.0.0", 8093)) return 1;
     ZLOG_INFO("Zenith Crew demo on http://127.0.0.1:8093");
     ZLOG_INFO("  浏览器打开 http://127.0.0.1:8093/crew/dashboard  ← 内嵌仪表盘");
-    ZLOG_INFO("  curl -X POST localhost:8093/crew/tasks -d '{\"brief\":\"team polling app\"}' -H 'Content-Type: application/json'");
+    ZLOG_INFO(
+        "  curl -X POST localhost:8093/crew/tasks -d '{\"brief\":\"team polling app\"}' -H "
+        "'Content-Type: application/json'");
     ZLOG_INFO("  curl localhost:8093/crew/tasks/<id>/board");
     ZLOG_INFO("  curl -N localhost:8093/crew/tasks/<id>/events/stream   # SSE 实时");
 
-    net::installSignalHandler([&] {
-        server.beginGracefulShutdown([&] { loop.stop(); });
-    });
+    net::installSignalHandler([&] { server.beginGracefulShutdown([&] { loop.stop(); }); });
     loop.loop();
     io.stop();
     facade.shutdown();

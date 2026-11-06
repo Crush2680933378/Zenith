@@ -62,7 +62,7 @@ zenith_status pluginInit(const zenith_host_api* host) {
     opt.memoryEnabled = confString(host, "crew.memory.enabled") != "false";
     if (!opt.persistDir.empty() && opt.maxConcurrentTasks == 1 &&
         confString(host, "crew.max.concurrent").empty()) {
-        opt.maxConcurrentTasks = 4; // atoi("")==0 兜底
+        opt.maxConcurrentTasks = 4;  // atoi("")==0 兜底
     }
     opt.taskTtlSec = std::max(0, std::atoi(confString(host, "crew.task.ttl.sec").c_str()));
     opt.maxRetainedTasks =
@@ -80,10 +80,12 @@ zenith_status pluginInit(const zenith_host_api* host) {
             if (v && v.value().isObject()) {
                 gc.blockScore = static_cast<int>(v.value()["blockScore"].asInt(60));
                 if (const auto* ex = v.value()["extraPhrases"].asArray()) {
-                    for (const auto& e : *ex) gc.extraPhrases.push_back(e.asString());
+                    for (const auto& e : *ex)
+                        gc.extraPhrases.push_back(e.asString());
                 }
                 if (const auto* al = v.value()["allowlist"].asArray()) {
-                    for (const auto& a : *al) gc.allowlist.push_back(a.asString());
+                    for (const auto& a : *al)
+                        gc.allowlist.push_back(a.asString());
                 }
             }
         }
@@ -120,10 +122,9 @@ zenith_status pluginInit(const zenith_host_api* host) {
     auto* engine = new (std::nothrow) zenith::crew::CrewEngine(std::move(opt));
     if (engine == nullptr) return ZENITH_ERR_OUT_OF_MEMORY;
     g_engine = engine;
-    return host->register_service(host->registry_ctx, host->plugin_token,
-                                  zenith::crew::ICrewService::service_name(),
-                                  zenith::crew::ICrewService::service_version(),
-                                  static_cast<void*>(engine), &destroyEngine);
+    return host->register_service(
+        host->registry_ctx, host->plugin_token, zenith::crew::ICrewService::service_name(),
+        zenith::crew::ICrewService::service_version(), static_cast<void*>(engine), &destroyEngine);
 }
 
 zenith_status pluginStart(void) {
@@ -140,9 +141,11 @@ zenith_status pluginStart(void) {
     return ZENITH_OK;
 }
 
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
-    g_engine = nullptr; // 所有权归宿主（destroyEngine 删除）
+    g_engine = nullptr;  // 所有权归宿主（destroyEngine 删除）
     g_host = nullptr;
 }
 
@@ -160,6 +163,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

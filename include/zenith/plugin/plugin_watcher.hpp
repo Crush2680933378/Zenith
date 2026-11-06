@@ -45,7 +45,7 @@ public:
         std::string file;    ///< 触发重载的文件
         std::string plugin;  ///< 插件名（失败时可能为空）
         bool ok = false;
-        std::string message; ///< 失败原因
+        std::string message;  ///< 失败原因
     };
     using Callback = std::function<void(const Event&)>;
 
@@ -77,4 +77,4 @@ private:
     Callback cb_;
 };
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

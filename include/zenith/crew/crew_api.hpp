@@ -36,8 +36,7 @@
 namespace zenith::crew {
 
 inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
-                         const std::string& writeToken = {},
-                         bool enableCors = true) {
+                         const std::string& writeToken = {}, bool enableCors = true) {
     using namespace http;
     // CORS（ZenithDesk 等跨源前端开发期即开即用；预检路径随路由注册）
     if (enableCors) {
@@ -53,9 +52,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         return c.request().header("X-Crew-Token") == token;
     };
     // 每个业务路径注册 OPTIONS 占位（CORS 中间件在链中先行短路 204）
-    auto preflight = [&r](const std::string& path) {
-        r.options(path, [](Context&) {});
-    };
+    auto preflight = [&r](const std::string& path) { r.options(path, [](Context&) {}); };
     preflight("/crew/tasks");
     preflight("/crew/roster");
     preflight("/crew/board");
@@ -92,11 +89,14 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             limit = static_cast<size_t>(std::strtoull(c.query("limit").c_str(), nullptr, 10));
         }
         std::reverse(all.begin(), all.end());
-        if (offset >= all.size()) all.clear();
-        else all.erase(all.begin(), all.begin() + static_cast<long>(offset));
+        if (offset >= all.size())
+            all.clear();
+        else
+            all.erase(all.begin(), all.begin() + static_cast<long>(offset));
         if (all.size() > limit) all.resize(limit);
         json::JsonValue arr = json::JsonValue::array();
-        for (const CrewTaskInfo& t : all) arr.push_back(t.toJson());
+        for (const CrewTaskInfo& t : all)
+            arr.push_back(t.toJson());
         json::JsonValue v = json::JsonValue::object();
         v["tasks"] = std::move(arr);
         v["total"] = static_cast<int64_t>(arr.size());
@@ -104,14 +104,10 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
     });
 
     // M15：团队名册——角色↔AI 形象/模型映射（?task= 解析该任务扮演者）
-    r.get("/crew/roster", [svc](Context& c) {
-        c.json(200, svc->roster(c.query("task")));
-    });
+    r.get("/crew/roster", [svc](Context& c) { c.json(200, svc->roster(c.query("task"))); });
 
     // M15：引擎元信息（特性开关——前端显隐交互元素）
-    r.get("/crew/meta", [svc](Context& c) {
-        c.json(200, svc->metaInfo());
-    });
+    r.get("/crew/meta", [svc](Context& c) { c.json(200, svc->metaInfo()); });
 
     // M15：多任务聚合 board（所有运行中/待审批任务的角色拼一张大图）
     r.get("/crew/board", [svc](Context& c) {
@@ -231,17 +227,16 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         // 订阅回调在编排线程触发：经共享队列 + 泵线程轮询发送（连接写线程安全）
         auto queue = std::make_shared<std::vector<std::pair<uint64_t, std::string>>>();
         auto qmtx = std::make_shared<std::mutex>();
-        const uint64_t subId = svc->subscribe(
-            id, [last, done, queue, qmtx](const CrewEvent& e) {
-                if (*last >= e.seq) return;
-                *last = e.seq;
-                std::lock_guard<std::mutex> lk(*qmtx);
-                queue->emplace_back(e.seq, e.toJson().dump());
-                if (e.phase == CrewPhase::Done || e.phase == CrewPhase::Failed ||
-                    e.phase == CrewPhase::Cancelled) {
-                    done->store(true);
-                }
-            });
+        const uint64_t subId = svc->subscribe(id, [last, done, queue, qmtx](const CrewEvent& e) {
+            if (*last >= e.seq) return;
+            *last = e.seq;
+            std::lock_guard<std::mutex> lk(*qmtx);
+            queue->emplace_back(e.seq, e.toJson().dump());
+            if (e.phase == CrewPhase::Done || e.phase == CrewPhase::Failed ||
+                e.phase == CrewPhase::Cancelled) {
+                done->store(true);
+            }
+        });
         // 定时器驱动转发（M17）：tick 挂在连接所属 loop 上——loop 停即消亡，
         // 无独立线程、无悬垂（旧实现的 200ms sleep 会占死 IO 线程）。
         // tick 只做队列交换 + 投递发送（微秒级），不阻塞 loop。
@@ -252,8 +247,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         auto tick = std::make_shared<SseTick>();
         net::EventLoop* loop = c.connection()->loop();
         auto drain = std::make_shared<std::function<void()>>();
-        *drain = [svc, sse, subId, last, queue, qmtx, done, tick, loop,
-                  drain]() mutable {
+        *drain = [svc, sse, subId, last, queue, qmtx, done, tick, loop, drain]() mutable {
             if (tick->ended.load()) return;
             std::vector<std::pair<uint64_t, std::string>> batch;
             {
@@ -263,7 +257,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             for (auto& [seq, json] : batch) {
                 sse->send(json, "crew", std::to_string(seq));
             }
-            if (sse->closed() || done->load()) { // 收尾：终态补发 + 关流
+            if (sse->closed() || done->load()) {  // 收尾：终态补发 + 关流
                 tick->ended.store(true);
                 svc->unsubscribe(subId);
                 if (!sse->closed()) sse->send("{\"phase\":\"stream_end\"}", "end");
@@ -271,10 +265,10 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
                 return;
             }
             sse->comment("keep-alive");
-            tick->timerId = loop->scheduleAfter(
-                std::chrono::milliseconds(200), [drain]() { (*drain)(); });
+            tick->timerId =
+                loop->scheduleAfter(std::chrono::milliseconds(200), [drain]() { (*drain)(); });
         };
-        loop->runInLoop([drain]() { (*drain)(); }); // 首拍在 loop 线程启动
+        loop->runInLoop([drain]() { (*drain)(); });  // 首拍在 loop 线程启动
     });
 
     r.get("/crew/tasks/:id/artifacts", [svc](Context& c) {
@@ -308,17 +302,26 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
         c.response().body = md;
     });
 
-    // 全量导出（M14）：task + artifacts + votes + events 单包
+    // 全量导出（M14）：task + artifacts + votes + events 单包。
+    // 大任务走流式（chunked）：逐段序列化直接写出，不把整包拼成一个大字符串。
     r.get("/crew/tasks/:id/export", [svc](Context& c) {
-        const std::string bundle = svc->exportBundle(c.param("id"));
-        if (bundle.empty()) {
+        const std::string id = c.param("id");
+        if (!svc->taskInfo(id)) {  // 先确认存在，避免流已经开始才回 404
             c.status(404).text(404, "404 no such task");
             return;
         }
-        c.response().headers.set("Content-Type", "application/json; charset=utf-8");
-        c.response().headers.set("Content-Disposition",
-                                 "attachment; filename=\"" + c.param("id") + ".json\"");
-        c.response().body = bundle;
+        c.setHeader("Content-Disposition", "attachment; filename=\"" + id + ".json\"");
+        auto w = c.chunkedStream("application/json; charset=utf-8");
+        if (!w) {  // 未绑定连接（单测直接构造 Context）：回退整包
+            c.response().headers.set("Content-Type", "application/json; charset=utf-8");
+            c.response().body = svc->exportBundle(id);
+            return;
+        }
+        (void)svc->exportBundleStream(id, [&w](std::string_view chunk) {
+            w->write(chunk);
+            return true;
+        });
+        w->close();
     });
 
     r.post("/crew/tasks/:id/approve", [svc, allowed](Context& c) {
@@ -331,8 +334,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             comment = c.bodyJson()["comment"].asString();
         }
         auto res = svc->approve(c.param("id"), comment);
-        c.status(res ? 200 : 404).text(res ? 200 : 404,
-                                       res ? "ok" : "404 no such task");
+        c.status(res ? 200 : 404).text(res ? 200 : 404, res ? "ok" : "404 no such task");
     });
 
     r.post("/crew/tasks/:id/cancel", [svc, allowed](Context& c) {
@@ -341,8 +343,8 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             return;
         }
         auto res = svc->cancel(c.param("id"));
-        c.status(res ? 200 : 409).text(res ? 200 : 409,
-                                       res ? "cancelled" : "409 " + res.error().message);
+        c.status(res ? 200 : 409)
+            .text(res ? 200 : 409, res ? "cancelled" : "409 " + res.error().message);
     });
 
     r.post("/crew/tasks/:id/resume", [svc, allowed](Context& c) {
@@ -351,8 +353,8 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             return;
         }
         auto res = svc->resume(c.param("id"));
-        c.status(res ? 200 : 409).text(res ? 200 : 409,
-                                       res ? "resumed" : "409 " + res.error().message);
+        c.status(res ? 200 : 409)
+            .text(res ? 200 : 409, res ? "resumed" : "409 " + res.error().message);
     });
 
     // M16：增量迭代——基于父任务既有产物开新任务
@@ -394,8 +396,7 @@ inline void mountCrewApi(http::Router& r, std::shared_ptr<ICrewService> svc,
             return;
         }
         auto res = svc->castHumanVote(c.param("id"), c.bodyJson()["choice"].asString());
-        c.status(res ? 200 : 404).text(res ? 200 : 404,
-                                       res ? "ok" : "404 no such task");
+        c.status(res ? 200 : 404).text(res ? 200 : 404, res ? "ok" : "404 no such task");
     });
 }
 
@@ -425,109 +426,102 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
     // 等于把 Beat 当 WatchState 读（ASan：heap-use-after-free / 类型混淆）。
     struct SessionState {
         std::string task;
-        uint64_t subId = 0;  // 事件订阅 id（0=未订阅）
-        uint64_t timerId = 0; // 心跳定时器句柄
+        uint64_t subId = 0;    // 事件订阅 id（0=未订阅）
+        uint64_t timerId = 0;  // 心跳定时器句柄
     };
-    srv.enableWebSocket("/crew/ws",
-                        [svc, writeToken](const net::WebSocketSession::Ptr& s) {
+    srv.enableWebSocket("/crew/ws", [svc, writeToken](const net::WebSocketSession::Ptr& s) {
         auto st = std::make_shared<SessionState>();
         s->setContext(st);
 
-        s->setMessageCallback(
-            [svc, s, st, writeToken](const net::WebSocketSession::Ptr&,
-                                     std::string msg, bool) {
-                auto v = json::JsonValue::parse(msg);
-                if (!v) return;
-                const std::string type = v.value()["type"].asString();
-                const std::string task = v.value()["task"].asString();
-                const bool authed =
-                    writeToken.empty() ||
-                    v.value()["token"].asString() == writeToken;
+        s->setMessageCallback([svc, s, st, writeToken](const net::WebSocketSession::Ptr&,
+                                                       std::string msg, bool) {
+            auto v = json::JsonValue::parse(msg);
+            if (!v) return;
+            const std::string type = v.value()["type"].asString();
+            const std::string task = v.value()["task"].asString();
+            const bool authed = writeToken.empty() || v.value()["token"].asString() == writeToken;
 
-                auto ack = [&s](const std::string& action, bool ok,
-                                const std::string& err = {}) {
-                    json::JsonValue a = json::JsonValue::object();
-                    a["type"] = "ack";
-                    a["action"] = action;
-                    a["ok"] = ok;
-                    if (!err.empty()) a["error"] = err;
-                    s->sendText(a.dump());
+            auto ack = [&s](const std::string& action, bool ok, const std::string& err = {}) {
+                json::JsonValue a = json::JsonValue::object();
+                a["type"] = "ack";
+                a["action"] = action;
+                a["ok"] = ok;
+                if (!err.empty()) a["error"] = err;
+                s->sendText(a.dump());
+            };
+
+            if (type == "ping") {
+                json::JsonValue p = json::JsonValue::object();
+                p["type"] = "pong";
+                s->sendText(p.dump());
+                return;
+            }
+            if (type == "watch") {
+                if (st->subId != 0) {
+                    svc->unsubscribe(st->subId);
+                    st->subId = 0;
+                }
+                st->task = task;
+                json::JsonValue h = json::JsonValue::object();
+                h["type"] = "hello";
+                h["task"] = task;
+                s->sendText(h.dump());
+                // 订阅前先补全量历史（回放），再实时订阅
+                for (const CrewEvent& e : svc->events(task, 0)) {
+                    s->sendText(e.toJson().dump());
+                }
+                st->subId = svc->subscribe(task, [s](const CrewEvent& e) {
+                    // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
+                    // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
+                    if (s->connection() != nullptr &&
+                        s->connection()->pendingOutputBytes() > 1024 * 1024) {
+                        s->close(1008, "slow consumer");
+                        return;
+                    }
+                    s->sendText(e.toJson().dump());  // runInLoop 投递，跨线程安全
+                });
+                // 服务端心跳（M17）：30s 自续 ping，死连接及时清理。
+                // 自持 shared_ptr<function> 模式——scheduleAfter 只存值拷贝
+                // （栈引用会在消息回调返回后悬垂）。
+                net::EventLoop* loop = s->connection()->loop();
+                // 重复 watch 会重复起定时器：先撤掉上一轮
+                if (st->timerId != 0) {
+                    loop->cancel(st->timerId);
+                    st->timerId = 0;
+                }
+                std::weak_ptr<net::WebSocketSession> weak = s;
+                auto tick = std::make_shared<std::function<void()>>();
+                *tick = [weak, loop, st, tick]() {
+                    if (auto sp = weak.lock()) {
+                        sp->ping();  // 关闭由 close 回调 cancel 定时器收尾
+                        st->timerId = loop->scheduleAfter(std::chrono::milliseconds(30000),
+                                                          [tick]() { (*tick)(); });
+                    }
                 };
-
-                if (type == "ping") {
-                    json::JsonValue p = json::JsonValue::object();
-                    p["type"] = "pong";
-                    s->sendText(p.dump());
-                    return;
-                }
-                if (type == "watch") {
-                    if (st->subId != 0) {
-                        svc->unsubscribe(st->subId);
-                        st->subId = 0;
-                    }
-                    st->task = task;
-                    json::JsonValue h = json::JsonValue::object();
-                    h["type"] = "hello";
-                    h["task"] = task;
-                    s->sendText(h.dump());
-                    // 订阅前先补全量历史（回放），再实时订阅
-                    for (const CrewEvent& e : svc->events(task, 0)) {
-                        s->sendText(e.toJson().dump());
-                    }
-                    st->subId = svc->subscribe(task, [s](const CrewEvent& e) {
-                        // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
-                        // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
-                        if (s->connection() != nullptr &&
-                            s->connection()->pendingOutputBytes() > 1024 * 1024) {
-                            s->close(1008, "slow consumer");
-                            return;
-                        }
-                        s->sendText(e.toJson().dump()); // runInLoop 投递，跨线程安全
-                    });
-                    // 服务端心跳（M17）：30s 自续 ping，死连接及时清理。
-                    // 自持 shared_ptr<function> 模式——scheduleAfter 只存值拷贝
-                    // （栈引用会在消息回调返回后悬垂）。
-                    net::EventLoop* loop = s->connection()->loop();
-                    // 重复 watch 会重复起定时器：先撤掉上一轮
-                    if (st->timerId != 0) {
-                        loop->cancel(st->timerId);
-                        st->timerId = 0;
-                    }
-                    std::weak_ptr<net::WebSocketSession> weak = s;
-                    auto tick = std::make_shared<std::function<void()>>();
-                    *tick = [weak, loop, st, tick]() {
-                        if (auto sp = weak.lock()) {
-                            sp->ping(); // 关闭由 close 回调 cancel 定时器收尾
-                            st->timerId = loop->scheduleAfter(
-                                std::chrono::milliseconds(30000), [tick]() { (*tick)(); });
-                        }
-                    };
-                    (*tick)();
-                    return;
-                }
-                if (type == "approve") {
-                    if (!authed) return ack(type, false, "bad token");
-                    auto r = svc->approve(task, v.value()["comment"].asString());
-                    return ack(type, static_cast<bool>(r));
-                }
-                if (type == "cancel") {
-                    if (!authed) return ack(type, false, "bad token");
-                    auto r = svc->cancel(task);
-                    return ack(type, static_cast<bool>(r),
-                               r ? std::string() : r.error().message);
-                }
-                if (type == "resume") {
-                    if (!authed) return ack(type, false, "bad token");
-                    auto r = svc->resume(task);
-                    return ack(type, static_cast<bool>(r),
-                               r ? std::string() : r.error().message);
-                }
-                if (type == "vote") {
-                    if (!authed) return ack(type, false, "bad token");
-                    auto r = svc->castHumanVote(task, v.value()["choice"].asString());
-                    return ack(type, static_cast<bool>(r));
-                }
-            });
+                (*tick)();
+                return;
+            }
+            if (type == "approve") {
+                if (!authed) return ack(type, false, "bad token");
+                auto r = svc->approve(task, v.value()["comment"].asString());
+                return ack(type, static_cast<bool>(r));
+            }
+            if (type == "cancel") {
+                if (!authed) return ack(type, false, "bad token");
+                auto r = svc->cancel(task);
+                return ack(type, static_cast<bool>(r), r ? std::string() : r.error().message);
+            }
+            if (type == "resume") {
+                if (!authed) return ack(type, false, "bad token");
+                auto r = svc->resume(task);
+                return ack(type, static_cast<bool>(r), r ? std::string() : r.error().message);
+            }
+            if (type == "vote") {
+                if (!authed) return ack(type, false, "bad token");
+                auto r = svc->castHumanVote(task, v.value()["choice"].asString());
+                return ack(type, static_cast<bool>(r));
+            }
+        });
 
         s->setCloseCallback([svc, s](const net::WebSocketSession::Ptr& sess) {
             // 关闭在连接所属 loop 线程：cancel 定时器线程安全。
@@ -548,4 +542,4 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
     });
 }
 
-} // namespace zenith::crew
+}  // namespace zenith::crew

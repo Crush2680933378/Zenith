@@ -16,7 +16,7 @@ int64_t nowUs() {
                std::chrono::steady_clock::now().time_since_epoch())
         .count();
 }
-} // namespace
+}  // namespace
 
 EventLoop::EventLoop() : poller_(createPoller()), pollerName_(poller_->name()) {
     threadId_ = std::this_thread::get_id();
@@ -36,7 +36,7 @@ EventLoop::~EventLoop() {
 }
 
 void EventLoop::loop() {
-    if (looping_) return; // 单线程单次
+    if (looping_) return;  // 单线程单次
     threadId_ = std::this_thread::get_id();
     looping_ = true;
     quit_.store(false, std::memory_order_release);
@@ -107,7 +107,7 @@ uint64_t EventLoop::scheduleAfter(std::chrono::milliseconds delay, Task task) {
     const int64_t when = nowUs() + static_cast<int64_t>(delay.count()) * kUsPerMs;
     const uint64_t seq = nextTimerSeq_++;
     {
-        std::lock_guard<std::mutex> lk(taskMtx_); // schedule 允许跨线程
+        std::lock_guard<std::mutex> lk(taskMtx_);  // schedule 允许跨线程
         pendingTasks_.push_back([this, when, seq, t = std::move(task)]() mutable {
             timers_.push_back(TimerEntry{when, seq, std::move(t)});
             std::push_heap(timers_.begin(), timers_.end());
@@ -133,7 +133,8 @@ void EventLoop::runPendingTasks() {
         std::lock_guard<std::mutex> lk(taskMtx_);
         local.swap(pendingTasks_);
     }
-    for (Task& t : local) t();
+    for (Task& t : local)
+        t();
 }
 
 void EventLoop::runExpiredTimers() {
@@ -142,10 +143,11 @@ void EventLoop::runExpiredTimers() {
         std::pop_heap(timers_.begin(), timers_.end());
         TimerEntry e = std::move(timers_.back());
         timers_.pop_back();
-        if (canceledTimers_.erase(e.seq) > 0) continue; // 已取消（墓碑）
+        if (canceledTimers_.erase(e.seq) > 0) continue;  // 已取消（墓碑）
         due.push_back(std::move(e.task));
     }
-    for (Task& t : due) t(); // 任务内可再 schedule 新定时器
+    for (Task& t : due)
+        t();  // 任务内可再 schedule 新定时器
 }
 
 int EventLoop::nextTimeoutMs() const {
@@ -154,7 +156,7 @@ int EventLoop::nextTimeoutMs() const {
         std::lock_guard<std::mutex> lk(taskMtx_);
         if (!pendingTasks_.empty()) return 0;
     }
-    if (timers_.empty()) return 1000; // 兜底上限：stop 等状态仍可及时感知
+    if (timers_.empty()) return 1000;  // 兜底上限：stop 等状态仍可及时感知
     const int64_t diffUs = timers_.front().whenUs - nowUs();
     if (diffUs <= 0) return 0;
     return static_cast<int>(diffUs / kUsPerMs + 1);
@@ -172,4 +174,4 @@ void EventLoop::handleWakeupRead() {
     }
 }
 
-} // namespace zenith::net
+}  // namespace zenith::net

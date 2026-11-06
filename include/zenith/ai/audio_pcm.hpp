@@ -21,11 +21,11 @@ namespace zenith::ai {
 /// WAV 头解析结果（只读元信息，不拷样本）
 struct WavInfo {
     bool ok = false;
-    int formatTag = 0;    // 1=PCM, 3=IEEE float, 0xFFFE=extensible（已解出子格式）
+    int formatTag = 0;  // 1=PCM, 3=IEEE float, 0xFFFE=extensible（已解出子格式）
     int channels = 0;
     int sampleRate = 0;
     int bitsPerSample = 0;
-    size_t dataOffset = 0; // 样本数据起始偏移
+    size_t dataOffset = 0;  // 样本数据起始偏移
     size_t dataBytes = 0;
     std::string error;
 };
@@ -37,9 +37,9 @@ ZENITH_API WavInfo parseWavHeader(std::string_view bytes);
 struct PcmAudio {
     bool ok = false;
     std::vector<float> samples;
-    int sourceRate = 0;     // 原始采样率
-    int sourceChannels = 0; // 原始声道数
-    int durationMs = 0;     // 按 16kHz 输出长度折算的时长
+    int sourceRate = 0;      // 原始采样率
+    int sourceChannels = 0;  // 原始声道数
+    int durationMs = 0;      // 按 16kHz 输出长度折算的时长
     std::string error;
 };
 
@@ -50,4 +50,4 @@ struct PcmAudio {
 /// 空 format 时按 RIFF 魔数自动判定。
 ZENITH_API PcmAudio decodeAudioTo16kMono(std::string_view bytes, const std::string& format);
 
-} // namespace zenith::ai
+}  // namespace zenith::ai

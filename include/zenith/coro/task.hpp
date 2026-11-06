@@ -42,7 +42,7 @@ struct PromiseBase {
         void await_resume() const noexcept {}
     };
 
-    std::coroutine_handle<> continuation = nullptr; // co_await 者
+    std::coroutine_handle<> continuation = nullptr;  // co_await 者
 
     [[nodiscard]] std::suspend_always initial_suspend() const noexcept { return {}; }
     [[nodiscard]] FinalAwaiter final_suspend() const noexcept { return {}; }
@@ -77,13 +77,13 @@ struct TaskPromise<void> final : PromiseBase {
     }
 };
 
-} // namespace detail
+}  // namespace detail
 
 template <typename T = void>
 class [[nodiscard]] Task {
 public:
     using promise_type = detail::TaskPromise<T>;
-    using Handle       = std::coroutine_handle<promise_type>;
+    using Handle = std::coroutine_handle<promise_type>;
 
     Task() noexcept = default;
     explicit Task(Handle h) noexcept : handle_(h) {}
@@ -105,10 +105,9 @@ public:
     /// Task 自身即 awaiter：co_await task 时挂起当前协程、启动被等待者。
     [[nodiscard]] bool await_ready() const noexcept { return handle_ == nullptr; }
 
-    [[nodiscard]] std::coroutine_handle<>
-    await_suspend(std::coroutine_handle<> awaiter) noexcept {
+    [[nodiscard]] std::coroutine_handle<> await_suspend(std::coroutine_handle<> awaiter) noexcept {
         handle_.promise().continuation = awaiter;
-        return handle_; // 对称转移：直接开始执行被等待协程
+        return handle_;  // 对称转移：直接开始执行被等待协程
     }
 
     [[nodiscard]] decltype(auto) await_resume() { return handle_.promise().result(); }
@@ -134,7 +133,7 @@ Task<T> TaskPromise<T>::get_return_object() {
 inline Task<void> TaskPromise<void>::get_return_object() {
     return Task<void>{std::coroutine_handle<TaskPromise<void>>::from_promise(*this)};
 }
-} // namespace detail
+}  // namespace detail
 
 // ---------------------------------------------------------------------------
 // syncWait —— 顶层驱动：运行惰性协程直至完成（支持协程内部挂起到其它线程，
@@ -159,7 +158,7 @@ inline Task<void> syncWaitRunner<void>(std::shared_ptr<std::promise<void>> pr, T
         pr->set_exception(std::current_exception());
     }
 }
-} // namespace detail
+}  // namespace detail
 
 template <typename T>
 T syncWait(Task<T> task) {
@@ -167,8 +166,8 @@ T syncWait(Task<T> task) {
     auto pr = std::make_shared<std::promise<T>>();
     auto fut = pr->get_future();
     Task<void> runner = detail::syncWaitRunner<T>(std::move(pr), std::move(task));
-    runner.handle().resume(); // 启动；内部挂起后由恢复方（如 loop 线程）驱动
+    runner.handle().resume();  // 启动；内部挂起后由恢复方（如 loop 线程）驱动
     return fut.get();
 }
 
-} // namespace zenith::coro
+}  // namespace zenith::coro

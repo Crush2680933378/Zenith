@@ -14,11 +14,11 @@
 #include "zenith/http/http_server.hpp"
 
 #ifndef ZENITH_NO_DB
-  #include "zenith/db/db_service.hpp"
+#include "zenith/db/db_service.hpp"
 #endif
 
 #if defined(ZENITH_PLATFORM_LINUX) || defined(ZENITH_PLATFORM_MACOS)
-  #define ZTEST_HAS_POSIX 1
+#define ZTEST_HAS_POSIX 1
 #endif
 #include "zenith/net/worker_supervisor.hpp"
 
@@ -29,7 +29,9 @@ using namespace std::chrono_literals;
 
 ZTEST(HotReload, FileChangeReloadsSnapshot) {
     const std::string path = "zhot.tmp.json";
-    { std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"dev","level":1}})"; }
+    {
+        std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"dev","level":1}})";
+    }
 
     config::HotReloader hr(path, 100);
     std::atomic<int> changes{0};
@@ -43,7 +45,9 @@ ZTEST(HotReload, FileChangeReloadsSnapshot) {
 
     // 触碰 mtime + 内容变更
     std::this_thread::sleep_for(300ms);
-    { std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"prod","level":2}})"; }
+    {
+        std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"prod","level":2}})";
+    }
 
     // 首次装载即触发一次 onChange —— 等待“变更后”的第二次
     const int baseline = changes.load();
@@ -57,14 +61,19 @@ ZTEST(HotReload, FileChangeReloadsSnapshot) {
 
     // 坏 JSON → 保留旧快照 + 错误回调
     std::this_thread::sleep_for(300ms);
-    { std::ofstream(path, std::ios::binary) << "{broken"; }
-    for (int i = 0; i < 60 && errors.load() == 0; ++i) std::this_thread::sleep_for(50ms);
+    {
+        std::ofstream(path, std::ios::binary) << "{broken";
+    }
+    for (int i = 0; i < 60 && errors.load() == 0; ++i)
+        std::this_thread::sleep_for(50ms);
     ZEXPECT_TRUE(errors.load() >= 1);
-    ZEXPECT_EQ(hr.get()->get("app.mode"), std::string("prod")); // 旧值仍在
+    ZEXPECT_EQ(hr.get()->get("app.mode"), std::string("prod"));  // 旧值仍在
 
     // 手动 reload 恢复
     std::this_thread::sleep_for(200ms);
-    { std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"fixed"}})"; }
+    {
+        std::ofstream(path, std::ios::binary) << R"({"app":{"mode":"fixed"}})";
+    }
     ZEXPECT_TRUE(hr.reload());
     ZEXPECT_EQ(hr.get()->get("app.mode"), std::string("fixed"));
 
@@ -74,13 +83,17 @@ ZTEST(HotReload, FileChangeReloadsSnapshot) {
 
 ZTEST(HotReload, ManualOnlyMode) {
     const std::string path = "zhot2.tmp.json";
-    { std::ofstream(path, std::ios::binary) << R"({"v":1})"; }
-    config::HotReloader hr(path, 0); // 无轮询
+    {
+        std::ofstream(path, std::ios::binary) << R"({"v":1})";
+    }
+    config::HotReloader hr(path, 0);  // 无轮询
     hr.start();
     ZEXPECT_TRUE(hr.loaded());
-    { std::ofstream(path, std::ios::binary) << R"({"v":2})"; }
+    {
+        std::ofstream(path, std::ios::binary) << R"({"v":2})";
+    }
     std::this_thread::sleep_for(300ms);
-    ZEXPECT_EQ(hr.get()->get("v"), std::string("1")); // 未轮询 → 不变
+    ZEXPECT_EQ(hr.get()->get("v"), std::string("1"));  // 未轮询 → 不变
     hr.reload();
     ZEXPECT_EQ(hr.get()->get("v"), std::string("2"));
     std::filesystem::remove(path);
@@ -96,7 +109,7 @@ struct AdminUser {
     int age = 0;
     std::string city;
 };
-} // namespace
+}  // namespace
 UORM_REFLECTION(AdminUser, id, name, age, city)
 
 ZTEST(AdminConsole, RestCrudRoundtrip) {
@@ -126,7 +139,10 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
         http::json::JsonValue arr = http::json::JsonValue::array();
         for (const AdminUser& u : db.find<AdminUser>("age >= ?", 0)) {
             http::json::JsonValue o = http::json::JsonValue::object();
-            o["id"] = u.id; o["name"] = u.name; o["age"] = u.age; o["city"] = u.city;
+            o["id"] = u.id;
+            o["name"] = u.name;
+            o["age"] = u.age;
+            o["city"] = u.city;
             arr.push_back(std::move(o));
         }
         v["users"] = std::move(arr);
@@ -135,7 +151,7 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
     r.post("/api/users", [&db](http::Context& c) {
         auto in = c.bodyJson();
         AdminUser u{0, in["name"].asString(), static_cast<int>(in["age"].asInt()),
-                   in["city"].asString()};
+                    in["city"].asString()};
         db.save(u);
         http::json::JsonValue v = http::json::JsonValue::object();
         v["id"] = u.id;
@@ -144,7 +160,10 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
     r.delete_("/api/users/:id", [&db](http::Context& c) {
         const int64_t id = std::strtoll(c.param("id").c_str(), nullptr, 10);
         auto u = db.findById<AdminUser>(id);
-        if (!u.has_value()) { c.status(404).text(404, "404"); return; }
+        if (!u.has_value()) {
+            c.status(404).text(404, "404");
+            return;
+        }
         const bool removed = db.remove(*u);
         c.status(removed ? 200 : 500).text(removed ? 200 : 500, removed ? "deleted" : "fail");
     });
@@ -164,8 +183,7 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
 
     // 空
     auto empty = http::HttpClient::fetchBlockingUrl(url("/api/users"));
-    ZEXPECT_EQ(http::json::JsonValue::parse(empty.value().body).value()["users"].size(),
-               size_t{0});
+    ZEXPECT_EQ(http::json::JsonValue::parse(empty.value().body).value()["users"].size(), size_t{0});
 
     // 建 ×2
     http::ClientRequest mk;
@@ -182,8 +200,7 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
 
     // 列
     auto list = http::HttpClient::fetchBlockingUrl(url("/api/users"));
-    ZEXPECT_EQ(http::json::JsonValue::parse(list.value().body).value()["users"].size(),
-               size_t{2});
+    ZEXPECT_EQ(http::json::JsonValue::parse(list.value().body).value()["users"].size(), size_t{2});
 
     // 删 → 404 复查
     http::ClientRequest del;
@@ -194,8 +211,7 @@ ZTEST(AdminConsole, RestCrudRoundtrip) {
     auto d2 = http::HttpClient::fetchBlocking(del);
     ZEXPECT_EQ(d2.value().status, 404);
     auto list2 = http::HttpClient::fetchBlockingUrl(url("/api/users"));
-    ZEXPECT_EQ(http::json::JsonValue::parse(list2.value().body).value()["users"].size(),
-               size_t{1});
+    ZEXPECT_EQ(http::json::JsonValue::parse(list2.value().body).value()["users"].size(), size_t{1});
 
     loop.stop();
     t.join();

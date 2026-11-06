@@ -2,7 +2,9 @@
 
 namespace zenith::plugin {
 
-ServiceRegistry::~ServiceRegistry() { clear(); }
+ServiceRegistry::~ServiceRegistry() {
+    clear();
+}
 
 zenith_status ServiceRegistry::registerTyped(const char* interfaceName, uint32_t implVersion,
                                              std::shared_ptr<void> service, bool replace) {
@@ -15,7 +17,7 @@ zenith_status ServiceRegistry::registerTyped(const char* interfaceName, uint32_t
 
     Entry e;
     e.version = implVersion;
-    e.typed   = std::move(service);
+    e.typed = std::move(service);
     if (it != entries_.end()) {
         it->second.typed = std::move(e.typed);
         it->second.version = e.version;
@@ -24,8 +26,8 @@ zenith_status ServiceRegistry::registerTyped(const char* interfaceName, uint32_t
             it->second.rawDestroy(it->second.rawInstance);
         }
         it->second.rawInstance = nullptr;
-        it->second.rawDestroy  = nullptr;
-        it->second.owner       = nullptr;
+        it->second.rawDestroy = nullptr;
+        it->second.owner = nullptr;
     } else {
         entries_.emplace(interfaceName, std::move(e));
     }
@@ -43,20 +45,20 @@ zenith_status ServiceRegistry::registerRaw(const char* interfaceName, uint32_t i
     if (it != entries_.end() && !replace) return ZENITH_ERR_ALREADY_EXISTS;
 
     Entry e;
-    e.version     = implVersion;
+    e.version = implVersion;
     e.rawInstance = instance;
-    e.rawDestroy  = destroy;
-    e.owner       = ownerToken;
+    e.rawDestroy = destroy;
+    e.owner = ownerToken;
     if (it != entries_.end()) {
         // 覆盖旧条目：raw 的调用旧 destroy，typed 的交给 shared_ptr
         if (it->second.rawInstance != nullptr && it->second.rawDestroy != nullptr) {
             it->second.rawDestroy(it->second.rawInstance);
         }
-        it->second.typed       = nullptr;
-        it->second.version     = e.version;
+        it->second.typed = nullptr;
+        it->second.version = e.version;
         it->second.rawInstance = e.rawInstance;
-        it->second.rawDestroy  = e.rawDestroy;
-        it->second.owner       = e.owner;
+        it->second.rawDestroy = e.rawDestroy;
+        it->second.owner = e.owner;
     } else {
         entries_.emplace(interfaceName, std::move(e));
     }
@@ -89,7 +91,7 @@ std::shared_ptr<void> ServiceRegistry::queryTyped(const char* interfaceName,
     std::shared_lock<std::shared_mutex> lk(mtx_);
     auto it = entries_.find(interfaceName);
     if (it == entries_.end() || it->second.version < minVersion) return nullptr;
-    return it->second.typed; // raw 条目此处置空，typed 查询只认 typed
+    return it->second.typed;  // raw 条目此处置空，typed 查询只认 typed
 }
 
 size_t ServiceRegistry::removeByOwner(void* ownerToken) {
@@ -118,7 +120,8 @@ void ServiceRegistry::clear() {
     {
         std::unique_lock<std::shared_mutex> lk(mtx_);
         doomed.reserve(entries_.size());
-        for (auto& [name, e] : entries_) doomed.push_back(std::move(e));
+        for (auto& [name, e] : entries_)
+            doomed.push_back(std::move(e));
         entries_.clear();
     }
     for (Entry& e : doomed) {
@@ -135,8 +138,9 @@ std::vector<std::pair<std::string, uint32_t>> ServiceRegistry::list() const {
     std::shared_lock<std::shared_mutex> lk(mtx_);
     std::vector<std::pair<std::string, uint32_t>> out;
     out.reserve(entries_.size());
-    for (const auto& [name, e] : entries_) out.emplace_back(name, e.version);
+    for (const auto& [name, e] : entries_)
+        out.emplace_back(name, e.version);
     return out;
 }
 
-} // namespace zenith::plugin
+}  // namespace zenith::plugin

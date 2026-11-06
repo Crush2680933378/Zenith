@@ -50,15 +50,15 @@ zenith_status pluginInit(const zenith_host_api* host) {
         g_stt = zenith::ai::makeWhisperStt(wopt);
         if (g_stt == nullptr) {
             const std::string why = zenith::ai::whisperLastError();
-            host->log_write(host->log_ctx, ZENITH_LOG_WARN, "ai_speech", 0,
-                            ("ai_speech: whisper backend unavailable (" + why +
-                             ") — falling back to mock")
-                                .c_str());
+            host->log_write(
+                host->log_ctx, ZENITH_LOG_WARN, "ai_speech", 0,
+                ("ai_speech: whisper backend unavailable (" + why + ") — falling back to mock")
+                    .c_str());
             backend = "mock";
         } else {
-            host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_speech", 0,
-                            ("ai_speech: whisper backend ready (model=" + wopt.modelPath + ")")
-                                .c_str());
+            host->log_write(
+                host->log_ctx, ZENITH_LOG_INFO, "ai_speech", 0,
+                ("ai_speech: whisper backend ready (model=" + wopt.modelPath + ")").c_str());
         }
     } else if (backend != "mock") {
         host->log_write(host->log_ctx, ZENITH_LOG_WARN, "ai_speech", 0,
@@ -72,11 +72,10 @@ zenith_status pluginInit(const zenith_host_api* host) {
 
     host->log_write(host->log_ctx, ZENITH_LOG_INFO, "ai_speech", 0,
                     ("ai_speech: ready (backend=" + backend + "; stt+tts registered)").c_str());
-    const zenith_status r1 = host->register_service(
-        host->registry_ctx, host->plugin_token,
-        zenith::ai::ISpeechToText::service_name(),
-        zenith::ai::ISpeechToText::service_version(),
-        static_cast<void*>(g_stt.get()), &noopDestroy);
+    const zenith_status r1 = host->register_service(host->registry_ctx, host->plugin_token,
+                                                    zenith::ai::ISpeechToText::service_name(),
+                                                    zenith::ai::ISpeechToText::service_version(),
+                                                    static_cast<void*>(g_stt.get()), &noopDestroy);
     if (r1 != ZENITH_OK) return r1;
     return host->register_service(host->registry_ctx, host->plugin_token,
                                   zenith::ai::ITextToSpeech::service_name(),
@@ -84,8 +83,12 @@ zenith_status pluginInit(const zenith_host_api* host) {
                                   static_cast<void*>(g_tts.get()), &noopDestroy);
 }
 
-zenith_status pluginStart(void) { return ZENITH_OK; }
-zenith_status pluginStop(void) { return ZENITH_OK; }
+zenith_status pluginStart(void) {
+    return ZENITH_OK;
+}
+zenith_status pluginStop(void) {
+    return ZENITH_OK;
+}
 void pluginShutdown(void) {
     g_stt.reset();
     g_tts.reset();
@@ -106,6 +109,6 @@ zenith_plugin_desc g_desc = {
     {nullptr, nullptr, nullptr, nullptr},
 };
 
-} // namespace
+}  // namespace
 
 ZENITH_PLUGIN_EXPORT(g_desc)

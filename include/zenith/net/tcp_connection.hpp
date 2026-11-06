@@ -18,7 +18,7 @@
 #include "zenith/net/socket.hpp"
 
 namespace zenith::tls {
-class TlsFilter; // 实现见 zenith/tls/tls_context.hpp
+class TlsFilter;  // 实现见 zenith/tls/tls_context.hpp
 }
 
 namespace zenith::net {
@@ -29,8 +29,8 @@ public:
     using Ptr = std::shared_ptr<TcpConnection>;
     using ConnectCallback = std::function<void(const Ptr&)>;
     using MessageCallback = std::function<void(const Ptr&, core::Buffer&)>;
-    using CloseCallback   = std::function<void(const Ptr&)>;
-    using ErrorCallback   = std::function<void(const Ptr&, const std::string&)>;
+    using CloseCallback = std::function<void(const Ptr&)>;
+    using ErrorCallback = std::function<void(const Ptr&, const std::string&)>;
 
     static Ptr create(EventLoop* loop, fd_t fd, std::string peer) {
         return Ptr(new TcpConnection(loop, fd, std::move(peer)));
@@ -39,13 +39,13 @@ public:
     ~TcpConnection();
 
     /* 建立后由创建方调用一次 */
-    void establish();        // 触发 onConnect；注册读兴趣
-    void finalize(CloseCallback hostClose); // 注入宿主清理（server 移表/client 收尾）
+    void establish();                        // 触发 onConnect；注册读兴趣
+    void finalize(CloseCallback hostClose);  // 注入宿主清理（server 移表/client 收尾）
 
     void setConnectCallback(ConnectCallback cb) { onConnect_ = std::move(cb); }
     void setMessageCallback(MessageCallback cb) { onMessage_ = std::move(cb); }
-    void setCloseCallback(CloseCallback cb)     { onClose_ = std::move(cb); }
-    void setErrorCallback(ErrorCallback cb)     { onError_ = std::move(cb); }
+    void setCloseCallback(CloseCallback cb) { onClose_ = std::move(cb); }
+    void setErrorCallback(ErrorCallback cb) { onError_ = std::move(cb); }
 
     /* 数据发送（线程安全） */
     void send(const void* data, size_t n);
@@ -102,7 +102,7 @@ private:
     void enableWriteInterest(bool on);
     // 文件零拷贝发送（M7.3，仅 loop 线程）
     void startFileSend(std::string path, uint64_t offset, uint64_t count);
-    bool pumpFileSend(); // true=仍需可写事件；false=已完成或已关闭
+    bool pumpFileSend();  // true=仍需可写事件；false=已完成或已关闭
     void closeFileSend() noexcept;
     // TLS 辅助（M4.1）
     void sockSend(const std::string& wire);
@@ -111,7 +111,7 @@ private:
     EventLoop* loop_;
     fd_t fd_;
     std::string peer_;
-    Socket sock_; // 仅用于 fd 的系统调用封装（move-in 保活）
+    Socket sock_;  // 仅用于 fd 的系统调用封装（move-in 保活）
 
     core::Buffer inBuf_;
     core::Buffer outBuf_;
@@ -119,8 +119,8 @@ private:
     // outBuf_ 里装的是「文件分块的尾部」，而这里的字节要等整个文件发完才能发，
     // 否则新响应的字节会插进文件正文中间（协议损坏）。
     core::Buffer postFileBuf_;
-    bool writing_ = false;         // 仅 loop 线程
-    bool shutdownPending_ = false; // 仅 loop 线程
+    bool writing_ = false;          // 仅 loop 线程
+    bool shutdownPending_ = false;  // 仅 loop 线程
 
     // M7.3：文件正文发送状态（仅 loop 线程）
     std::FILE* file_ = nullptr;      // 正在发送的文件；nullptr=无
@@ -134,9 +134,9 @@ private:
     ErrorCallback onError_;
     CloseCallback hostClose_;
 
-    std::unique_ptr<tls::TlsFilter> tls_; // 可选 TLS 滤层（M4.1）
+    std::unique_ptr<tls::TlsFilter> tls_;  // 可选 TLS 滤层（M4.1）
     std::shared_ptr<void> context_;
     std::atomic<bool> connected_{false};
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net

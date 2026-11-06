@@ -32,7 +32,8 @@ std::vector<std::vector<float>> makeClustered(int clusters, int perCluster, int 
     std::vector<std::vector<float>> out;
     for (int c = 0; c < clusters; ++c) {
         std::vector<float> center(static_cast<size_t>(dim));
-        for (auto& x : center) x = static_cast<float>(rng()) / rng.max() * 2 - 1;
+        for (auto& x : center)
+            x = static_cast<float>(rng()) / rng.max() * 2 - 1;
         for (int i = 0; i < perCluster; ++i) {
             std::vector<float> v(static_cast<size_t>(dim));
             for (int d = 0; d < dim; ++d) {
@@ -43,11 +44,11 @@ std::vector<std::vector<float>> makeClustered(int clusters, int perCluster, int 
     }
     return out;
 }
-} // namespace
+}  // namespace
 
 ZTEST(Hnsw, RecallOnClusteredData) {
     const int dim = 32;
-    auto data = makeClustered(20, 50, dim, 42); // 1000 点
+    auto data = makeClustered(20, 50, dim, 42);  // 1000 点
     vector::HnswConfig cfg;
     cfg.dim = dim;
     cfg.metric = vector::Metric::Euclidean;
@@ -74,15 +75,15 @@ ZTEST(Hnsw, RecallOnClusteredData) {
             if (i == qi) continue;
             float acc = 0;
             for (int d = 0; d < dim; ++d) {
-                const float df = data[i][static_cast<size_t>(d)] -
-                                 query[static_cast<size_t>(d)];
+                const float df = data[i][static_cast<size_t>(d)] - query[static_cast<size_t>(d)];
                 acc += df * df;
             }
             exact.emplace_back(acc, static_cast<uint64_t>(i + 1));
         }
         std::sort(exact.begin(), exact.end());
         std::set<uint64_t> truth;
-        for (int i = 0; i < 10; ++i) truth.insert(exact[static_cast<size_t>(i)].second);
+        for (int i = 0; i < 10; ++i)
+            truth.insert(exact[static_cast<size_t>(i)].second);
 
         auto hits = idx.search(query.data(), 10);
         ZEXPECT_TRUE(!hits.empty());
@@ -112,13 +113,14 @@ ZTEST(Hnsw, UpsertRemoveSerialize) {
     // c 最接近 a（cosine）
     auto hits = idx.search(a.data(), 2);
     ZEXPECT_EQ(hits.size(), size_t{2});
-    ZEXPECT_EQ(hits[0].id, static_cast<uint64_t>(1)); // 自身（cos=1 → score 最高）
+    ZEXPECT_EQ(hits[0].id, static_cast<uint64_t>(1));  // 自身（cos=1 → score 最高）
     ZEXPECT_EQ(hits[1].id, static_cast<uint64_t>(3));
 
     // 删除 3 → 不再返回
     idx.remove(3);
     hits = idx.search(a.data(), 3);
-    for (const auto& h : hits) ZEXPECT_TRUE(h.id != 3);
+    for (const auto& h : hits)
+        ZEXPECT_TRUE(h.id != 3);
     ZEXPECT_EQ(idx.size(), size_t{2});
 
     // 序列化 → 反序列化 → 同结果
@@ -183,8 +185,7 @@ ZTEST(VectorApi, QdrantCompatibleE2E) {
             }
             return core::Result<void>::Ok();
         }
-        core::Result<void> remove(const std::string& n,
-                                  const std::vector<uint64_t>& ids) override {
+        core::Result<void> remove(const std::string& n, const std::vector<uint64_t>& ids) override {
             for (uint64_t id : ids) {
                 cols[n]->remove(id);
                 payloads[n].erase(id);
@@ -203,9 +204,9 @@ ZTEST(VectorApi, QdrantCompatibleE2E) {
             p.payloadJson = payloads[n][id];
             return core::Result<vector::VectorPoint>::Ok(p);
         }
-        core::Result<std::vector<vector::ScoredPoint>> search(
-            const std::string& n, const std::vector<float>& q, int k,
-            float thr) override {
+        core::Result<std::vector<vector::ScoredPoint>> search(const std::string& n,
+                                                              const std::vector<float>& q, int k,
+                                                              float thr) override {
             auto hits = cols[n]->search(q.data(), k);
             std::vector<vector::ScoredPoint> out;
             for (const auto& h : hits) {
@@ -303,15 +304,13 @@ ZTEST(Mcp, ServerDispatchAndBridge) {
     auto init = srv.handle(http::json::JsonValue::parse(
                                R"({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}})")
                                .value());
-    ZEXPECT_EQ(init["result"]["protocolVersion"].asString(),
-               std::string("2026-07-28"));
+    ZEXPECT_EQ(init["result"]["protocolVersion"].asString(), std::string("2026-07-28"));
     ZEXPECT_EQ(init["result"]["serverInfo"]["name"].asString(), std::string("test-mcp"));
 
     // tools/list
-    auto tl = srv.handle(
-        http::json::JsonValue::parse(
-            R"({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})")
-            .value());
+    auto tl = srv.handle(http::json::JsonValue::parse(
+                             R"({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}})")
+                             .value());
     ZEXPECT_EQ(tl["result"]["tools"].size(), size_t{1});
     ZEXPECT_EQ(tl["result"]["tools"].at(size_t{0})["name"].asString(), std::string("echo"));
 
@@ -325,22 +324,21 @@ ZTEST(Mcp, ServerDispatchAndBridge) {
 
     // 未知方法 → MethodNotFound
     auto bad = srv.handle(
-        http::json::JsonValue::parse(
-            R"({"jsonrpc":"2.0","id":4,"method":"bogus","params":{}})")
+        http::json::JsonValue::parse(R"({"jsonrpc":"2.0","id":4,"method":"bogus","params":{}})")
             .value());
     ZEXPECT_EQ(bad["error"]["code"].asInt(), int64_t{-32601});
 
     // 通知 → Null
     auto note = srv.handle(
-        http::json::JsonValue::parse(
-            R"({"jsonrpc":"2.0","method":"notifications/initialized"})")
+        http::json::JsonValue::parse(R"({"jsonrpc":"2.0","method":"notifications/initialized"})")
             .value());
     ZEXPECT_TRUE(note.isNull());
 
     // raw 批量 + 全通知 → 空串
-    ZEXPECT_TRUE(srv.handleRaw(
-                     R"([{"jsonrpc":"2.0","method":"notifications/x"},{"jsonrpc":"2.0","method":"notifications/y"}])")
-                     .empty());
+    ZEXPECT_TRUE(
+        srv.handleRaw(
+               R"([{"jsonrpc":"2.0","method":"notifications/x"},{"jsonrpc":"2.0","method":"notifications/y"}])")
+            .empty());
 }
 
 ZTEST(Mcp, HttpE2EClientServer) {
@@ -367,8 +365,7 @@ ZTEST(Mcp, HttpE2EClientServer) {
     ZEXPECT_EQ(tools.value().size(), size_t{1});
     ZEXPECT_EQ(tools.value()[0].name, std::string("add"));
 
-    auto sum = cli.callTool("add",
-                            http::json::JsonValue::parse(R"({"a":40,"b":2})").value());
+    auto sum = cli.callTool("add", http::json::JsonValue::parse(R"({"a":40,"b":2})").value());
     ZEXPECT_TRUE(static_cast<bool>(sum));
     ZEXPECT_EQ(sum.value(), std::string("42"));
 
@@ -410,13 +407,13 @@ public:
     }
     std::string backend() const override { return "scripted"; }
 };
-} // namespace
+}  // namespace
 
 ZTEST(Agent, ToolLoopThenFinal) {
     auto inf = std::make_shared<ScriptedInference>();
     inf->script = {
-        R"({"action":"tool","tool":"add","args":{"a":19,"b":23}})",     // 步 1：调工具
-        R"({"action":"final","answer":"the sum is 42"})",               // 步 2：收尾
+        R"({"action":"tool","tool":"add","args":{"a":19,"b":23}})",  // 步 1：调工具
+        R"({"action":"final","answer":"the sum is 42"})",            // 步 2：收尾
     };
 
     agent::Agent ag(inf);
@@ -430,11 +427,11 @@ ZTEST(Agent, ToolLoopThenFinal) {
     ZEXPECT_EQ(r.toolCalls, 1);
     ZEXPECT_EQ(r.steps.size(), size_t{2});
     ZEXPECT_EQ(r.steps[0].tool, std::string("add"));
-    ZEXPECT_EQ(r.steps[0].observation, std::string("42")); // 工具结果正确回喂
+    ZEXPECT_EQ(r.steps[0].observation, std::string("42"));  // 工具结果正确回喂
 }
 
 ZTEST(Agent, UnknownToolAndFallbackFinal) {
-    { // 未知工具 → observation 提示，仍可继续到 final
+    {  // 未知工具 → observation 提示，仍可继续到 final
         auto inf = std::make_shared<ScriptedInference>();
         inf->script = {
             R"({"action":"tool","tool":"nope","args":{}})",
@@ -446,7 +443,7 @@ ZTEST(Agent, UnknownToolAndFallbackFinal) {
         ZEXPECT_EQ(r.answer, std::string("recovered"));
         ZEXPECT_TRUE(r.steps[0].observation.find("unknown tool") != std::string::npos);
     }
-    { // 模型不守约（纯文本）→ 容错降级为 final
+    {  // 模型不守约（纯文本）→ 容错降级为 final
         auto inf = std::make_shared<ScriptedInference>();
         inf->script = {"I do not follow protocols, here is my answer: 7"};
         agent::Agent ag(inf);
@@ -463,9 +460,7 @@ ZTEST(Agent, MaxStepsExceeded) {
     agent::AgentConfig cfg;
     cfg.maxSteps = 3;
     agent::Agent ag(inf, cfg);
-    ag.registerTool("loop", "infinite", [](const http::json::JsonValue&) {
-        return "again";
-    });
+    ag.registerTool("loop", "infinite", [](const http::json::JsonValue&) { return "again"; });
     auto r = ag.run("loop forever");
     ZEXPECT_FALSE(r.ok);
     ZEXPECT_TRUE(r.error.find("max steps") != std::string::npos);

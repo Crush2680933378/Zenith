@@ -28,8 +28,8 @@ public:
         Object,
     };
 
-    using Array  = std::vector<JsonValue>;
-    using Object = std::map<std::string, JsonValue>; // 字典序 → 输出确定
+    using Array = std::vector<JsonValue>;
+    using Object = std::map<std::string, JsonValue>;  // 字典序 → 输出确定
 
     JsonValue() = default;
     JsonValue(std::nullptr_t) {}
@@ -92,9 +92,9 @@ public:
 
     /* ---- array 访问 ---- */
     void push_back(JsonValue v);
-    [[nodiscard]] const JsonValue& at(size_t i) const;      // 越界抛 out_of_range
+    [[nodiscard]] const JsonValue& at(size_t i) const;  // 越界抛 out_of_range
     [[nodiscard]] JsonValue& at(size_t i);
-    [[nodiscard]] const JsonValue& operator[](size_t i) const noexcept; // 越界返回静态 null
+    [[nodiscard]] const JsonValue& operator[](size_t i) const noexcept;  // 越界返回静态 null
     [[nodiscard]] const Array* asArray() const noexcept {
         return type_ == Type::Array ? &arr_ : nullptr;
     }
@@ -111,13 +111,13 @@ public:
 private:
     explicit JsonValue(Type t) : type_(t) {}
 
-    Type        type_ = Type::Null;
-    bool        b_    = false;
-    int64_t     i_    = 0;
-    double      d_    = 0.0;
+    Type type_ = Type::Null;
+    bool b_ = false;
+    int64_t i_ = 0;
+    double d_ = 0.0;
     std::string s_;
-    Array       arr_;
-    Object      obj_;
+    Array arr_;
+    Object obj_;
 };
 
-} // namespace zenith::json
+}  // namespace zenith::json

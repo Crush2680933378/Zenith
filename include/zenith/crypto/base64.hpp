@@ -10,8 +10,7 @@
 namespace zenith::crypto {
 
 inline std::string base64Encode(const uint8_t* data, size_t n) {
-    static const char* kTable =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static const char* kTable = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string out;
     out.reserve((n + 2) / 3 * 4);
     size_t i = 0;
@@ -32,8 +31,8 @@ inline std::string base64Encode(const uint8_t* data, size_t n) {
         out.push_back('=');
         out.push_back('=');
     } else if (rem == 2) {
-        const uint32_t v = (static_cast<uint32_t>(data[i]) << 16) |
-                           (static_cast<uint32_t>(data[i + 1]) << 8);
+        const uint32_t v =
+            (static_cast<uint32_t>(data[i]) << 16) | (static_cast<uint32_t>(data[i + 1]) << 8);
         out.push_back(kTable[(v >> 18) & 0x3F]);
         out.push_back(kTable[(v >> 12) & 0x3F]);
         out.push_back(kTable[(v >> 6) & 0x3F]);
@@ -52,15 +51,16 @@ inline std::string base64Decode(const std::string& in) {
     static bool init = false;
     if (!init) {
         std::fill(rev, rev + 256, -1);
-        const char* kTable =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        for (int i = 0; i < 64; ++i) rev[static_cast<uint8_t>(kTable[i])] = static_cast<int8_t>(i);
+        const char* kTable = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        for (int i = 0; i < 64; ++i)
+            rev[static_cast<uint8_t>(kTable[i])] = static_cast<int8_t>(i);
         init = true;
     }
 
     // 去掉填充
     size_t len = in.size();
-    while (len > 0 && in[len - 1] == '=') --len;
+    while (len > 0 && in[len - 1] == '=')
+        --len;
 
     std::string out;
     out.reserve(len / 4 * 3 + 3);
@@ -79,4 +79,4 @@ inline std::string base64Decode(const std::string& in) {
     return out;
 }
 
-} // namespace zenith::crypto
+}  // namespace zenith::crypto

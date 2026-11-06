@@ -87,4 +87,4 @@ std::string headerAlg(const std::string& token) {
     return hdr->substr(q1 + 1, q2 - q1 - 1);
 }
 
-} // namespace zenith::http::jwt
+}  // namespace zenith::http::jwt

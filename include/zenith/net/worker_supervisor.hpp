@@ -29,10 +29,10 @@ namespace zenith::net {
 class EventLoop;
 
 struct ZENITH_API WorkerStats {
-    int desired = 0;        // 目标 worker 数
-    int alive = 0;          // 存活数
-    uint64_t spawns = 0;    // 累计派生次数
-    uint64_t exits = 0;     // 累计退出次数
+    int desired = 0;      // 目标 worker 数
+    int alive = 0;        // 存活数
+    uint64_t spawns = 0;  // 累计派生次数
+    uint64_t exits = 0;   // 累计退出次数
 };
 
 class ZENITH_API WorkerSupervisor {
@@ -62,8 +62,8 @@ private:
 
     SetupCallback setup_;
     WorkerStats stats_;
-    std::vector<int64_t> pids_; // 仅主进程访问（POSIX pid 存 int64）
+    std::vector<int64_t> pids_;  // 仅主进程访问（POSIX pid 存 int64）
     bool running_ = false;
 };
 
-} // namespace zenith::net
+}  // namespace zenith::net
