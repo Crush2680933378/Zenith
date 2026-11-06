@@ -184,6 +184,17 @@ if (ZENITH_BUILD_STATIC OR ZENITH_BUILD_SHARED)
     install(EXPORT ZenithTargets
             NAMESPACE Zenith::
             DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Zenith)
+    # 导出配置里的依赖开关（ZenithConfig.cmake.in 据此生成 find_dependency）
+    get_property(_zenith_has_tls GLOBAL PROPERTY ZENITH_HAS_TLS)
+    get_property(_zenith_has_zlib GLOBAL PROPERTY ZENITH_HAS_ZLIB)
+    set(ZENITH_CONFIG_HAS_OPENSSL FALSE)
+    set(ZENITH_CONFIG_HAS_ZLIB FALSE)
+    if (_zenith_has_tls)
+        set(ZENITH_CONFIG_HAS_OPENSSL TRUE)
+    endif()
+    if (_zenith_has_zlib)
+        set(ZENITH_CONFIG_HAS_ZLIB TRUE)
+    endif()
     configure_package_config_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake/ZenithConfig.cmake.in
         ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfig.cmake
@@ -194,6 +205,10 @@ if (ZENITH_BUILD_STATIC OR ZENITH_BUILD_SHARED)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfig.cmake
                   ${CMAKE_CURRENT_BINARY_DIR}/ZenithConfigVersion.cmake
             DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Zenith)
+    # 许可证与使用说明随包分发（下游/合规检查都要求）
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+                  ${CMAKE_CURRENT_SOURCE_DIR}/README.md
+            DESTINATION ${CMAKE_INSTALL_DOCDIR})
 endif()
 
 message(STATUS "Zenith ${PROJECT_VERSION}: "

@@ -74,7 +74,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_guard",
-    "0.1.0",
+    "0.2.2",
     "Zenith LLM input guard: prompt-injection phrases + PII scan/redact (local rules)",
     "Zenith Authors",
     &pluginInit,

@@ -292,7 +292,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "db_vector",
-    "0.2.0",
+    "0.2.2",
     "Zenith vector store: HNSW ANN + snapshot persistence (RAG memory backbone)",
     "Zenith Authors",
     &pluginInit,

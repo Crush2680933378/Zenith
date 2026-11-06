@@ -452,7 +452,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "edge_esp32",
-    "0.1.0",
+    "0.2.2",
     "Zenith edge plugin: COBS-framed device bridge (TCP gateway + serial)",
     "Zenith Authors",
     &pluginInit,

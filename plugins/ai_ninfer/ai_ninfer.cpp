@@ -273,7 +273,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_ninfer",
-    "0.1.0",
+    "0.2.2",
     "Zenith AI plugin: NInfer engine supervisor + OpenAI HTTP adapter (NInfer has NO C ABI)",
     "Zenith Authors",
     &pluginInit,

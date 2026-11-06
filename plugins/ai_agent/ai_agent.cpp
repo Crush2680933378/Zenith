@@ -110,7 +110,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_agent",
-    "0.1.0",
+    "0.2.2",
     "Zenith agent runtime: ReAct tool-loop + session memory + RAG recall",
     "Zenith Authors",
     &pluginInit,

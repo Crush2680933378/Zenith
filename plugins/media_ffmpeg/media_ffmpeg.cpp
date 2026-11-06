@@ -402,7 +402,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "media_ffmpeg",
-    "0.1.0",
+    "0.2.2",
     "Zenith media plugin: FFmpeg probe/snapshot/transcode",
     "Zenith Authors",
     &pluginInit,

@@ -38,9 +38,13 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 
 | 平台 | 构建 | 测试 | 说明 |
 |---|---|---|---|
-| Windows (MinGW) | ✅ | ✅ 43/43 | WSAPoll 后端 |
-| Linux (GCC / Clang+Coro) | ✅ | ✅ 43/43 | epoll 后端；Clang 任务额外跑协程层 |
-| macOS (Apple Clang) | ✅ | ⚠️ 41/43 | kqueue 后端；全量构建阻塞验证 |
+| Windows · MinGW-w64 | ✅ | ✅ 43/43 | WSAPoll 后端；**MSVC 尚未验证**（见下） |
+| Linux · GCC / Clang+Coro | ✅ | ✅ 43/43 | epoll 后端；Clang 任务额外跑协程层 |
+| macOS · Apple Clang | ✅ | ⚠️ 41/43 | kqueue 后端；全量构建阻塞验证 |
+
+> **Windows 的编译器范围**：目前 CI 只覆盖 MinGW-w64（产物是 `libzenith.dll.a`）。
+> MSVC 用户暂时无法直接链接（缺 `.lib` 导入库）——如果你的环境必须用 MSVC，
+> 请先提 Issue，我们再补一条 MSVC 构建矩阵。
 
 macOS 两个已知运行期问题（CI 里单列非阻塞步骤，失败可见但不阻塞合并）：
 
@@ -61,10 +65,16 @@ CI 现在有这些任务，每一层拦一类问题：
 | `linux-sanitize` · ASan+UBSan | 越界/UAF/UB，全量 41 套 | ✅ |
 | `linux-sanitize` · LSan | 进程退出时的对象泄漏 | ❌ 仅报告 |
 | `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ✅ |
+| `consumer-smoke` | 装 SDK → 用 `find_package(Zenith CONFIG)` 编独立下游项目 | ✅ |
 | `perf-gate` | 大文件峰值 RSS + 吞吐下限（与硬件无关的不变量） | ✅ |
-| `coverage` | llvm-cov 行覆盖汇总（artifact + step summary） | 仅产物 |
+| `coverage` | llvm-cov 行覆盖 + 门限（阈值走仓库变量 `COVERAGE_MIN`，默认 20%） | ✅ |
 | `fuzz-smoke` | HTTP 请求/响应、WS 帧、JSON、WAV 五个解析入口 × 45s | ✅ |
 | `Fuzz (nightly)` | 同五个目标 × 600s，崩溃样本作为 artifact 上传 | 夜间 |
+| `Flaky (nightly)` | 核心套件重复 3 轮，专抓偶发失败 | 夜间 |
+
+> `consumer-smoke` 是新增的「消费者视角」验证：它装出 SDK，再用 `find_package(Zenith CONFIG)`
+> 编一个独立小项目。这条链路此前是坏的（导出目标引用了 `ZLIB::ZLIB` 但 config 没
+> `find_dependency`，链接项里还带着构建机的绝对路径），只测本仓库永远发现不了。
 
 **perf-gate 的思路**：不做「和上次的绝对数字比」（CI runner 的硬件差异比要抓的回归还大），
 而是校验行为不变量——64MB 静态文件的峰值 RSS 必须保持在 64MB 以内、吞吐不能低于下限。
@@ -620,6 +630,13 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | 纯 C++ 模板/头文件库，且无法薄封装成 C ABI | 会把 C++ ABI、STL 版本、编译器差异带进宿主 |
 | 要求 C++ ABI 一致的预编译二进制（.lib/.a） | 与「跨编译器一致」的内核目标直接冲突 |
 | 自带 reactor、要接管 fd 与线程的网络运行时 | 与自研 EventLoop 抢控制权 |
+
+## 参与贡献
+
+- 环境、代码约定、提交信息规范、PR 检查清单 → [CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全问题请走私密渠道，攻击面与已知限制见 [SECURITY.md](SECURITY.md)
+- 待办与已知问题都开在 [Issues](https://github.com/Crush2680933378/Zenith/issues)，
+  没有「文档里提一句但没人跟」的悬空项
 
 ## 许可
 

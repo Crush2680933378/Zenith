@@ -4,12 +4,12 @@
 set(ZENITH_TLS_LIBS)
 set(ZENITH_TLS_SOURCES)
 if (ZENITH_TLS STREQUAL "openssl")
-    find_path(OPENSSL_INCLUDE_DIR openssl/ssl.h)
-    find_library(OPENSSL_SSL_LIB NAMES ssl libssl)
-    find_library(OPENSSL_CRYPTO_LIB NAMES crypto libcrypto)
-    if (OPENSSL_INCLUDE_DIR AND OPENSSL_SSL_LIB AND OPENSSL_CRYPTO_LIB)
+    # 用 find_package 而不是手工 find_library：链接项会变成 imported target
+    # （OpenSSL::SSL / OpenSSL::Crypto），导出给下游时不会带构建机的绝对路径。
+    find_package(OpenSSL QUIET)
+    if (OpenSSL_FOUND)
         list(APPEND ZENITH_TLS_SOURCES tls/tls_context.cpp http/jwt_asym.cpp)
-        set(ZENITH_TLS_LIBS ${OPENSSL_SSL_LIB} ${OPENSSL_CRYPTO_LIB})
+        set(ZENITH_TLS_LIBS OpenSSL::SSL OpenSSL::Crypto)
         set(ZENITH_HAS_OPENSSL ON)
         set(ZENITH_TLS_DEFINE ZENITH_TLS_OPENSSL=1)
         # 头文件路径必须传播（macOS brew openssl 不在默认搜索路径；
@@ -33,6 +33,8 @@ if (ZLIB_FOUND)
 else()
     message(STATUS "Zenith compress: zlib not found -> identity only")
 endif()
+# 传给上层：安装导出的 ZenithConfig.cmake 要据此生成 find_dependency
+set_property(GLOBAL PROPERTY ZENITH_HAS_ZLIB ${ZENITH_HAS_ZLIB})
 
 set(ZENITH_SOURCES
     core/key_value_config.cpp

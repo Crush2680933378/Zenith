@@ -35,6 +35,10 @@ jobs:
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
                 -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
           cmake --build build
+      # 打包前先跑测试：tag 不能指向一个没验证过的提交
+      - name: Test (Release)
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure
       - name: Package
         shell: msys2 {0}
         run: |
@@ -67,6 +71,9 @@ jobs:
                 -DZENITH_TLS=openssl \
                 -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
           cmake --build build
+      # 打包前先跑测试：tag 不能指向一个没验证过的提交
+      - name: Test (Release)
+        run: ctest --test-dir build --output-on-failure
       - name: Package
         run: |
           PKG="package/zenith-${GITHUB_REF_NAME}-linux-x64"
@@ -105,4 +112,21 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --title "Zenith ${TAG}" --generate-notes
           fi
+          # 保险：无论谁创建的，都确保不是 draft（v0.2.1 曾整晚是 draft）
+          gh release edit "$TAG" --draft=false
           gh release upload "$TAG" dist/* --clobber
+      - name: 校验发布结果
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          DRAFT=$(gh release view "$TAG" --json isDraft -q .isDraft)
+          [ "$DRAFT" = "false" ] || { echo "::error::release $TAG 仍是 draft"; exit 1; }
+          gh release view "$TAG" --json assets -q '.assets[].name' | tee names.txt
+          grep -q "win-x64.zip"   names.txt || { echo "::error::缺少 Windows 包"; exit 1; }
+          grep -q "linux-x64.tar.gz" names.txt || { echo "::error::缺少 Linux 包"; exit 1; }
+          SIZES=$(gh release view "$TAG" --json assets -q '[.assets[] | select(.size < 1024)] | length')
+          [ "$SIZES" = "0" ] || { echo "::error::有资产大小异常（<1KB）"; exit 1; }
+          echo "✅ $TAG 已发布：非 draft、双平台资产齐全"

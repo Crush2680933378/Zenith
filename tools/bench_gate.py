@@ -15,6 +15,7 @@
 """
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -84,6 +85,8 @@ def main() -> int:
     ap.add_argument("--workdir", default=os.path.join("build", "bench-gate"),
                     help="数据目录（默认 build/bench-gate；不用系统 TEMP，"
                          "某些沙箱会禁止子进程写 TEMP）")
+    ap.add_argument("--out", default="",
+                    help="把本次指标写成 JSON（用于 CI artifact / 趋势记录）")
     args = ap.parse_args()
 
     workdir = os.path.abspath(args.workdir)
@@ -119,7 +122,7 @@ def main() -> int:
 
         base = f"http://127.0.0.1:{args.port}"
         big = parse_metrics(run_bench(bench_exe, base + "/big.bin", 6, 4, 2))
-        json = parse_metrics(run_bench(bench_exe, base + "/json", 4, 4, 2))
+        json_metrics = parse_metrics(run_bench(bench_exe, base + "/json", 4, 4, 2))
         rss = peak_rss_mb(server.pid)
 
         print("\n| 指标 | 实测 | 门限 | 结果 |")
@@ -137,7 +140,7 @@ def main() -> int:
 
         check(f"峰值 RSS（{args.file_size_mb}MB 文件）", rss, args.max_rss_mb, "MB", True)
         check("大文件吞吐", big.get("mbps"), args.min_file_mbps, " MB/s", False)
-        check("JSON RPS", float(json.get("rps", 0)) or None, args.min_json_rps, "", False)
+        check("JSON RPS", float(json_metrics.get("rps", 0)) or None, args.min_json_rps, "", False)
 
         if rss is None:
             print("| （非 Linux 环境跳过 RSS 校验） | | | |")
@@ -152,9 +155,28 @@ def main() -> int:
 
     if failures:
         print(f"\n[gate] ❌ 未通过：{', '.join(failures)}", file=sys.stderr)
-        return 1
-    print("\n[gate] ✅ 全部通过")
-    return 0
+        rc = 1
+    else:
+        print("\n[gate] ✅ 全部通过")
+        rc = 0
+
+    if args.out:
+        report = {
+            "file_size_mb": args.file_size_mb,
+            "peak_rss_mb": rss,
+            "big_file_mbps": big.get("mbps"),
+            "json_rps": json_metrics.get("rps"),
+            "limits": {
+                "max_rss_mb": args.max_rss_mb,
+                "min_file_mbps": args.min_file_mbps,
+                "min_json_rps": args.min_json_rps,
+            },
+            "failed": failures,
+            "ok": rc == 0,
+        }
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+    return rc
 
 
 if __name__ == "__main__":

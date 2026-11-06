@@ -1,0 +1,35 @@
+name: Flaky (nightly)
+
+# 偶发失败检测：核心套件重复跑 3 轮，第一个失败的用例会被 ctest 记下来。
+# 这轮已经手工碰到两次 flake（test_concurrency 的断言竞态、macOS 的 WS 用例），
+# 与其等别人撞上，不如每晚自己撞。
+on:
+  schedule:
+    - cron: "0 19 * * *" # UTC 19:00 = 北京时间 03:00
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev
+      - name: Build (Debug)
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build
+      - name: 重复 3 轮（核心套件）
+        run: |
+          ctest --test-dir build --output-on-failure -j 4 \
+                --repeat until-fail:3 \
+                -R "test_core|test_concurrency|test_http_e2e|test_m6|test_websocket|test_stream|test_m5_web|test_m13g"

@@ -1,0 +1,20 @@
+version: 2
+
+updates:
+  # GitHub Actions：workflow 里用的 action 版本会随时间老化
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+
+  # 子模块（thirdparty/uORM）
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"

@@ -76,7 +76,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_router",
-    "0.1.0",
+    "0.2.2",
     "Zenith multi-provider LLM router: openai-chat/anthropic/gemini adapters (DeepSeek "
     "Harness style provider config)",
     "Zenith Authors",

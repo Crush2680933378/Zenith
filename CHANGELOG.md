@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### 修复
+- **安装导出链路（消费者视角）**：`find_package(Zenith CONFIG)` 此前**直接失败**——
+  导出目标引用了 `ZLIB::ZLIB`，但 `ZenithConfig.cmake` 没 `find_dependency(ZLIB)`；
+  同时 `INTERFACE_LINK_LIBRARIES` 里带着构建机的绝对路径（`C:/msys64/.../libssl.dll.a`），
+  换台机器也链接不上。现在 TLS 改用 `find_package(OpenSSL)` + imported target
+  （`OpenSSL::SSL`/`Crypto`），config 补齐 ZLIB/OpenSSL 依赖，并随包安装 LICENSE/README。
+- 插件描述符版本与项目版本对齐（此前混着 0.1.0 / 0.2.0）→ 统一 0.2.2。
+
+### 工程质量
+- **`consumer-smoke` job**：装 SDK → 用 `find_package(Zenith CONFIG)` 编独立下游项目
+  （静态库 + 动态库两种消费都跑一遍）。这条链路只测本仓库永远发现不了。
+- **发版闭环**：release workflow 打包前先 `ctest`；发布后校验「非 draft + 双平台资产齐全 +
+  资产大小正常」，并用 `gh release edit --draft=false` 兜底（v0.2.1 曾整晚是 draft）。
+- **覆盖率门限**：`coverage` 现在会按仓库变量 `COVERAGE_MIN`（默认 20%）卡门限。
+- **性能趋势**：perf-gate 额外输出 `bench-report.json` 并作为 artifact 留存。
+- **`Flaky (nightly)`**：核心套件 `ctest --repeat until-fail:3`，专抓偶发失败。
+- **工程规范**：新增 `.clang-format`、`.editorconfig`、`CONTRIBUTING.md`、`SECURITY.md`、
+  Dependabot（actions 每周 / 子模块每月）。
+
 ## v0.2.2 (2026-11-06)
 
 把「测试全绿」升级成「四道自动防线」的版本：性能、覆盖率、模糊测试，以及

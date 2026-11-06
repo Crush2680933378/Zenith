@@ -150,7 +150,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_crew",
-    "0.2.0",
+    "0.2.2",
     "Zenith multi-agent SDLC crew: roles, debates, artifacts, persistence, memory, cost",
     "Zenith Authors",
     &pluginInit,

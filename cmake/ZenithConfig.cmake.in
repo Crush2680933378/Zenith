@@ -1,8 +1,21 @@
 @PACKAGE_INIT@
+
+# 导出目标引用了这些 imported target，缺一个下游就 configure 失败：
+#   Threads::Threads / OpenSSL::SSL / OpenSSL::Crypto / ZLIB::ZLIB
+# 这里必须全部 find 出来——此前漏了 ZLIB，下游 find_package(Zenith) 直接报
+#   "ZLIB::ZLIB but the target was not found"。
 include(CMakeFindDependencyMacro)
+
 find_dependency(Threads)
-if(NOT TARGET OpenSSL::SSL AND EXISTS "@OPENSSL_INCLUDE_DIR@")
+
+if("@ZENITH_CONFIG_HAS_OPENSSL@" STREQUAL "TRUE")
     find_dependency(OpenSSL)
 endif()
+
+if("@ZENITH_CONFIG_HAS_ZLIB@" STREQUAL "TRUE")
+    find_dependency(ZLIB)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/ZenithTargets.cmake")
+
 check_required_components(Zenith)

@@ -146,7 +146,7 @@ zenith_plugin_desc g_desc = {
     sizeof(zenith_plugin_desc),
     ZENITH_ABI_VERSION,
     "ai_ninfer_native",
-    "0.1.0",
+    "0.2.2",
     "Zenith AI plugin: NInfer engine IN-PROCESS via a self-made pure C ABI shim (MSVC side)",
     "Zenith Authors",
     &pluginInit,
