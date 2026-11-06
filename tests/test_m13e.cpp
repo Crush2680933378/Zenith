@@ -385,7 +385,11 @@ ZTEST(Desk, WebSocketWatchAndEvents) {
         [&](const net::WebSocketSession::Ptr& s0) {
             auto s = s0;
             // s 按值捕获：open 回调返回后其栈帧销毁，按引用捕获会悬垂（CI UAF）
-            s->setMessageCallback([&, s](const net::WebSocketSession::Ptr&, std::string m, bool) {
+            // 弱捕获自身：回调挂在会话上，强捕获即自环（LSan 的会话泄漏）
+            s->setMessageCallback([&, w = std::weak_ptr<net::WebSocketSession>(s)](
+                                      const net::WebSocketSession::Ptr&, std::string m, bool) {
+                auto s = w.lock();
+                if (!s) return;
                 const int n = ++frames;
                 auto v = json::JsonValue::parse(m);
                 const std::string type = v ? v.value()["type"].asString() : std::string();
