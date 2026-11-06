@@ -93,6 +93,14 @@ ZTEST(ThreadPool, ExecutesAllTasks) {
 
     ZEXPECT_TRUE(doneFuture.wait_for(std::chrono::seconds(10)) ==
                  std::future_status::ready);
+    // 哨兵任务只保证「它自己跑过了」——4 个 worker 并发，哨兵完成时其余任务
+    // 可能仍在执行（CI 上偶发 499/500 就是这个竞态，不是线程池丢任务）。
+    // 等计数追平再断言，语义仍是「500 个任务全部执行」。
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (counter.load(std::memory_order_relaxed) < kTasks &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     ZEXPECT_EQ(counter.load(), kTasks);
 }
 

@@ -89,11 +89,14 @@ def main() -> int:
     workdir = os.path.abspath(args.workdir)
     shutil.rmtree(workdir, ignore_errors=True)
     os.makedirs(workdir, exist_ok=True)
+    # Popen 带 cwd 时，相对可执行路径会按新 cwd 解析——必须先转绝对路径
+    server_exe = os.path.abspath(args.server)
+    bench_exe = os.path.abspath(args.bench)
     server = None
     failures = []
     try:
         server = subprocess.Popen(
-            [args.server, str(args.port), "90", str(args.file_size_mb),
+            [server_exe, str(args.port), "90", str(args.file_size_mb),
              os.path.join(workdir, "www")],
             cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         # 等监听就绪
@@ -115,8 +118,8 @@ def main() -> int:
         time.sleep(1.5)
 
         base = f"http://127.0.0.1:{args.port}"
-        big = parse_metrics(run_bench(args.bench, base + "/big.bin", 6, 4, 2))
-        json = parse_metrics(run_bench(args.bench, base + "/json", 4, 4, 2))
+        big = parse_metrics(run_bench(bench_exe, base + "/big.bin", 6, 4, 2))
+        json = parse_metrics(run_bench(bench_exe, base + "/json", 4, 4, 2))
         rss = peak_rss_mb(server.pid)
 
         print("\n| 指标 | 实测 | 门限 | 结果 |")
