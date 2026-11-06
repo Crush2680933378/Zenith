@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <thread>
 
 #include "zenith/core/platform.hpp"
+#include "zenith/net/poller_io_uring.hpp"
 
 #if defined(ZENITH_PLATFORM_WINDOWS)
 #ifndef _WIN32_WINNT
@@ -38,6 +41,13 @@ std::unique_ptr<Poller> createSelectPoller();
 
 std::unique_ptr<Poller> createPoller() {
 #if defined(ZENITH_PLATFORM_LINUX)
+    // 默认 epoll；ZENITH_POLLER=io_uring 才尝试 io_uring（不可用自动回退）。
+    // 默认不开的原因：不少容器/加固内核直接禁掉 io_uring，默认开等于把
+    // "跑不起来" 变成默认体验。
+    if (const char* env = ::getenv("ZENITH_POLLER");
+        env != nullptr && std::strcmp(env, "io_uring") == 0) {
+        if (auto p = createIoUringPoller()) return p;
+    }
     return createEpollPoller();
 #elif defined(ZENITH_PLATFORM_MACOS)
     return createKqueuePoller();

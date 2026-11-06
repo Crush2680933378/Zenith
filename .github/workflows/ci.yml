@@ -287,6 +287,20 @@ jobs:
                 -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
           cmake --build build
           ctest --test-dir build --output-on-failure
+      # io_uring 后端：默认不启用，这里显式跑一遍探测 + 就绪语义。
+      # 内核/沙箱禁用 io_uring 时自动回退 epoll，用例仍应通过（只给 warning）。
+      - name: io_uring 后端（可用时覆盖）
+        run: |
+          set +e
+          OUT=$(ZENITH_POLLER=io_uring ./build/bin/test_poller 2>&1)
+          RC=$?
+          echo "$OUT"
+          if [ $RC -ne 0 ]; then exit $RC; fi
+          if echo "$OUT" | grep -q "active backend: io_uring"; then
+            echo "io_uring path covered"
+          else
+            echo "::warning::io_uring unavailable on this runner (kernel/sandbox), fell back to epoll"
+          fi
       # 文档内链：重构 README / 拆分 docs 时容易留死链
       - name: 文档内链检查
         run: python3 tools/check_docs_links.py

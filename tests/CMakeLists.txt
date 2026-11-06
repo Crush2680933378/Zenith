@@ -194,6 +194,14 @@ target_include_directories(test_mqtt PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 zenith_set_warnings(test_mqtt)
 add_test(NAME test_mqtt COMMAND test_mqtt)
 set_tests_properties(test_mqtt PROPERTIES TIMEOUT 60)
+
+# 通知后端选择（io_uring 探测 + 回退）与就绪语义
+add_executable(test_poller test_poller.cpp)
+target_link_libraries(test_poller PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_poller PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_poller)
+add_test(NAME test_poller COMMAND test_poller)
+set_tests_properties(test_poller PROPERTIES TIMEOUT 60)
 set_tests_properties(test_http2 PROPERTIES TIMEOUT 60)
 
 # M8.7 W3C Trace Context（解析/校验 + 跨服务两跳传播）

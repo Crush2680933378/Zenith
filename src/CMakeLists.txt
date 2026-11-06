@@ -56,6 +56,7 @@ set(ZENITH_SOURCES
     net/poller_wsapoll.cpp
     net/poller_epoll.cpp
     net/poller_kqueue.cpp
+    net/poller_io_uring.cpp
     net/event_loop.cpp
     net/event_loop_thread_pool.cpp
     mqtt/mqtt.cpp
