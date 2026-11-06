@@ -1,4 +1,4 @@
-﻿# zenith 核心库目标：zenith_core(静态) + zenith(动态) + zenith_coro(可选接口层)
+# zenith 核心库目标：zenith_core(静态) + zenith(动态) + zenith_coro(可选接口层)
 
 # ---- TLS 后端（ZENITH_TLS=openssl；先于源列表展开）----
 set(ZENITH_TLS_LIBS)
@@ -88,6 +88,9 @@ set(ZENITH_SOURCES
     ai/provider_router.cpp
     ai/guard_service.cpp
     ai/speech_mock.cpp
+    ai/audio_pcm.cpp
+    ai/whisper_stt.cpp
+    obs/trace_context.cpp
     concurrency/cron.cpp
     http/otel.cpp
     http/oauth.cpp
@@ -117,6 +120,30 @@ else()
     set(ZENITH_DB_LIBS)
 endif()
 
+# ---- whisper.cpp（可选，M8.8）：-DZENITH_WHISPER_ROOT=<whisper.cpp 根目录> ----
+# 不配置时 whisper_stt.cpp 编成「不可用占位」：工厂返回 nullptr + 原因，
+# 插件自动回落 mock。这样默认构建零依赖，要用真 STT 才引入 whisper。
+set(ZENITH_WHISPER_INCLUDES "")
+set(ZENITH_WHISPER_LIBS "")
+set(ZENITH_WHISPER_DEFINE "")
+if (ZENITH_WHISPER_ROOT)
+    find_path(ZENITH_WHISPER_INC whisper.h
+        HINTS "${ZENITH_WHISPER_ROOT}" "${ZENITH_WHISPER_ROOT}/include"
+              "${ZENITH_WHISPER_ROOT}/include/whisper" "${ZENITH_WHISPER_ROOT}/ggml/include")
+    find_library(ZENITH_WHISPER_LIB NAMES whisper libwhisper
+        HINTS "${ZENITH_WHISPER_ROOT}" "${ZENITH_WHISPER_ROOT}/build/src"
+              "${ZENITH_WHISPER_ROOT}/build" "${ZENITH_WHISPER_ROOT}/lib")
+    if (ZENITH_WHISPER_INC AND ZENITH_WHISPER_LIB)
+        set(ZENITH_WHISPER_INCLUDES ${ZENITH_WHISPER_INC})
+        set(ZENITH_WHISPER_LIBS ${ZENITH_WHISPER_LIB})
+        set(ZENITH_WHISPER_DEFINE ZENITH_HAS_WHISPER=1)
+        message(STATUS "Zenith whisper.cpp: ${ZENITH_WHISPER_LIB}")
+    else()
+        message(STATUS "Zenith whisper.cpp: 未在 ZENITH_WHISPER_ROOT 找到 whisper.h/libwhisper — "
+                       "STT 编为不可用占位（插件回落 mock）")
+    endif()
+endif()
+
 # ---------------------------------------------------------------------------
 # zenith_core —— 静态库（嵌入式 / 单体部署形态）
 # ---------------------------------------------------------------------------
@@ -134,7 +161,11 @@ if (ZENITH_BUILD_STATIC)
     if (ZENITH_HAS_ZLIB)
         target_compile_definitions(zenith_core PRIVATE ZENITH_HAS_ZLIB=1)
     endif()
-    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS} ${ZENITH_ZLIB_LIBS})
+    if (ZENITH_WHISPER_DEFINE)
+        target_compile_definitions(zenith_core PRIVATE ${ZENITH_WHISPER_DEFINE})
+        target_include_directories(zenith_core SYSTEM PRIVATE ${ZENITH_WHISPER_INCLUDES})
+    endif()
+    target_link_libraries(zenith_core PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS} ${ZENITH_ZLIB_LIBS} ${ZENITH_WHISPER_LIBS})
     set_target_properties(zenith_core PROPERTIES OUTPUT_NAME zenith)
 endif()
 
@@ -155,6 +186,11 @@ if (ZENITH_BUILD_SHARED)
     if (ZENITH_HAS_ZLIB)
         target_compile_definitions(zenith PRIVATE ZENITH_HAS_ZLIB=1)
     endif()
+    if (ZENITH_WHISPER_DEFINE)
+        target_compile_definitions(zenith PRIVATE ${ZENITH_WHISPER_DEFINE})
+        target_include_directories(zenith SYSTEM PRIVATE ${ZENITH_WHISPER_INCLUDES})
+    endif()
+    target_link_libraries(zenith PRIVATE ${ZENITH_WHISPER_LIBS})
     target_link_libraries(zenith PUBLIC Threads::Threads ${ZENITH_PLATFORM_LIBS} ${ZENITH_DB_LIBS} ${ZENITH_TLS_LIBS} ${ZENITH_ZLIB_LIBS})
     set_target_properties(zenith PROPERTIES
         OUTPUT_NAME zenith

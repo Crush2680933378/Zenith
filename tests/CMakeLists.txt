@@ -171,6 +171,22 @@ zenith_set_warnings(test_m7)
 add_test(NAME test_m7 COMMAND test_m7)
 set_tests_properties(test_m7 PROPERTIES TIMEOUT 180)
 
+# M8.7 W3C Trace Context（解析/校验 + 跨服务两跳传播）
+add_executable(test_m8_trace test_m8_trace.cpp)
+target_link_libraries(test_m8_trace PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m8_trace PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m8_trace)
+add_test(NAME test_m8_trace COMMAND test_m8_trace)
+set_tests_properties(test_m8_trace PROPERTIES TIMEOUT 120)
+
+# M8.8 语音前处理（WAV/重采样）+ whisper 后端降级语义
+add_executable(test_m8_speech test_m8_speech.cpp)
+target_link_libraries(test_m8_speech PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m8_speech PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m8_speech)
+add_test(NAME test_m8_speech COMMAND test_m8_speech)
+set_tests_properties(test_m8_speech PROPERTIES TIMEOUT 120)
+
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)
     add_executable(zenith_bench ../tools/zenith_bench.cpp)

@@ -1,6 +1,7 @@
 #include "zenith/http/http_client.hpp"
 
 #include "zenith/net/tcp_client.hpp"
+#include "zenith/obs/trace_context.hpp"
 
 namespace zenith::http {
 
@@ -32,7 +33,27 @@ std::string serializeRequest(const ClientRequest& req) {
     out += std::to_string(req.body.size());
     out += "\r\nConnection: ";
     out += req.keepAlive ? "keep-alive" : "close";
-    out += "\r\n\r\n";
+    out += "\r\n";
+    // M8.7：线程上下文里有链路就自动补 W3C traceparent（调用方显式设置优先）
+    bool hasTraceparent = false;
+    for (const auto& [k, v] : req.headers.entries()) {
+        if (iequals(k, "traceparent")) {
+            hasTraceparent = true;
+            break;
+        }
+    }
+    if (!hasTraceparent) {
+        const auto tc = obs::currentTrace();
+        if (tc.has_value()) {
+            const std::string tp = tc->traceparent();
+            if (!tp.empty()) {
+                out += "traceparent: ";
+                out += tp;
+                out += "\r\n";
+            }
+        }
+    }
+    out += "\r\n";
     out += req.body;
     return out;
 }

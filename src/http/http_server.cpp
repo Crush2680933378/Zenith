@@ -1,6 +1,7 @@
 #include "zenith/http/http_server.hpp"
 
 #include "zenith/log/logger.hpp"
+#include "zenith/obs/trace_context.hpp"
 
 namespace zenith::http {
 
@@ -221,6 +222,12 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     ctx.response().httpMinor = ctx.request().httpMinor;
     ctx.setConnection(conn); // M9.1：流式响应写端需要连接
     state->streaming = false;
+
+    // M8.7：提取入站 W3C traceparent 并写入线程上下文（无则新起一条）。
+    // 作用域覆盖整个派发过程：handler 里发起的下游 HttpClient 调用会自动
+    // 带上同一条 trace，跨服务链路由此串起来——业务代码零改动。
+    const obs::TraceScope traceScope(
+        obs::TraceContext::parseOrGenerate(ctx.header("traceparent")));
 
     try {
         router_.dispatch(ctx);
