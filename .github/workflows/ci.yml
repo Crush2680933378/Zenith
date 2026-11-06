@@ -217,6 +217,9 @@ jobs:
                 -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
           cmake --build build
           ctest --test-dir build --output-on-failure
+      # 文档内链：重构 README / 拆分 docs 时容易留死链
+      - name: 文档内链检查
+        run: python3 tools/check_docs_links.py
 
   # 内存安全防线：ASan+UBSan 全量、TSan 跑并发套件（两者互斥，分两个构建目录）。
   # 这两类问题此前靠人肉 review 才发现（缓冲越界搬数据、shared_ptr 环），

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### 文档
+- **README 重构（643 → 223 行）**：首页只保留「是什么 / 怎么跑 / 多快 / 质量 / 去哪看」，
+  时间线式内容与专题细节拆进 `docs/`：
+  [MILESTONES](docs/MILESTONES.md)（M1–M19 明细）、
+  [INFERENCE](docs/INFERENCE.md)（推理网关与引擎对接）、
+  [PLUGINS](docs/PLUGINS.md)（16 个插件 + 热重载协议）、
+  [QUALITY](docs/QUALITY.md)（CI/sanitizer/fuzz 细节）、
+  [DEPENDENCIES](docs/DEPENDENCIES.md)（依赖准入原则）。
+  快速开始从第 437 行提到第 34 行，并新增「文档导航」表。
+- 新增 `tools/check_docs_links.py`：检查 README 与 docs 的相对链接/锚点，
+  已接入 CI（防止拆分文档时留死链）。
+- README 的 HTTP 示例代码经 `g++ -fsyntax-only` 校验，保证可直接编译。
+
 ### 修复
 - **安装导出链路（消费者视角）**：`find_package(Zenith CONFIG)` 此前**直接失败**——
   导出目标引用了 `ZLIB::ZLIB`，但 `ZenithConfig.cmake` 没 `find_dependency(ZLIB)`；
