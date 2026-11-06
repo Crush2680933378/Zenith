@@ -127,6 +127,61 @@
 - `ZENITH_TLS=none` 时 net/http 层仍无条件引用 TLS 符号，静态/动态库均
   不可链接；规避：`ZENITH_TLS=openssl`。计划在 none 后端补 stub 后解除。
 
+## v0.2.0 (2026-11)
+
+九个里程碑的累积更新（M9–M17）：AI 后端全家桶、多厂商路由韧性、2.5D 可视化契约、
+生产级护栏与性能优化。测试 4 → 40 套（337 用例），代码 ~24K → ~28K 行。
+
+### M17 优化全包（2026-11）
+- **SSE 转发定时器化**：tick 挂连接所属 loop（200ms 队列交换微秒级），
+  取代占死 IO 线程的 sleep 循环——多观看者不再拖垮单线程 IO 池
+- **execVerify 命令闸门**：首 token 精确白名单（默认仅 echo）+ shell 元字符全禁
+- **持久化去抖**：非边界写 1.5s 合并（治 O(N²) 写放大）；JSON 快照锁内生成
+  （修复并行实现线程的无锁读竞态）
+- **任务淘汰**：`taskTtlSec`/`maxRetainedTasks` 惰性清扫 + 持久化文件同步删除
+- **语义记忆**：embeddings 优先（`memoryEmbedModel`）→ 词哈希回退，维度混排守卫
+- **ai_guard 联动**：brief 注入阻断 + 产物 PII 掩码（guard 事件）
+- **定时 crew**：`scheduleCron/Brief/ConfigJson`（复用 sched_cron）
+- **WS 心跳/背压**：30s 服务端 ping + 慢消费者（>1MB 发送缓冲）踢除
+- **投票配置化**：abstain/quorum/按声明序破平
+- 修复：子线程 CrewInterrupted 逃逸（Linux clang terminate）、asArray() 悬垂指针
+
+### M16 P0 护栏（2026-10-25）
+- 上下文预算截断（头 60%+尾 30%+标记，`truncate` 事件）
+- 成本预算熔断（phase 边界转人工，每次放行限额翻倍）
+- cancel webhook 补漏、followup 增量迭代（`POST /crew/tasks/:id/followup`）
+
+### M15 ZenithDesk 契约（2026-10-25）
+- `GET /crew/roster`（角色↔AI 立绘映射 + personaFromModel）、`/crew/meta`、
+  聚合 `/crew/board`；逐票 `vote_cast`、`handoff`（8 处）、`bug_assigned`、
+  `test_result`、story/debate 事件；`/crew/ws` WebSocket 双向；CORS 默认挂载
+- `docs/CREW_EVENTS.md`：完整事件目录 + 18 组动画映射表（前端对接圣经）
+
+### M14 Crew 全面强化（2026-10-24）
+- 取消/断点恢复+持久化、每角色模型路由、结构化输出自修正、token 流/成本记账、
+  真实缺陷环（工单派单）、后端∥前端真并行、story 子环、组织记忆、多轮辩论、
+  人工选民、OTel span、质量评分卡、webhook、导出、写鉴权、受管线程池（21 项）
+
+### M13 全栈补强（2026-10-24）
+- **ProviderRouter**：TLS https 直连（SNI/证书校验/insecure）、三协议流式
+  SSE→token 翻译、failover+熔断+成本记账
+- **新插件**：`ai_guard`（注入/PII 护栏）、`ai_speech`（STT/TTS 接口+mock WAV）
+- **核心新模块**：sched_cron（5 字段 cron）、obs_otel（OTLP 导出）、
+  auth_oauth（授权码+PKCE）、net_mqtt（3.1.1 客户端）
+- db_vector 持久化快照、crew 内嵌仪表盘
+
+### M12 多厂商 LLM 路由（2026-10-23）
+- openai-chat/anthropic/gemini 三协议适配器、模型发现、`$ENV:` 密钥、通配路由
+
+### M11 SDLC-Crew（2026-10-23）
+- 7 角色协作引擎：投票决策/产物库/缺陷环/人工门禁/SSE 状态板
+
+### M10 AI Agent 后端（2026-10-22）
+- ReAct 循环 + 会话记忆 + RAG 召回、MCP 双向、自研 HNSW + Qdrant API
+
+### M9 流式与身份（2026-10-21）
+- SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT
+
 ## v0.1.0 (2026-10)
 
 首个正式版本。六个里程碑、27 个提交、~24,000 行自研代码、22 个测试套件全绿。

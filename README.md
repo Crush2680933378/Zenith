@@ -21,6 +21,8 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 | **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
 | **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
 | **M8 生态扩展** | 🚧 **2/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP **+ M8.3 向量库提前落地**（M10 三件套：ai_mcp/db_vector/ai_agent）→ [PLAN_M8](docs/PLAN_M8.md) |
+| **M17 优化全包** | ✅ 完成 | SSE 定时器化（多观看者不占死 IO 线程）/execVerify 命令白名单+元字符禁令/持久化去抖+锁内快照/任务 TTL 淘汰/语义记忆（embeddings→哈希回退）/ai_guard 联动（brief 阻断+产物 PII 掩码）/定时 crew（cron）/WS 心跳+慢消费者背压/投票 abstain+quorum+声明序破平/任务分页/OTel 锁外上传 |
+| **M16 P0 护栏** | ✅ 完成 | 上下文预算截断（truncate 事件）/成本预算熔断（超限转人工，放行翻倍）/cancel webhook 补漏/followup 增量迭代（POST /:id/followup 继承产物+增量提示） |
 | **M15 ZenithDesk 契约** | ✅ 完成 | 2.5D 可视化前端全套 API：`/crew/roster`（角色↔AI 立绘映射）、逐票 `vote_cast`/`handoff`/`bug_assigned` 结构化协作事件、`/crew/ws` WebSocket 双向、`/crew/board` 多任务聚合、CORS 即开即用 → [CREW_EVENTS.md](docs/CREW_EVENTS.md) |
 | **M14 Crew 全面强化** | ✅ 完成 | 21 项：取消/断点恢复+持久化、每角色模型路由、结构化输出自修正、token 流/成本记账、真实缺陷环(工单派单)、后端∥前端真并行、story 子环、组织记忆、多轮辩论、人工选民、OTel、评分卡、webhook、导出、写鉴权 |
 | **M13 全栈补强** | ✅ 完成 | ProviderRouter **https/TLS 直连**、三协议**流式 SSE→token** 翻译、db_vector 持久化快照、crew 内嵌仪表盘；路由 **failover+熔断+成本记账**；**ai_guard**(注入/PII 护栏)、**ai_stt/ai_tts** 语音接口；sched_cron / obs_otel(OTLP) / auth_oauth(PKCE) / **net_mqtt**(3.1.1 客户端) |
@@ -29,7 +31,7 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 | **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
 | **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
-| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，38 套测试全绿 |
+| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，40 套测试全绿 |
 | **插件** | 16 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·ai_inference·ai_llama·ai_ninfer·ai_ninfer_native·db_vector·ai_mcp·ai_agent·ai_router·ai_crew·**ai_guard**·**ai_speech** |
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
@@ -440,7 +442,7 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 
 | 插件 | 功能 | 为什么最火 | 优先级 |
 |---|---|---|---|
-| `net_mqtt` | ~~MQTT 客户端~~ ✅ **已入核心**（M13：3.1.1 客户端——变长编码/QoS1 PUBACK/心跳/下行分发）；broker 形态仍在计划 | IoT 标准消息协议 | ⭐⭐⭐⭐ |
+| `net_mqtt` | ✅ **客户端已入核心**（M13c：3.1.1——变长编码/QoS1 PUBACK/心跳/下行分发）；📋 broker 形态（保留消息/共享订阅）仍在计划 | IoT 标准消息协议 | ⭐⭐⭐⭐ |
 | `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
 | `media_webrtc` | WebRTC 实时通信（ICE/DTLS/SRTP + FFmpeg 转码联动） | 视频会议/AI 实时视频 | ⭐⭐⭐ |
 | `obs_otel` | ~~OTLP 导出~~ ✅ **已入核心**（M13：OTLP/HTTP-JSON 批量导出+失败回队；crew 全链路 span 已接） | 云原生可观测标准 | ⭐⭐⭐ |
@@ -474,6 +476,12 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 - **M15 ✅ ZenithDesk 契约（2026-10-25）**：roster/meta/聚合 board、逐票 vote_cast、handoff、
   bug_assigned、test_result、story/debate 事件、`/crew/ws` WebSocket、CORS
   → [docs/CREW_EVENTS.md](docs/CREW_EVENTS.md)
+- **M16 ✅ P0 护栏（2026-10-25）**：上下文预算截断、成本预算熔断（放行翻倍链）、
+  cancel webhook 补漏、followup 增量迭代
+- **M17 ✅ 优化全包（2026-11）**：SSE 定时器化、execVerify 白名单、持久化去抖、
+  任务淘汰、语义记忆、guard 联动、定时 crew、WS 心跳/背压、投票配置化、分页、
+  OTel 解锁；修复子线程 CrewInterrupted 逃逸（Linux clang terminate）与
+  asArray() 悬垂指针（Linux 平台 UB）
 - **M8 🚧 生态扩展（1/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
   （`ai_inference` 网关 / `ai_llama` 进程内 llama.cpp / `ai_ninfer` 子进程 /
   `ai_ninfer_native` 自研 C ABI 进程内），实测 prefill 3.65k · decode 729 tok/s；
