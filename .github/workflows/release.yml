@@ -86,12 +86,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: 归档并发布
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # publish 作业不 checkout 就没有 .git，gh 无法推断仓库；显式指定
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
