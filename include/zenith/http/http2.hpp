@@ -162,6 +162,12 @@ private:
     void handleFrame(const Frame& f, std::string& out);
     void dispatch(const H2Request& req, uint32_t streamId, std::string& out);
     void sendGoAway(std::string& out, ErrorCode code);
+    /// 按连接/流窗口把一段响应正文切成 DATA 帧发出；窗口不足的部分暂存
+    void sendData(uint32_t streamId, std::string body, std::string& out);
+    /// 窗口变大后，把暂存的数据继续发
+    void flushPending(uint32_t streamId, std::string& out);
+    /// 回 WINDOW_UPDATE（收到对端 DATA 后补充窗口）
+    void replenish(uint32_t streamId, uint32_t bytes, std::string& out);
 
     Handler handler_;
     HpackDecoder decoder_;
@@ -170,6 +176,13 @@ private:
     std::map<uint32_t, H2Request> streams_;  // 流 → 已收头字段/正文累积
     std::string pendingHeaderBlock_;         // CONTINUATION 拼装
     uint32_t pendingHeaderStream_ = 0;
+
+    // 流控（RFC 9113 §6.9）：发送窗口按连接 + 流两级
+    uint32_t connSendWindow_ = 65535;
+    std::map<uint32_t, uint32_t> streamSendWindow_;
+    std::map<uint32_t, std::string> pendingData_;  // 窗口不够时挂起的正文
+    uint32_t maxFrameSize_ = kDefaultMaxFrameSize;
+
     bool prefaceSeen_ = false;
     bool settingsSent_ = false;
     bool closed_ = false;

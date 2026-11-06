@@ -478,6 +478,10 @@ void H2ServerConnection::handleFrame(const Frame& f, std::string& out) {
         }
         case FrameType::Headers: {
             auto& req = streams_[f.streamId];
+            // 新流初始化发送窗口（默认 65535；对端 SETTINGS 里调小的情况暂不处理）
+            if (streamSendWindow_.find(f.streamId) == streamSendWindow_.end()) {
+                streamSendWindow_[f.streamId] = 65535;
+            }
             const bool endHeaders = (f.flags & 0x4) != 0;
             const bool endStream = (f.flags & 0x1) != 0;
             std::string block = f.payload;
@@ -562,6 +566,8 @@ void H2ServerConnection::handleFrame(const Frame& f, std::string& out) {
         case FrameType::Data: {
             auto& req = streams_[f.streamId];
             req.body += f.payload;
+            // 收了多少补多少：否则大请求体（>64KB）会被对端窗口卡死
+            replenish(f.streamId, static_cast<uint32_t>(f.payload.size()), out);
             if ((f.flags & 0x1) != 0) dispatch(req, f.streamId, out);
             return;
         }
@@ -573,8 +579,29 @@ void H2ServerConnection::handleFrame(const Frame& f, std::string& out) {
             closed_ = true;
             return;
         }
-        case FrameType::WindowUpdate:
-            return;  // 简化：不做流控
+        case FrameType::WindowUpdate: {
+            if (f.payload.size() != 4) return;
+            uint32_t inc = 0;
+            for (int i = 0; i < 4; ++i) {
+                inc = (inc << 8) | static_cast<uint32_t>(static_cast<uint8_t>(f.payload[i]));
+            }
+            if (f.streamId == 0) {
+                connSendWindow_ += inc;
+                // 先收集 id 再 flush：flushPending 会 erase，直接遍历容器会失效
+                std::vector<uint32_t> ids;
+                ids.reserve(pendingData_.size());
+                for (const auto& [sid, buf] : pendingData_) {
+                    (void)buf;
+                    ids.push_back(sid);
+                }
+                for (uint32_t sid : ids)
+                    flushPending(sid, out);
+            } else {
+                streamSendWindow_[f.streamId] += inc;
+                flushPending(f.streamId, out);
+            }
+            return;
+        }
         default:
             return;  // PRIORITY / PUSH_PROMISE 等暂不处理
     }
@@ -599,15 +626,55 @@ void H2ServerConnection::dispatch(const H2Request& req, uint32_t streamId, std::
     h.payload = std::move(block);
     out += encodeFrame(h);
 
-    if (!resp.body.empty()) {
+    // 正文按窗口分帧（大响应会被拆成多个 DATA，窗口不足的部分挂起等 WINDOW_UPDATE）
+    if (!resp.body.empty()) sendData(streamId, std::move(resp.body), out);
+    streams_.erase(streamId);
+}
+
+void H2ServerConnection::sendData(uint32_t streamId, std::string body, std::string& out) {
+    if (body.empty()) return;
+    pendingData_[streamId] += body;
+    flushPending(streamId, out);
+}
+
+void H2ServerConnection::flushPending(uint32_t streamId, std::string& out) {
+    auto it = pendingData_.find(streamId);
+    if (it == pendingData_.end()) return;
+    std::string& buf = it->second;
+    uint32_t& sw = streamSendWindow_[streamId];
+    while (!buf.empty()) {
+        uint32_t allowed = static_cast<uint32_t>(buf.size());
+        if (allowed > connSendWindow_) allowed = connSendWindow_;
+        if (allowed > sw) allowed = sw;
+        if (allowed > maxFrameSize_) allowed = maxFrameSize_;
+        if (allowed == 0) return;  // 两个窗口都干了：等对端 WINDOW_UPDATE
         Frame d;
         d.type = FrameType::Data;
         d.streamId = streamId;
-        d.flags = 0x1;  // END_STREAM
-        d.payload = std::move(resp.body);
+        d.payload.assign(buf.data(), allowed);
+        buf.erase(0, allowed);
+        connSendWindow_ -= allowed;
+        sw -= allowed;
+        if (buf.empty()) d.flags = 0x1;  // END_STREAM
         out += encodeFrame(d);
     }
-    streams_.erase(streamId);
+    pendingData_.erase(it);
+}
+
+void H2ServerConnection::replenish(uint32_t streamId, uint32_t bytes, std::string& out) {
+    if (bytes == 0) return;
+    auto putUpdate = [&out](uint32_t sid, uint32_t inc) {
+        Frame w;
+        w.type = FrameType::WindowUpdate;
+        w.streamId = sid;
+        w.payload.push_back(static_cast<char>((inc >> 24) & 0xFF));
+        w.payload.push_back(static_cast<char>((inc >> 16) & 0xFF));
+        w.payload.push_back(static_cast<char>((inc >> 8) & 0xFF));
+        w.payload.push_back(static_cast<char>(inc & 0xFF));
+        out += encodeFrame(w);
+    };
+    putUpdate(streamId, bytes);  // 流级
+    putUpdate(0, bytes);         // 连接级
 }
 
 }  // namespace zenith::http::h2

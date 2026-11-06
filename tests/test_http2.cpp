@@ -1,5 +1,7 @@
 // HTTP/2 基础层：帧编解码 + HPACK（RFC 9113 / RFC 7541）
 #include <chrono>
+#include <map>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -315,6 +317,140 @@ ZTEST(H2E2E, GetOverH2c) {
     ZEXPECT_TRUE(gotBody);
     ZEXPECT_EQ(body, std::string("Hello, Zenith!"));
 
+    raw.close();
+}
+
+/* ------------------- 流控：大响应分帧 + 客户端补窗口 ------------------- */
+
+ZTEST(H2E2E, LargeResponseRespectsFlowControl) {
+    net::EventLoop loop;
+    net::EventLoopThreadPool io{1};
+    io.start();
+    http::HttpServer server(&loop, &io);
+    const std::string big(200000, 'x');
+    server.router().get("/big", [&big](http::Context& c) { c.text(200, big); });
+    (void)server.listen("127.0.0.1", 0);
+    std::thread t([&loop] { loop.loop(); });
+    std::this_thread::sleep_for(150ms);
+    struct Cleanup {
+        net::EventLoop& loop;
+        std::thread& t;
+        net::EventLoopThreadPool& io;
+        ~Cleanup() {
+            loop.stop();
+            if (t.joinable()) t.join();
+            io.stop();
+        }
+    } cleanup{loop, t, io};
+    Raw raw;
+    ZEXPECT_TRUE(raw.open(server.port()));
+    std::string req(http::h2::kClientPreface);
+    http::h2::Frame settings;
+    settings.type = http::h2::FrameType::Settings;
+    req += http::h2::encodeFrame(settings);
+    http::h2::HpackEncoder enc;
+    http::h2::Frame h;
+    h.type = http::h2::FrameType::Headers;
+    h.streamId = 1;
+    h.flags = 0x4 | 0x1;
+    h.payload = enc.encode({{":method", "GET"}, {":scheme", "http"}, {":path", "/big"}});
+    req += http::h2::encodeFrame(h);
+    ZEXPECT_TRUE(raw.sendAll(req));
+
+    std::string body;
+    std::string acc;
+    bool done = false;
+    for (int round = 0; round < 80 && !done; ++round) {
+        acc += raw.readFor(150, 1);
+        size_t pos = 0;
+        while (pos < acc.size()) {
+            auto r = http::h2::parseFrame(std::string_view(acc).substr(pos));
+            if (r.status != http::h2::ParseResult::Status::Ok) break;
+            pos += r.consumed;
+            if (r.frame.type != http::h2::FrameType::Data) continue;
+            body += r.frame.payload;
+            const uint32_t n = static_cast<uint32_t>(r.frame.payload.size());
+            for (uint32_t sid : {1u, 0u}) {  // 流级 + 连接级都要补
+                http::h2::Frame w;
+                w.type = http::h2::FrameType::WindowUpdate;
+                w.streamId = sid;
+                w.payload.push_back(static_cast<char>((n >> 24) & 0xFF));
+                w.payload.push_back(static_cast<char>((n >> 16) & 0xFF));
+                w.payload.push_back(static_cast<char>((n >> 8) & 0xFF));
+                w.payload.push_back(static_cast<char>(n & 0xFF));
+                (void)raw.sendAll(http::h2::encodeFrame(w));
+            }
+            if ((r.frame.flags & 0x1) != 0) done = true;
+        }
+        acc.erase(0, pos);
+    }
+    ZEXPECT_TRUE(done);
+    ZEXPECT_EQ(body.size(), big.size());
+    ZEXPECT_TRUE(body == big);
+    raw.close();
+}
+
+/* --------------------------- 多流并发 --------------------------- */
+
+ZTEST(H2E2E, MultiStreamOnOneConnection) {
+    net::EventLoop loop;
+    net::EventLoopThreadPool io{1};
+    io.start();
+    http::HttpServer server(&loop, &io);
+    server.router().get("/a", [](http::Context& c) { c.text(200, "A"); });
+    server.router().get("/b", [](http::Context& c) { c.text(200, "B"); });
+    server.router().get("/c", [](http::Context& c) { c.text(200, "C"); });
+    (void)server.listen("127.0.0.1", 0);
+    std::thread t([&loop] { loop.loop(); });
+    std::this_thread::sleep_for(150ms);
+    struct Cleanup {
+        net::EventLoop& loop;
+        std::thread& t;
+        net::EventLoopThreadPool& io;
+        ~Cleanup() {
+            loop.stop();
+            if (t.joinable()) t.join();
+            io.stop();
+        }
+    } cleanup{loop, t, io};
+    Raw raw;
+    ZEXPECT_TRUE(raw.open(server.port()));
+    std::string req(http::h2::kClientPreface);
+    http::h2::Frame settings;
+    settings.type = http::h2::FrameType::Settings;
+    req += http::h2::encodeFrame(settings);
+    http::h2::HpackEncoder enc;
+    const std::pair<uint32_t, const char*> streams[] = {{1, "/a"}, {3, "/b"}, {5, "/c"}};
+    for (const auto& [sid, path] : streams) {
+        http::h2::Frame h;
+        h.type = http::h2::FrameType::Headers;
+        h.streamId = sid;
+        h.flags = 0x4 | 0x1;
+        h.payload = enc.encode({{":method", "GET"}, {":scheme", "http"}, {":path", path}});
+        req += http::h2::encodeFrame(h);
+    }
+    ZEXPECT_TRUE(raw.sendAll(req));
+
+    std::set<uint32_t> gotStreams;
+    std::map<uint32_t, std::string> bodies;
+    std::string acc;
+    for (int round = 0; round < 30 && gotStreams.size() < 3; ++round) {
+        acc += raw.readFor(150, 1);
+        size_t pos = 0;
+        while (pos < acc.size()) {
+            auto r = http::h2::parseFrame(std::string_view(acc).substr(pos));
+            if (r.status != http::h2::ParseResult::Status::Ok) break;
+            pos += r.consumed;
+            if (r.frame.type != http::h2::FrameType::Data) continue;
+            bodies[r.frame.streamId] += r.frame.payload;
+            if ((r.frame.flags & 0x1) != 0) gotStreams.insert(r.frame.streamId);
+        }
+        acc.erase(0, pos);
+    }
+    ZEXPECT_EQ(gotStreams.size(), size_t{3});
+    ZEXPECT_EQ(bodies[1], std::string("A"));
+    ZEXPECT_EQ(bodies[3], std::string("B"));
+    ZEXPECT_EQ(bodies[5], std::string("C"));
     raw.close();
 }
 
