@@ -37,7 +37,10 @@ using SockFd = int;
 
 namespace zenith::ai {
 
-thread_local std::string ProviderRouter::lastProviderUsed;
+std::string& ProviderRouter::lastProviderUsed() {
+    static thread_local std::string v;
+    return v;
+}
 
 const char* providerApiName(ProviderApi api) noexcept {
     switch (api) {
@@ -759,7 +762,7 @@ ChatResult ProviderRouter::chat(const ChatRequest& req, const TokenCallback& onT
             }
             if (r.ok) {
                 rt_->onSuccess(idx, cur, r.usage.promptTokens, r.usage.completionTokens);
-                lastProviderUsed = cur.name;
+                lastProviderUsed() = cur.name;
                 r.model = model;
                 return r;
             }

@@ -201,7 +201,7 @@ ZTEST(Router, RoutesAllThreeProtocols) {
     auto r4 = router.chat(makeReq("unknown-model"));
     ZEXPECT_TRUE(r4.ok);
     ZEXPECT_TRUE(r4.content.find("[unknown-model]") != std::string::npos);  // 兜底走了 deepseek
-    ZEXPECT_EQ(ai::ProviderRouter::lastProviderUsed, std::string("deepseek"));
+    ZEXPECT_EQ(ai::ProviderRouter::lastProviderUsed(), std::string("deepseek"));
 
     // 路由诊断
     ZEXPECT_EQ(router.route("deepseek-reasoner")->name, std::string("deepseek"));

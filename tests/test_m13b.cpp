@@ -88,7 +88,7 @@ ZTEST(RouterResilience, FallbackOnFailure) {
     auto r = router.chat(simpleReq("m"));
     ZEXPECT_TRUE(r.ok);
     ZEXPECT_EQ(r.content, std::string("ok"));
-    ZEXPECT_EQ(ai::ProviderRouter::lastProviderUsed, std::string("backup"));
+    ZEXPECT_EQ(ai::ProviderRouter::lastProviderUsed(), std::string("backup"));
     auto st = router.statsSnapshot();
     ZEXPECT_EQ(st["main"].failures, uint64_t{1});
     ZEXPECT_EQ(st["main"].fallbacks, uint64_t{1});

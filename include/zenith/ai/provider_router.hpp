@@ -107,8 +107,10 @@ public:
     [[nodiscard]] const ProviderConfig* route(const std::string& model) const;
     /// 模型发现（openai 协议 GET /models；其余返回配置内清单）
     core::Result<std::vector<std::string>> discoverModels(const std::string& providerName);
-    /// 上次路由命中的厂商（诊断；thread_local 每请求有效）
-    static thread_local std::string lastProviderUsed;
+    /// 上次路由命中的厂商（诊断；thread_local 每请求有效）。
+    /// 用访问器而不是静态数据成员：MSVC 不允许导出类里带动态初始化的
+    /// thread_local 静态成员（C2492: data with dynamic initializer has dllimport/dllexport）。
+    static std::string& lastProviderUsed();
 
     // ---- 可观测（M13 第二批：failover/熔断/成本）----
     struct ProviderStat {
