@@ -198,6 +198,13 @@ if (ZENITH_BUILD_SHARED)
         OUTPUT_NAME zenith
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
+    # MSVC 下动态库会产出导入库 zenith.lib，与静态库 zenith_core 的 zenith.lib
+    # 同名同目录 → ninja 报 "multiple rules generate lib/zenith.lib"。
+    # 把导入库放到 lib/import/ 子目录即可（CMake 消费方走 target，不受影响）。
+    if (MSVC AND ZENITH_BUILD_STATIC)
+        set_target_properties(zenith PROPERTIES
+            ARCHIVE_OUTPUT_DIRECTORY ${ZENITH_LIBRARY_OUTPUT_DIR}/import)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
