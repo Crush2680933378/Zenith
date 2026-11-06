@@ -48,7 +48,7 @@ jobs:
           cp README.md CHANGELOG.md "$PKG/" 2>/dev/null || true
           mkdir -p "$PKG/docs" && cp docs/*.md "$PKG/docs/" 2>/dev/null || true
           echo "Zenith ${GITHUB_REF_NAME} (Windows x64, Release)" > "$PKG/VERSION.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pkg-windows
           path: package/
@@ -82,7 +82,7 @@ jobs:
           cp README.md CHANGELOG.md "$PKG/" 2>/dev/null || true
           mkdir -p "$PKG/docs" && cp docs/*.md "$PKG/docs/" 2>/dev/null || true
           echo "Zenith ${GITHUB_REF_NAME} (Linux x64, Release)" > "$PKG/VERSION.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pkg-linux
           path: package/
