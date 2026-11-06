@@ -338,7 +338,7 @@ jobs:
                 -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
           cmake --build build-tsan
           ctest --test-dir build-tsan --output-on-failure \
-                -R "test_concurrency|test_m6|test_websocket|test_m13b|test_m13d"
+                -R "test_concurrency|test_m6|test_stream|test_websocket|test_m5_web|test_m13b|test_m13d|test_m13e|test_m13g|test_m11"
 
   linux-clang-coro:
     runs-on: ubuntu-latest
