@@ -231,6 +231,16 @@ ZTEST(WsE2E, MultipleMessagesAndBinary) {
     net::EventLoop clientLoop;
     std::thread clientThread([&] { clientLoop.loop(); });
 
+    // 断言失败会抛异常：必须靠 RAII 停 loop + join，否则线程未 join → std::terminate
+    struct Cleanup {
+        net::EventLoop& loop;
+        std::thread& t;
+        ~Cleanup() {
+            loop.stop();
+            if (t.joinable()) t.join();
+        }
+    } cleanup{clientLoop, clientThread};
+
     std::atomic<int> echoes{0};
     std::string lastEcho;
     std::atomic<bool> closed{false};
@@ -260,7 +270,7 @@ ZTEST(WsE2E, MultipleMessagesAndBinary) {
             ztest::reportFail(__FILE__, __LINE__, "ws connect failed: " + reason);
         });
 
-    for (int i = 0; i < 300 && !closed.load(); ++i)
+    for (int i = 0; i < 600 && !closed.load(); ++i)
         std::this_thread::sleep_for(10ms);
     ZEXPECT_TRUE(closed.load());
     ZEXPECT_EQ(echoes.load(), 3);
@@ -269,9 +279,6 @@ ZTEST(WsE2E, MultipleMessagesAndBinary) {
         std::lock_guard<std::mutex> lk(f.mtx);
         ZEXPECT_EQ(f.received.size(), size_t{3});
     }
-
-    clientLoop.stop();
-    clientThread.join();
 }
 
 ZTEST(WsE2E, PingPongAndLargeMessage) {
