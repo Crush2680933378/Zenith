@@ -13,11 +13,15 @@
     HEADERS + DATA；`HttpServer` 按首字节识别 preface，整条连接转入 h2
   - *流控*：连接级 + 流级发送窗口；DATA 按 `min(窗口, 16384)` 分帧，窗口不足的正文挂起、
     收到 `WINDOW_UPDATE` 后继续；收到 DATA 立即回补窗口（流级 + 连接级）
+  - *Huffman*：解码表由 RFC 7541 附录 B **自动生成**（`tools/gen_hpack_huffman.py` →
+    `src/http/hpack_huffman.inc`，257 项），按位查表 + 补位/EOS 校验；
+    用 RFC C.4.1 / C.4.2 官方向量验证（含 12 字节 Huffman 的 `:authority`）。编码端仍输出
+    非 Huffman（合法且省 CPU）
   - 端到端测试：`H2E2E.GetOverH2c`（真 socket 走完 preface→HEADERS→200+DATA）、
     `H2E2E.LargeResponseRespectsFlowControl`（200KB 响应，客户端逐帧补窗口，
     校验正文逐字节一致）、`H2E2E.MultiStreamOnOneConnection`（单连接 3 条流并发）
-  - 当前边界（写在头文件里）：**不做 Huffman 解码**（收到即报压缩错误）、
-    h2 上暂不支持流式响应（SSE/chunked）
+  - 当前边界（写在头文件里）：h2 上暂不支持流式响应（SSE/chunked）、PUSH_PROMISE、
+    PRIORITY 语义；`SETTINGS.HEADER_TABLE_SIZE` 暂不生效
 - `TcpConnection` / `WebSocketSession` 的 `liveCount()` 存活计数留在库里：
   排查「对象没析构」类问题，一条打印就能定位到类型。
 
