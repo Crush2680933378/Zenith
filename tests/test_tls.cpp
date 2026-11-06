@@ -51,11 +51,15 @@ struct CertDir {
         X509_gmtime_adj(X509_get_notAfter(x), 3600LL * 24 * 2);
         X509_set_pubkey(x, pkey);
 
-        X509_NAME* name = X509_get_subject_name(x);
+        // OpenSSL 3 的 X509_get_subject_name 返回 const X509_NAME*（macOS brew
+        // 版本直接暴露该签名），故显式构造名字对象——1.1/3.x/LibreSSL 通吃。
+        X509_NAME* name = X509_NAME_new();
         X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
                                    reinterpret_cast<const unsigned char*>("127.0.0.1"), -1,
                                    -1, 0);
+        X509_set_subject_name(x, name);
         X509_set_issuer_name(x, name);
+        X509_NAME_free(name);
         // SAN = IP:127.0.0.1（现代校验必需）
         GENERAL_NAMES* gns = GENERAL_NAMES_new();
         GENERAL_NAME* gn = GENERAL_NAME_new();

@@ -178,8 +178,12 @@ std::string HttpResponse::serialize(bool includeBody, bool connKeepAlive) const 
         // 流式响应（M9.1）：长度未知，改分块传输；终止块由写端（ChunkWriter）负责
         out += "Transfer-Encoding: chunked\r\n";
     } else {
+        // M7.3：零拷贝响应体的长度来自 contentLengthOverride（正文不经 body）
+        const uint64_t len = hasContentLengthOverride
+                                 ? contentLengthOverride
+                                 : static_cast<uint64_t>(includeBody ? body.size() : 0);
         out += "Content-Length: ";
-        out += std::to_string(includeBody ? body.size() : 0);
+        out += std::to_string(len);
         out += "\r\n";
     }
     out += "Connection: ";

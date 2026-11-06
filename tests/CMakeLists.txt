@@ -1,4 +1,4 @@
-﻿# 单元测试（ZTEST 自研微框架）—— 链接静态库 zenith_core，逐可执行注册 ctest
+# 单元测试（ZTEST 自研微框架）—— 链接静态库 zenith_core，逐可执行注册 ctest
 
 if(WIN32)
     set(ZT_NETLIB ws2_32)
@@ -162,6 +162,14 @@ target_include_directories(test_m13g PRIVATE ${CMAKE_SOURCE_DIR}/tests)
 zenith_set_warnings(test_m13g)
 add_test(NAME test_m13g COMMAND test_m13g)
 set_tests_properties(test_m13g PROPERTIES TIMEOUT 300)
+
+# M7 性能批（缓冲缩容/Context 池化隔离/静态文件零拷贝）
+add_executable(test_m7 test_m7.cpp)
+target_link_libraries(test_m7 PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_m7 PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_m7)
+add_test(NAME test_m7 COMMAND test_m7)
+set_tests_properties(test_m7 PROPERTIES TIMEOUT 180)
 
 # zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
 if (ZENITH_BUILD_BENCH)

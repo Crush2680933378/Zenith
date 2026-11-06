@@ -41,11 +41,15 @@ struct TmpCert {
         X509_gmtime_adj(X509_get_notBefore(x), 0);
         X509_gmtime_adj(X509_get_notAfter(x), 3600LL * 24);
         X509_set_pubkey(x, pk);
-        X509_NAME* n = X509_get_subject_name(x);
+        // OpenSSL 3 的 X509_get_subject_name 返回 const X509_NAME*（macOS brew
+        // 版本直接暴露该签名），故显式构造名字对象——1.1/3.x/LibreSSL 通吃。
+        X509_NAME* n = X509_NAME_new();
         X509_NAME_add_entry_by_txt(n, "CN", MBSTRING_ASC,
                                    reinterpret_cast<const unsigned char*>("127.0.0.1"), -1,
                                    -1, 0);
+        X509_set_subject_name(x, n);
         X509_set_issuer_name(x, n);
+        X509_NAME_free(n);
         GENERAL_NAMES* gns = GENERAL_NAMES_new();
         GENERAL_NAME* gn = GENERAL_NAME_new();
         GENERAL_NAME_set0_value(gn, GEN_IPADD, a2i_IPADDRESS("127.0.0.1"));

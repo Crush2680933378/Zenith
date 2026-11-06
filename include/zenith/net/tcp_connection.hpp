@@ -7,6 +7,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdio>
 #include <memory>
 #include <string>
 
@@ -50,6 +51,17 @@ public:
     void send(const void* data, size_t n);
     void send(const std::string& s) { send(s.data(), s.size()); }
 
+    /// M7.3：发送文件内容 [offset, offset+count)。
+    /// POSIX（Linux/macOS）走 sendfile 内核态零拷贝；Windows 或 TLS 连接
+    /// 自动回退为分块读发（内存占用有界，语义一致）。
+    /// 与 send() 共用事件循环队列：字节顺序=调用顺序，文件正文一定排在
+    /// 之前 send() 的响应头之后（期间新到的 send() 会缓冲到 outBuf_，
+    /// 由 handleWrite 在文件发完后依次送出）。
+    void sendFile(const std::string& path, uint64_t offset, uint64_t count);
+    [[nodiscard]] bool fileSendActive() const noexcept {
+        return file_ != nullptr || filePendingStart_;
+    }
+
     /// 写半关闭：排空发送缓冲后 shutdown(WR)。
     void shutdown();
     /// 立即关闭。
@@ -59,7 +71,9 @@ public:
     [[nodiscard]] fd_t fd() const noexcept { return fd_; }
     [[nodiscard]] const std::string& peer() const noexcept { return peer_; }
     [[nodiscard]] bool connected() const noexcept { return connected_.load(); }
-    [[nodiscard]] size_t pendingOutputBytes() const noexcept { return outBuf_.readableBytes(); }
+    [[nodiscard]] size_t pendingOutputBytes() const noexcept {
+        return outBuf_.readableBytes() + static_cast<size_t>(fileRemain_);
+    }
 
     /* 附带状态（如 HTTP 解析器） */
     void setContext(std::shared_ptr<void> ctx) { context_ = std::move(ctx); }
@@ -85,6 +99,10 @@ private:
     void handleClose(const std::string& reason);
     void sendInLoop(const void* data, size_t n);
     void enableWriteInterest(bool on);
+    // 文件零拷贝发送（M7.3，仅 loop 线程）
+    void startFileSend(std::string path, uint64_t offset, uint64_t count);
+    bool pumpFileSend(); // true=仍需可写事件；false=已完成或已关闭
+    void closeFileSend() noexcept;
     // TLS 辅助（M4.1）
     void sockSend(const std::string& wire);
     bool pumpTls(const char* cipher, size_t n);
@@ -98,6 +116,12 @@ private:
     core::Buffer outBuf_;
     bool writing_ = false;         // 仅 loop 线程
     bool shutdownPending_ = false; // 仅 loop 线程
+
+    // M7.3：文件正文发送状态（仅 loop 线程）
+    std::FILE* file_ = nullptr;      // 正在发送的文件；nullptr=无
+    uint64_t fileRemain_ = 0;        // 尚待发送字节数
+    uint64_t fileOffset_ = 0;        // 当前文件偏移（POSIX sendfile 用）
+    bool filePendingStart_ = false;  // 头部仍在 outBuf_，排空后再启动文件
 
     ConnectCallback onConnect_;
     MessageCallback onMessage_;

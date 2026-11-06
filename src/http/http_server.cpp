@@ -10,6 +10,8 @@ struct ConnState {
     explicit ConnState(size_t maxBody) : parser(maxBody) {}
     HttpRequestParser parser;
     bool streaming = false; // M9.1：流式响应在途（不参与空闲踢除/keep-alive）
+    // M7.2a：连接级 Context 池——keep-alive 每请求零构造（reset 复用堆容量）
+    std::unique_ptr<Context> ctx;
 };
 } // namespace
 
@@ -207,7 +209,14 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
         if (tryWebSocketUpgrade(conn)) return;
     }
 
-    Context ctx(std::move(req));
+    // M7.2a：池化——首个请求构造，此后 reset 复用（params_/响应体等
+    // 字符串容量保留在连接上，热路径省一串堆分配）
+    if (state->ctx == nullptr) {
+        state->ctx = std::make_unique<Context>(std::move(req));
+    } else {
+        state->ctx->reset(std::move(req));
+    }
+    Context& ctx = *state->ctx;
     ctx.response().httpMajor = ctx.request().httpMajor;
     ctx.response().httpMinor = ctx.request().httpMinor;
     ctx.setConnection(conn); // M9.1：流式响应写端需要连接
@@ -226,7 +235,14 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
         ctx.status(500).text(500, "500 Internal Server Error");
     }
 
+    // 池化 Context 常驻连接：派发一结束就断开与连接的强引用。
+    // 否则 连接→ConnState→Context→连接 构成循环，整条连接永不析构
+    // （sse()/chunkedStream() 创建时各自持有连接强引用，这里断开安全）。
+    ctx.setConnection(nullptr);
+
     const bool isHead = ctx.request().method == HttpMethod::Head;
+    bool keep = ctx.request().keepAlive();
+    if (closing_.load()) keep = false; // 停机中：一律短连接
 
     // 流式响应（M9.1）：响应头已由 SseStream/ChunkWriter 写出，正文由 handler
     // 持有的写端继续推送；服务器此刻既不补 Content-Length，也不关连接。
@@ -245,10 +261,23 @@ void HttpServer::handleRequest(const net::TcpConnection::Ptr& conn) {
     }
 
     // 未显式写响应体的合法情形：handler 未设置 body → 200 空体
-    bool keep = ctx.request().keepAlive();
-    if (closing_.load()) keep = false; // 停机中：一律短连接
+    // M7.3：零拷贝正文——头部单独序列化，正文由 sendfile 直接从文件送出。
+    // 无 sendfile 的平台/TLS 连接在 TcpConnection 内部回退为分块读发。
+    if (ctx.hasFileBody() && !isHead) {
+        const std::string path = ctx.fileBodyPath();
+        const uint64_t off = ctx.fileBodyOffset();
+        const uint64_t len = ctx.fileBodyLength();
+        conn->send(ctx.response().serialize(/*includeBody=*/false, keep));
+        conn->sendFile(path, off, len);
+        if (!keep) conn->shutdown();
+        return;
+    }
+
     const std::string wire = ctx.response().serialize(/*includeBody=*/!isHead, keep);
     conn->send(wire);
+    // 池化只留小缓冲：大响应体发完即还，避免空闲 keep-alive 连接长期占着
+    // 上一次大响应的整块内存（M7.2a 的代价对冲）
+    ctx.releaseLargeBuffers();
     if (!keep) conn->shutdown();
 }
 

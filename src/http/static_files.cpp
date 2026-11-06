@@ -142,6 +142,17 @@ bool cacheGet(const std::string& path, const std::string& etag, std::string& out
     return true;
 }
 
+// M7.3：大文件零拷贝阈值——小文件走上面的内存缓存更快（省一次 open/sendfile）
+constexpr uint64_t kZeroCopyMinBytes = 256 * 1024;
+
+/// 本身已是压缩格式的资源：再 gzip 几乎无收益，可直接零拷贝
+bool isPrecompressedMime(const std::string& mime) {
+    return mime.rfind("image/", 0) == 0 || mime.rfind("video/", 0) == 0 ||
+           mime.rfind("audio/", 0) == 0 || mime == "application/zip" ||
+           mime == "application/wasm" || mime == "application/pdf" ||
+           mime == "font/woff" || mime == "font/woff2" || mime == "font/ttf";
+}
+
 void cachePut(const std::string& path, const std::string& etag, const std::string& body,
               int64_t mtime) {
     std::lock_guard<std::mutex> lk(gCacheMtx);
@@ -234,6 +245,21 @@ Handler staticHandler(std::string rootDir, std::string urlPrefix, bool cacheSmal
         }
 
         const uint64_t len = size == 0 ? 0 : (end - start + 1);
+
+        // M7.3：大文件直接 sendfile 零拷贝，正文不进内存。
+        //  - 文本类资源若客户端接受 gzip，仍走内存路径：压缩省下的带宽远
+        //    大于一次拷贝（压缩中间件只看 body，零拷贝会让它无事可做）；
+        //  - 图片/视频/压缩包等本身不可压，直接零拷贝；
+        //  - 单测里 Context 未绑定连接（connection()==nullptr）时自动回退。
+        const std::string mime = mimeTypeFor(full);
+        const bool acceptsGzip = c.header("Accept-Encoding").find("gzip") != std::string::npos;
+        if (len >= kZeroCopyMinBytes && c.connection() != nullptr &&
+            (isPrecompressedMime(mime) || !acceptsGzip)) {
+            c.setHeader("Content-Type", mime);
+            c.sendFileBody(full, start, len);
+            return;
+        }
+
         in.seekg(static_cast<std::streamoff>(start));
         std::string body;
         body.resize(static_cast<size_t>(len));

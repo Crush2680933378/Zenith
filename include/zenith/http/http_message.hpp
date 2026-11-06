@@ -4,6 +4,7 @@
 // ============================================================================
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +49,8 @@ public:
     }
     [[nodiscard]] bool empty() const noexcept { return entries_.empty(); }
     [[nodiscard]] size_t size() const noexcept { return entries_.size(); }
+    /// 清空但保留已分配容量（连接级 Context 复用时避免反复扩容）。
+    void clear() noexcept { entries_.clear(); }
 
     using Entry = std::pair<std::string, std::string>;
     [[nodiscard]] const std::vector<Entry>& entries() const noexcept { return entries_; }
@@ -100,6 +103,24 @@ struct HttpResponse {
     /// `Transfer-Encoding: chunked`，正文字节按分块编码写出。
     /// 通常由 Context::sse() / Context::chunkedStream() 置位，勿手工设置。
     bool chunked = false;
+
+    /// M7.3：零拷贝响应体——正文由 TcpConnection::sendFile 直接从文件写到
+    /// socket，serialize() 只输出头部，Content-Length 取 contentLengthOverride
+    /// 而非 body.size()。由 Context::sendFileBody() 置位，勿手工设置。
+    bool hasContentLengthOverride = false;
+    uint64_t contentLengthOverride = 0;
+
+    /// M7.2a：原地复位（保留 headers 容量与 body 缓冲区），供连接级 Context 复用。
+    void reset() noexcept {
+        httpMajor = 1;
+        httpMinor = 1;
+        status = 200;
+        headers.clear();
+        body.clear();
+        chunked = false;
+        hasContentLengthOverride = false;
+        contentLengthOverride = 0;
+    }
 
     [[nodiscard]] bool keepAlive() const noexcept {
         const std::string conn = core::string_util::toLower(headers.get("Connection"));

@@ -34,6 +34,26 @@ public:
 
     explicit Context(HttpRequest req) : req_(std::move(req)) {}
 
+    /// 池化复位（M7.2a：连接级 Context 池——每请求零构造）。
+    /// 语义等价于析构+重建，但保留 headers 容量/body 缓冲区供下次复用。
+    /// 关键：conn_ 必须在此清空——Context 常驻连接后若持有连接强引用，
+    /// 就形成 连接→ConnState→Context→连接 的循环，整条连接永不释放。
+    void reset(HttpRequest req) {
+        req_ = std::move(req);
+        resp_.reset();          // 原地复位（不释放已分配的堆内存）
+        params_.clear();        // 保留哈希桶
+        chain_.clear();         // 保留容量（链长每请求固定，shrink_to_fit 反而是分配抖动）
+        context_.reset();
+        formCache_.reset();
+        conn_.reset();
+        filePath_.clear();
+        fileOffset_ = 0;
+        fileLength_ = 0;
+        streaming_ = false;
+        idx_ = 0;
+        aborted_ = false;
+    }
+
     /* ---- 请求侧 ---- */
     [[nodiscard]] HttpMethod method() const noexcept { return req_.method; }
     [[nodiscard]] const std::string& path() const noexcept { return req_.path; }
@@ -154,6 +174,30 @@ public:
         return conn_;
     }
 
+    /* ---- 零拷贝响应体（M7.3）---- */
+    /// 声明响应体直接从文件的 [offset, offset+length) 发送（sendfile）。
+    /// 头部照常序列化（Content-Length 用 length），正文跳过内存拷贝；
+    /// 无 sendfile 的平台/TLS 连接由 TcpConnection 内部回退为分块读发，
+    /// 对调用方语义一致。
+    void sendFileBody(std::string path, uint64_t offset, uint64_t length) {
+        filePath_ = std::move(path);
+        fileOffset_ = offset;
+        fileLength_ = length;
+        resp_.body.clear();
+        resp_.hasContentLengthOverride = true;
+        resp_.contentLengthOverride = length;
+    }
+    [[nodiscard]] bool hasFileBody() const noexcept { return !filePath_.empty(); }
+    [[nodiscard]] const std::string& fileBodyPath() const noexcept { return filePath_; }
+    [[nodiscard]] uint64_t fileBodyOffset() const noexcept { return fileOffset_; }
+    [[nodiscard]] uint64_t fileBodyLength() const noexcept { return fileLength_; }
+
+    /// 池化用：请求/响应体超过阈值的缓冲立即归还分配器（小缓冲留给下次复用）。
+    void releaseLargeBuffers(size_t threshold = 64 * 1024) {
+        if (resp_.body.capacity() > threshold) std::string().swap(resp_.body);
+        if (req_.body.capacity() > threshold) std::string().swap(req_.body);
+    }
+
 private:
     friend class Router;
     friend class HttpServer;
@@ -171,6 +215,9 @@ private:
     std::shared_ptr<void> context_;                      // session 等附带状态
     mutable std::shared_ptr<std::vector<multipart::FormPart>> formCache_;
     std::shared_ptr<net::TcpConnection> conn_;            // 流式响应写端（M9.1）
+    std::string filePath_;                                // 零拷贝响应体来源（M7.3）
+    uint64_t fileOffset_ = 0;
+    uint64_t fileLength_ = 0;
     bool streaming_ = false;
     size_t idx_ = 0;
     bool aborted_ = false;

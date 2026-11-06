@@ -6,6 +6,7 @@
 // ============================================================================
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -35,6 +36,26 @@ public:
     [[nodiscard]] size_t readableBytes() const noexcept { return writerIndex_ - readerIndex_; }
     [[nodiscard]] size_t writableBytes() const noexcept { return buf_.size() - writerIndex_; }
     [[nodiscard]] size_t capacity() const noexcept { return buf_.size(); }
+
+    /// M7.2c：空闲缩容——容量远超阈值且几乎无堆积时收缩，防瞬时大响应把
+    /// 连接缓冲永久撑大。writeComplete（发送排空）后调用，此时无在途写指针。
+    ///
+    /// 注意顺序：必须**先紧凑化再截断**。反过来的话 resize 会先把
+    /// [readerIndex_, writerIndex_) 里的未读数据截掉，随后 memmove 搬的是
+    /// 已失效区间（sanitizer/debug STL 下直接暴露）。
+    void shrinkIfBloated(size_t threshold) {
+        if (buf_.size() <= threshold || readableBytes() >= threshold / 4) return;
+        compact();
+        const size_t need = kPrependBytes + readableBytes();
+        if (buf_.size() - need <= threshold / 2) {
+            buf_.resize(need); // 冗余不多：仅退回逻辑长度，保留已分配内存
+            return;
+        }
+        // 冗余明显（如一次性 8MB 下载排空后）：真正换小缓冲把内存还给分配器
+        std::vector<uint8_t> fresh(std::max(need, kInitialCapacity));
+        if (need > kPrependBytes) std::memcpy(fresh.data(), buf_.data(), need);
+        buf_.swap(fresh);
+    }
 
     void ensureWritable(size_t n) {
         if (writableBytes() >= n) return;
