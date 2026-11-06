@@ -16,9 +16,21 @@
   配合 `tools/zenith_bench` 做前后对比；README 新增「M7.3 零拷贝实测」。
 
 ### 修复
-- **HTTP 客户端失败/超时路径泄漏**（LSan 发现）：`AsyncState` 与 `TcpConnection`
-  互相强引用，成功复用会断链、失败路径只 `forceClose` 不断链——每次超时泄漏一份
-  响应解析器与连接。非复用分支现在同样释放 `st->conn`。
+- **ZTEST 断言宏的悬垂引用**：`ZEXPECT_EQ/NE` 用 `auto&&` 绑定实参，遇到
+  `ZEXPECT_EQ(obj.fn()["k"].field, ...)` 时绑到临时对象内部成员上，比较时临时对象已
+  销毁（macOS 上表现为段错误，ASan 下是 heap-use-after-free）。改为值语义。
+- **crew WS 的 context 类型混淆**：`WebSocketSession::context` 是单槽
+  `shared_ptr<void>`，先塞 `WatchState`、watch 时又覆盖成 `Beat`，关闭回调再按两种类型
+  各取一次 —— 把 `Beat` 当 `WatchState` 读越界。合并为单个 `SessionState`；
+  重复 watch 时先撤掉旧心跳定时器。
+- **插件卸载与在途任务赛跑**：`post_task` 投递的函数指针指向插件代码段，`dlclose` 后
+  队列里残留任务即跳进已释放内存。`ThreadPool` 新增 `waitIdle()`，
+  `PluginManager::doUnload` 在卸载前等池空闲（3s 超时告警）。
+- **HTTP 客户端失败/超时路径泄漏**：`AsyncState` 与 `TcpConnection` 互相强引用，
+  失败路径只 `forceClose` 不断链 → 每次超时泄漏一份解析器与连接。
+- **空闲定时器强引用连接**：`armIdleTimer` 每次请求重新挂定时器却不取消旧的，
+  且闭包强捕获连接 —— 已关闭的连接被多吊 `keepAliveIdleSec` 秒。改为弱引用 + 先取消。
+- **连接关闭不清回调**：关闭后投递清空全部回调，断开会话/客户端状态与连接的回引环。
 - **文件零拷贝写路径的缓冲膨胀**（基准发现）：文件分块被追加进发送缓冲后只涨不排，
   4MB 文件吞吐比旧路径还低 20%、RSS 涨到 168MB。改为分块直写 + 独立的
   `postFileBuf_`（文件在途期间的后续响应排队到文件之后），字节顺序不交错。
