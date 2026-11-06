@@ -3,11 +3,18 @@
 ## Unreleased
 
 ### 新增
-- **HTTP/2 基础层（M7.7 第一刀）**：`zenith::http::h2` —— 帧编解码（9 字节头 / 长度校验 /
-  streamId 31 位 / 半包 Pending）+ HPACK（静态表 61 条、索引与字面量、
-  Dynamic Table Size Update、动态表插入与驱逐）。边界写在头文件里：
-  **不做 Huffman 解码**（收到即明确报压缩错误，不静默解出乱码），
-  也还没接连接/流状态机——下一步是 h2c 服务端与流复用。
+- **HTTP/2（M7.7）**：`zenith::http::h2`
+  - *帧层*：9 字节头编解码、长度上限校验（`FrameSizeError`）、streamId 掩到 31 位、
+    半包返回 `Pending`
+  - *HPACK*：RFC 7541 静态表 61 条、整数/字符串编解码、索引字段、字面量（含增量索引）、
+    Dynamic Table Size Update、动态表插入与驱逐
+  - *h2c 服务端*：`H2ServerConnection` —— preface 校验、SETTINGS 交换/ACK、PING ACK、
+    GOAWAY、HEADERS(+CONTINUATION) → 解码 → 复用同一套 Router/中间件/Context →
+    HEADERS + DATA；`HttpServer` 按首字节识别 preface，整条连接转入 h2
+  - 端到端测试 `H2E2E.GetOverH2c`：真 socket 客户端发 preface+SETTINGS+HEADERS，
+    逐帧校验 `:status 200` 与 DATA 正文
+  - 当前边界（写在头文件里）：不做流控（默认窗口，响应体 < 64KB）、**不做 Huffman 解码**
+    （收到即报压缩错误）、h2 上暂不支持流式响应
 - `TcpConnection` / `WebSocketSession` 的 `liveCount()` 存活计数留在库里：
   排查「对象没析构」类问题，一条打印就能定位到类型。
 
