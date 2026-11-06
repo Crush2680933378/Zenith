@@ -60,7 +60,7 @@ CI 现在有这些任务，每一层拦一类问题：
 | `linux-release` | NDEBUG/优化下才暴露的问题（Debug 全绿 ≠ Release 全绿） | ✅ |
 | `linux-sanitize` · ASan+UBSan | 越界/UAF/UB，全量 41 套 | ✅ |
 | `linux-sanitize` · LSan | 进程退出时的对象泄漏 | ❌ 仅报告 |
-| `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ❌ 仅报告 |
+| `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ✅ |
 | `perf-gate` | 大文件峰值 RSS + 吞吐下限（与硬件无关的不变量） | ✅ |
 | `coverage` | llvm-cov 行覆盖汇总（artifact + step summary） | 仅产物 |
 | `fuzz-smoke` | HTTP 请求/响应、WS 帧、JSON、WAV 五个解析入口 × 45s | ✅ |

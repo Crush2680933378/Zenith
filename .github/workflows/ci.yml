@@ -200,13 +200,10 @@ jobs:
         run: |
           ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure \
                 -R "test_websocket|test_m5_web|test_m13e|test_m13g"
-      # TSan 先以「仅报告」方式接入：存量代码里还有若干跨线程共享状态
-      # （EventLoop 唤醒路径、crew 引擎的订阅分发）没有同步，逐个清零后再转阻塞。
-      # 已修：EventLoop::threadId_ 的原子发布（首轮即抓到）。
-      - name: TSan（并发套件 · 仅报告）
-        continue-on-error: true
+      # TSan：已清零并转阻塞（并发相关 5 套）。后续可扩到更多并发套件。
+      - name: TSan（并发套件）
         env:
-          TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
         run: |
           cmake -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
                 -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
