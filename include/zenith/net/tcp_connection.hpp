@@ -38,6 +38,9 @@ public:
 
     ~TcpConnection();
 
+    /// 诊断：当前存活的连接数（排查「关闭后对象未析构」类问题，零成本量级）
+    static int liveCount() noexcept;
+
     /* 建立后由创建方调用一次 */
     void establish();                        // 触发 onConnect；注册读兴趣
     void finalize(CloseCallback hostClose);  // 注入宿主清理（server 移表/client 收尾）

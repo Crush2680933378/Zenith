@@ -475,12 +475,12 @@ ZTEST(WssE2E, WebSocketOverTls) {
         &cloop, opt,
         [&](const net::WebSocketSession::Ptr& s0) {
             auto s = s0;
-            s->setMessageCallback(
-                [s, &echoed, &gotEcho](const net::WebSocketSession::Ptr&, std::string m, bool) {
-                    echoed = m;
-                    gotEcho.store(true);
-                    s->close();
-                });
+            s->setMessageCallback([w = std::weak_ptr<net::WebSocketSession>(s), &echoed, &gotEcho](
+                                      const net::WebSocketSession::Ptr&, std::string m, bool) {
+                echoed = m;
+                gotEcho.store(true);
+                if (auto sess = w.lock()) sess->close();
+            });
             s->setCloseCallback(
                 [&closed](const net::WebSocketSession::Ptr&) { closed.store(true); });
             s->sendText("secure-hello");

@@ -162,6 +162,9 @@ struct WsFixture {
         loop.stop();
         runner.join();
         io.stop();
+        // 诊断：常驻对象应随夹具销毁全部归零（LSan 那 4 个套件的排查入口）
+        std::printf("      [lifetime] sessions=%d connections=%d\n",
+                    net::WebSocketSession::liveCount(), net::TcpConnection::liveCount());
     }
     [[nodiscard]] uint16_t port() const { return server.port(); }
 };
@@ -188,13 +191,17 @@ ZTEST(WsE2E, UpgradeEchoClose) {
         &clientLoop, opt,
         [&](const net::WebSocketSession::Ptr& session) {
             auto s = session;  // 内层回调按值持有（勿引用外层参数）
-            s->setMessageCallback([s, &echoed, &gotEcho](const net::WebSocketSession::Ptr&,
-                                                         std::string msg, bool isText) {
-                echoed = msg;
-                (void)isText;
-                gotEcho.store(true);
-                s->close(1000, "bye");
-            });
+            // 弱捕获自身：回调挂在会话上，强捕获就是自环（LSan 的会话泄漏）
+            s->setMessageCallback(
+                [w = std::weak_ptr<net::WebSocketSession>(s), &echoed, &gotEcho](
+                    const net::WebSocketSession::Ptr&, std::string msg, bool isText) {
+                    auto s = w.lock();
+                    if (!s) return;
+                    echoed = msg;
+                    (void)isText;
+                    gotEcho.store(true);
+                    s->close(1000, "bye");
+                });
             s->setCloseCallback(
                 [&gotClose](const net::WebSocketSession::Ptr&) { gotClose.store(true); });
             s->sendText("你好 zenith");
@@ -287,11 +294,11 @@ ZTEST(WsE2E, PingPongAndLargeMessage) {
         &clientLoop, opt,
         [&](const net::WebSocketSession::Ptr& session) {
             auto s = session;
-            s->setMessageCallback(
-                [s, &gotLarge, &big](const net::WebSocketSession::Ptr&, std::string msg, bool) {
-                    if (msg.size() == big.size() + 5) gotLarge.store(true);
-                    s->close();
-                });
+            s->setMessageCallback([w = std::weak_ptr<net::WebSocketSession>(s), &gotLarge, &big](
+                                      const net::WebSocketSession::Ptr&, std::string msg, bool) {
+                if (msg.size() == big.size() + 5) gotLarge.store(true);
+                if (auto sess = w.lock()) sess->close();
+            });
             s->setCloseCallback(
                 [&closed](const net::WebSocketSession::Ptr&) { closed.store(true); });
             s->ping("hb");

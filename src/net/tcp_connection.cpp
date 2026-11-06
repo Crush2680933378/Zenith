@@ -43,12 +43,23 @@ bool seekFile(std::FILE* f, uint64_t offset) {
 }
 }  // namespace
 
+namespace {
+std::atomic<int> gLiveConnections{0};
+}  // namespace
+
+int TcpConnection::liveCount() noexcept {
+    return gLiveConnections.load();
+}
+
 TcpConnection::TcpConnection(EventLoop* loop, fd_t fd, std::string peer)
-    : loop_(loop), fd_(fd), peer_(std::move(peer)), sock_(fd) {}
+    : loop_(loop), fd_(fd), peer_(std::move(peer)), sock_(fd) {
+    gLiveConnections.fetch_add(1, std::memory_order_relaxed);
+}
 
 TcpConnection::~TcpConnection() {
     // fd_ 由 Socket 析构统一关闭；deregister 由 handleClose 完成
     closeFileSend();
+    gLiveConnections.fetch_sub(1, std::memory_order_relaxed);
 }
 
 void TcpConnection::establish() {

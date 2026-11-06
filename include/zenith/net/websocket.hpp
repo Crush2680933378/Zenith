@@ -65,6 +65,9 @@ public:
     static Ptr takeover(TcpConnection::Ptr conn, bool clientSide = false);
     ~WebSocketSession();
 
+    /// 诊断：当前存活的会话数
+    static int liveCount() noexcept;
+
     void setMessageCallback(MessageCallback cb) { onMessage_ = std::move(cb); }
     void setCloseCallback(CloseCallback cb) { onClose_ = std::move(cb); }
     void setOpenCallback(std::function<void(const Ptr&)> cb) { onOpen_ = std::move(cb); }

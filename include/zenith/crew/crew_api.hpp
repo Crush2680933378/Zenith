@@ -433,8 +433,11 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
         auto st = std::make_shared<SessionState>();
         s->setContext(st);
 
-        s->setMessageCallback([svc, s, st, writeToken](const net::WebSocketSession::Ptr&,
-                                                       std::string msg, bool) {
+        // 回调里不能强捕获 s 自身：回调挂在会话上，强捕获即成自环（LSan 的 session 泄漏）。
+        s->setMessageCallback([svc, w = std::weak_ptr<net::WebSocketSession>(s), st, writeToken](
+                                  const net::WebSocketSession::Ptr&, std::string msg, bool) {
+            auto s = w.lock();
+            if (!s) return;
             auto v = json::JsonValue::parse(msg);
             if (!v) return;
             const std::string type = v.value()["type"].asString();
@@ -470,16 +473,20 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
                 for (const CrewEvent& e : svc->events(task, 0)) {
                     s->sendText(e.toJson().dump());
                 }
-                st->subId = svc->subscribe(task, [s](const CrewEvent& e) {
-                    // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
-                    // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
-                    if (s->connection() != nullptr &&
-                        s->connection()->pendingOutputBytes() > 1024 * 1024) {
-                        s->close(1008, "slow consumer");
-                        return;
-                    }
-                    s->sendText(e.toJson().dump());  // runInLoop 投递，跨线程安全
-                });
+                st->subId = svc->subscribe(
+                    task, [w = std::weak_ptr<net::WebSocketSession>(s)](const CrewEvent& e) {
+                        // 订阅者同样只拿弱引用：服务持有订阅者，强捕获会话就又成环了
+                        auto s = w.lock();
+                        if (!s) return;
+                        // 慢消费者背压（M17）：发送缓冲 >1MB 直接踢除，
+                        // 防 token 流把内存拖爆（pendingOutputBytes 为近似读）
+                        if (s->connection() != nullptr &&
+                            s->connection()->pendingOutputBytes() > 1024 * 1024) {
+                            s->close(1008, "slow consumer");
+                            return;
+                        }
+                        s->sendText(e.toJson().dump());  // runInLoop 投递，跨线程安全
+                    });
                 // 服务端心跳（M17）：30s 自续 ping，死连接及时清理。
                 // 自持 shared_ptr<function> 模式——scheduleAfter 只存值拷贝
                 // （栈引用会在消息回调返回后悬垂）。
@@ -523,7 +530,7 @@ inline void mountCrewWs(http::HttpServer& srv, std::shared_ptr<ICrewService> svc
             }
         });
 
-        s->setCloseCallback([svc, s](const net::WebSocketSession::Ptr& sess) {
+        s->setCloseCallback([svc](const net::WebSocketSession::Ptr& sess) {
             // 关闭在连接所属 loop 线程：cancel 定时器线程安全。
             // 单槽 context 只按 SessionState 取一次（此前按两种类型各取一次，类型混淆）。
             auto st = sess->context<SessionState>();

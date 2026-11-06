@@ -150,10 +150,22 @@ std::string wsComputeAccept(const std::string& clientKey) {
  * WebSocketSession
  * ======================================================================== */
 
-WebSocketSession::WebSocketSession(TcpConnection::Ptr conn, bool clientSide)
-    : conn_(std::move(conn)), clientSide_(clientSide) {}
+namespace {
+std::atomic<int> gLiveSessions{0};
+}  // namespace
 
-WebSocketSession::~WebSocketSession() = default;
+int WebSocketSession::liveCount() noexcept {
+    return gLiveSessions.load();
+}
+
+WebSocketSession::WebSocketSession(TcpConnection::Ptr conn, bool clientSide)
+    : conn_(std::move(conn)), clientSide_(clientSide) {
+    gLiveSessions.fetch_add(1, std::memory_order_relaxed);
+}
+
+WebSocketSession::~WebSocketSession() {
+    gLiveSessions.fetch_sub(1, std::memory_order_relaxed);
+}
 
 WebSocketSession::Ptr WebSocketSession::takeover(TcpConnection::Ptr conn, bool clientSide) {
     Ptr session(new WebSocketSession(conn, clientSide));
