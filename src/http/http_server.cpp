@@ -60,16 +60,26 @@ void HttpServer::armIdleTimer(const net::TcpConnection::Ptr& conn) {
     if (limits_.keepAliveIdleSec <= 0) return;
     const auto key = reinterpret_cast<uintptr_t>(conn.get());
     std::lock_guard<std::mutex> lk(idleMtx_);
+    // 每个请求都会重新 arm：先撤掉上一个，否则旧定时器仍排在队列里，
+    // 既重复计时，又（配合下面的强捕获）把连接多吊 keepAliveIdleSec 秒。
+    const auto it = idleTimers_.find(key);
+    if (it != idleTimers_.end()) {
+        loop_->cancel(it->second);
+        idleTimers_.erase(it);
+    }
+    // 弱捕获：定时器不该拥有连接。强捕获会让「已关闭但定时器未到期」的连接
+    // 一直活着（LSan 报的 TcpConnection 缓冲泄漏就是这么来的）。
+    std::weak_ptr<net::TcpConnection> wconn = conn;
     idleTimers_[key] = loop_->scheduleAfter(
-        std::chrono::seconds(limits_.keepAliveIdleSec), [this, conn] {
+        std::chrono::seconds(limits_.keepAliveIdleSec), [this, wconn, key] {
             std::lock_guard<std::mutex> lk2(idleMtx_);
-            idleTimers_.erase(reinterpret_cast<uintptr_t>(conn.get()));
-            if (conn->connected() && inflight_.load() <= 0) {
-                // M9.1：SSE/分块流在途时不得踢除——长连接本身可能长时间无新字节
-                auto st = conn->context<ConnState>();
-                if (st != nullptr && st->streaming) return;
-                conn->forceClose(); // 空闲超限
-            }
+            idleTimers_.erase(key);
+            auto conn = wconn.lock();
+            if (!conn || !conn->connected() || inflight_.load() > 0) return;
+            // M9.1：SSE/分块流在途时不得踢除——长连接本身可能长时间无新字节
+            auto st = conn->context<ConnState>();
+            if (st != nullptr && st->streaming) return;
+            conn->forceClose(); // 空闲超限
         });
 }
 
