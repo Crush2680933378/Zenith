@@ -22,6 +22,16 @@
     校验正文逐字节一致）、`H2E2E.MultiStreamOnOneConnection`（单连接 3 条流并发）
   - 当前边界（写在头文件里）：h2 上暂不支持流式响应（SSE/chunked）、PUSH_PROMISE、
     PRIORITY 语义；`SETTINGS.HEADER_TABLE_SIZE` 暂不生效
+- **MQTT 3.1.1 broker**：`zenith::mqtt`
+  - 编解码：CONNECT/CONNACK、PUBLISH（QoS0/1）、PUBACK、SUBSCRIBE/SUBACK、
+    UNSUBSCRIBE/UNSUBACK、PINGREQ/PINGRESP、DISCONNECT；变长剩余长度
+  - 主题：过滤器合法性校验、`+`/`#` 通配匹配（`sport/#` 也匹配 `sport`）
+  - broker：会话与 clientId 重连踢旧、订阅集合、保留消息（空载荷清除）、
+    QoS1 回 PUBACK、订阅时补投保留消息；**锁内只改状态，发送/关闭排队到锁外**
+  - 边界：不支持 QoS2、不支持遗嘱消息发布、不做离线消息缓存
+- **ALPN**：`TlsClientConfig::alpn` + `TlsFilter::alpnProtocol()`；
+  顺带修好一个 use-after-free——`OpenSslContext` 移动时丢了 `alpnHolder_`，
+  服务端 ALPN 选择回调的 `arg` 因此悬垂，**服务端 ALPN 此前从未真正工作过**
 - `TcpConnection` / `WebSocketSession` 的 `liveCount()` 存活计数留在库里：
   排查「对象没析构」类问题，一条打印就能定位到类型。
 
