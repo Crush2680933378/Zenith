@@ -295,10 +295,34 @@ ZTEST(M7ZeroCopy, TextWithGzipAcceptFallsBackToBuffer) {
     ZEXPECT_TRUE(r.value().body == f.textBody);
 }
 
+/* ============================ M7.3 零拷贝：响应顺序 ============================ */
+
+ZTEST(M7ZeroCopy, PipelinedResponseQueuesBehindFileBody) {
+    // 场景：客户端把第二条请求与第一条一起发来（HTTP/1.1 pipelining）。
+    // 第一条是大文件零拷贝正文，服务器在文件还没发完时就处理了第二条——
+    // 第二条的字节绝不能插进文件正文中间，必须等文件发完再发。
+    M7Fixture f;
+    RawConn c;
+    ZEXPECT_TRUE(c.open(f.server.port()));
+    const std::string reqs =
+        "GET /assets/big.png HTTP/1.1\r\nHost: x\r\n\r\n"
+        "GET /plain HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n";
+    ZEXPECT_TRUE(c.sendAll(reqs));
+
+    const std::string raw = c.readAtLeast(f.bigBody.size() + 512, 15000);
+    std::vector<std::pair<std::string, std::string>> rs;
+    ZEXPECT_TRUE(parseResponses(raw, 2, rs)); // 两条都完整，说明没有交错
+    if (rs.size() == 2) {
+        ZEXPECT_EQ(rs[0].first.rfind("HTTP/1.1 200", 0), size_t{0});
+        ZEXPECT_TRUE(rs[0].second.size() == f.bigBody.size());
+        ZEXPECT_TRUE(rs[0].second == f.bigBody); // 正文一个字节都不能被污染
+        ZEXPECT_EQ(rs[1].second, std::string("second"));
+    }
+}
+
 /* ============================ M7.2a Context 池化隔离 ============================ */
 
-ZTEST(M7ContextPool, KeepAliveReuseDoesNotLeakResponseState) {
-    M7Fixture f;
+ZTEST(M7ContextPool, KeepAliveReuseDoesNotLeakResponseState) {    M7Fixture f;
     RawConn c;
     ZEXPECT_TRUE(c.open(f.server.port()));
     // 同一个连接上连发两条请求（HTTP/1.1 keep-alive）：第二条不得继承

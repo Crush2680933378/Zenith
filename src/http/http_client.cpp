@@ -99,6 +99,10 @@ void HttpClient::finishState(const std::shared_ptr<AsyncState>& st,
             });
         } else {
             st->conn->forceClose();
+            // 断开 st→conn 的强引用。回调闭包（conn→st）会随连接销毁一起释放，
+            // 只 forceClose 不断链的话 AsyncState/解析器/连接 会互相吊着——
+            // 超时与失败路径每条请求泄漏一次（ASan+LSan 抓到的就是这个）。
+            st->conn.reset();
         }
     }
     if (st->cb) {

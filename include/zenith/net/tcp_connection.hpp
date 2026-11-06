@@ -72,7 +72,8 @@ public:
     [[nodiscard]] const std::string& peer() const noexcept { return peer_; }
     [[nodiscard]] bool connected() const noexcept { return connected_.load(); }
     [[nodiscard]] size_t pendingOutputBytes() const noexcept {
-        return outBuf_.readableBytes() + static_cast<size_t>(fileRemain_);
+        return outBuf_.readableBytes() + postFileBuf_.readableBytes() +
+               static_cast<size_t>(fileRemain_);
     }
 
     /* 附带状态（如 HTTP 解析器） */
@@ -114,6 +115,10 @@ private:
 
     core::Buffer inBuf_;
     core::Buffer outBuf_;
+    // M7.3：文件发送期间由 send() 追加的字节。必须与 outBuf_ 分开——
+    // outBuf_ 里装的是「文件分块的尾部」，而这里的字节要等整个文件发完才能发，
+    // 否则新响应的字节会插进文件正文中间（协议损坏）。
+    core::Buffer postFileBuf_;
     bool writing_ = false;         // 仅 loop 线程
     bool shutdownPending_ = false; // 仅 loop 线程
 
