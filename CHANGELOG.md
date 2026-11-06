@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### 新增
+- **HTTP/2 基础层（M7.7 第一刀）**：`zenith::http::h2` —— 帧编解码（9 字节头 / 长度校验 /
+  streamId 31 位 / 半包 Pending）+ HPACK（静态表 61 条、索引与字面量、
+  Dynamic Table Size Update、动态表插入与驱逐）。边界写在头文件里：
+  **不做 Huffman 解码**（收到即明确报压缩错误，不静默解出乱码），
+  也还没接连接/流状态机——下一步是 h2c 服务端与流复用。
+- `TcpConnection` / `WebSocketSession` 的 `liveCount()` 存活计数留在库里：
+  排查「对象没析构」类问题，一条打印就能定位到类型。
+
 ## v0.2.3 (2026-11-07)
 
 ### 文档
