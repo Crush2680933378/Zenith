@@ -6,6 +6,7 @@
 // ============================================================================
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <deque>
@@ -49,7 +50,7 @@ private:
     mutable std::mutex       mtx_;
     std::condition_variable  cv_;
     bool                     stopped_ = false;
-    size_t                   active_ = 0; // 正在执行的任务数（waitIdle 用）
+    std::atomic<size_t>      active_{0}; // 正在执行的任务数（waitIdle 用）
 };
 
 } // namespace zenith::concurrency

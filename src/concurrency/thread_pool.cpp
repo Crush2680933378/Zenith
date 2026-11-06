@@ -49,12 +49,12 @@ bool ThreadPool::waitIdle(int timeoutMs) {
     std::unique_lock<std::mutex> lk(mtx_);
     const auto deadline =
         std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
-    while (!tasks_.empty() || active_ != 0) {
+    while (!tasks_.empty() || active_.load(std::memory_order_acquire) != 0) {
         if (cv_.wait_until(lk, deadline) == std::cv_status::timeout) {
             break;
         }
     }
-    return tasks_.empty() && active_ == 0;
+    return tasks_.empty() && active_.load(std::memory_order_acquire) == 0;
 }
 
 void ThreadPool::workerLoop() {
@@ -66,13 +66,14 @@ void ThreadPool::workerLoop() {
             if (tasks_.empty()) return; // stopped_ 且队列已排空 → 退出
             task = std::move(tasks_.front());
             tasks_.pop_front();
-            ++active_;
+            active_.fetch_add(1, std::memory_order_relaxed);
         }
         task(); // 在锁外执行，异常由任务自身负责
-        {
+        // 只有「池刚刚变空」才需要通知 waitIdle；常见路径仅一次原子减，
+        // 不额外加锁（每任务多两次锁会把 500 任务量的用例拖慢到超时）。
+        if (active_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             std::lock_guard<std::mutex> lk(mtx_);
-            --active_;
-            if (tasks_.empty() && active_ == 0) cv_.notify_all(); // 唤醒 waitIdle
+            if (tasks_.empty()) cv_.notify_all();
         }
     }
 }
