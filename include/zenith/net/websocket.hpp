@@ -78,8 +78,13 @@ public:
     /// 外部喂入字节流（升级响应之后的残留帧等）；线程不安全，仅同 loop。
     void processPending(const std::string& bytes);
 
-    [[nodiscard]] const std::string& peer() const noexcept { return conn_->peer(); }
-    [[nodiscard]] TcpConnection* connection() const noexcept { return conn_.get(); }
+    [[nodiscard]] std::string peer() const {
+        auto c = conn_.lock();
+        return c ? c->peer() : std::string();
+    }
+    /// 底层连接（已断开时返回 nullptr）。
+    /// 返回 Ptr 而不是裸指针：调用方 `session->connection()->xxx()` 期间对象必须活着。
+    [[nodiscard]] TcpConnection::Ptr connection() const noexcept { return conn_.lock(); }
     /// 用户附带状态
     ///
     /// ⚠️ 会话身份必须挂在这里（setContext/context<T>），不要用
@@ -106,7 +111,10 @@ private:
     void sendFrame(WsOpcode op, const std::string& payload);
     void finishClose(uint16_t code, const std::string& reason);
 
-    TcpConnection::Ptr conn_;
+    // 弱引用：连接的消息回调强持有会话（conn → closure → session），
+    // 会话再强持有连接就成环——连接关闭后整组对象谁也放不掉（LSan 报的就是它）。
+    // 断成单向后：连接活着 → 会话就活着；连接销毁 → 回调消失 → 会话随之释放。
+    std::weak_ptr<TcpConnection> conn_;
     bool clientSide_;
     bool closed_ = false;
     bool closeSent_ = false;

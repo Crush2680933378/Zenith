@@ -156,9 +156,10 @@ WebSocketSession::WebSocketSession(TcpConnection::Ptr conn, bool clientSide)
 WebSocketSession::~WebSocketSession() = default;
 
 WebSocketSession::Ptr WebSocketSession::takeover(TcpConnection::Ptr conn, bool clientSide) {
-    Ptr session(new WebSocketSession(std::move(conn), clientSide));
-    // 接管消息回调：后续字节流均为 WebSocket 帧
-    session->conn_->setMessageCallback(
+    Ptr session(new WebSocketSession(conn, clientSide));
+    // 接管消息回调：后续字节流均为 WebSocket 帧。
+    // 回调强持有 session（连接活着 → 会话就活着），session 侧只留弱引用，环由此断开。
+    conn->setMessageCallback(
         [s = session->shared_from_this()](const TcpConnection::Ptr&, core::Buffer& buf) {
             s->handleIncoming(buf);
         });
@@ -267,7 +268,7 @@ void WebSocketSession::close(uint16_t code, const std::string& reason) {
     sendFrame(WsOpcode::Close, payload);
     closeSent_ = true;
     // 半关闭写侧，等待对端 close（或直接超时由 conn 关闭兜底）
-    conn_->shutdown();
+    if (auto c = conn_.lock()) c->shutdown();
 }
 
 void WebSocketSession::sendFrame(WsOpcode op, const std::string& payload) {
@@ -276,7 +277,7 @@ void WebSocketSession::sendFrame(WsOpcode op, const std::string& payload) {
     f.fin = true;
     f.opcode = op;
     f.payload = payload;
-    conn_->send(f.encode(/*mask=*/clientSide_, randomMaskKey()));
+    if (auto c = conn_.lock()) c->send(f.encode(/*mask=*/clientSide_, randomMaskKey()));
 }
 
 void WebSocketSession::finishClose(uint16_t code, const std::string& reason) {
@@ -288,7 +289,7 @@ void WebSocketSession::finishClose(uint16_t code, const std::string& reason) {
         auto cb = std::move(onClose_);
         cb(shared_from_this());
     }
-    conn_->forceClose();
+    if (auto c = conn_.lock()) c->forceClose();
 }
 
 /* ==========================================================================
