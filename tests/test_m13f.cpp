@@ -266,9 +266,18 @@ ZTEST(CrewP0, CancelDuringApprovalFiresWebhook) {
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("cancelled"));
 
+    // 事件是异步追加的：waitTerminal 只等 phase 变 cancelled，事件可能晚一拍落地，
+    // 立即断言在慢机（macOS CI）上会稳定失败。这里短超时轮询——phase 的断言仍是硬的。
     bool sawCancelledEvent = false;
-    for (const crew::CrewEvent& e : eng.events(id)) {
-        if (e.type == "cancelled") sawCancelledEvent = true;
+    const auto evDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (!sawCancelledEvent && std::chrono::steady_clock::now() < evDeadline) {
+        for (const crew::CrewEvent& e : eng.events(id)) {
+            if (e.type == "cancelled") {
+                sawCancelledEvent = true;
+                break;
+            }
+        }
+        if (!sawCancelledEvent) std::this_thread::sleep_for(20ms);
     }
     ZEXPECT_TRUE(sawCancelledEvent);
     // webhook：awaiting_approval 有、cancelled 也有（旧实现这里缺 cancelled）
