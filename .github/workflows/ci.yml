@@ -47,6 +47,42 @@ jobs:
           cmake --build build
           ctest --test-dir build --output-on-failure
 
+  # 内存安全防线：ASan+UBSan 全量、TSan 跑并发套件（两者互斥，分两个构建目录）。
+  # 这两类问题此前靠人肉 review 才发现（缓冲越界搬数据、shared_ptr 环），
+  # 上 sanitizer 让机器替我们盯。
+  linux-sanitize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang libssl-dev
+      - name: ASan + UBSan（全量）
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: |
+          cmake -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_SANITIZE=address,undefined \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build-asan
+          ctest --test-dir build-asan --output-on-failure
+      - name: TSan（并发套件）
+        env:
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: |
+          cmake -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+                -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+                -DZENITH_SANITIZE=thread \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build-tsan
+          ctest --test-dir build-tsan --output-on-failure \
+                -R "test_concurrency|test_m6|test_websocket|test_m13b|test_m13d"
+
   linux-clang-coro:
     runs-on: ubuntu-latest
     steps:

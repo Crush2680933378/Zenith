@@ -1,0 +1,105 @@
+name: Release
+
+# 推 v* tag（或手动触发）→ 构建 Windows + Linux 的 Release 包 → 上传到同名 GitHub Release。
+# 目的：发版不再依赖人手工 cmake --install + 压缩，也不会出现「只出了 Windows 包」。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-openssl
+      - name: Build (Release)
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
+          cmake --build build
+      - name: Package
+        shell: msys2 {0}
+        run: |
+          PKG="package/zenith-${GITHUB_REF_NAME}-win-x64"
+          cmake --install build --prefix "$PKG"
+          cp build/plugins/*.dll "$PKG/bin/" 2>/dev/null || true
+          cp README.md CHANGELOG.md "$PKG/" 2>/dev/null || true
+          mkdir -p "$PKG/docs" && cp docs/*.md "$PKG/docs/" 2>/dev/null || true
+          echo "Zenith ${GITHUB_REF_NAME} (Windows x64, Release)" > "$PKG/VERSION.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-windows
+          path: package/
+          if-no-files-found: error
+
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ libssl-dev
+      - name: Build (Release)
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+                -DZENITH_TLS=openssl \
+                -DUORM_ENABLE_MYSQL=OFF -DUORM_ENABLE_POSTGRESQL=OFF
+          cmake --build build
+      - name: Package
+        run: |
+          PKG="package/zenith-${GITHUB_REF_NAME}-linux-x64"
+          cmake --install build --prefix "$PKG"
+          cp build/plugins/*.so "$PKG/bin/" 2>/dev/null || true
+          cp README.md CHANGELOG.md "$PKG/" 2>/dev/null || true
+          mkdir -p "$PKG/docs" && cp docs/*.md "$PKG/docs/" 2>/dev/null || true
+          echo "Zenith ${GITHUB_REF_NAME} (Linux x64, Release)" > "$PKG/VERSION.txt"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-linux
+          path: package/
+          if-no-files-found: error
+
+  publish:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: 归档并发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          (cd artifacts/pkg-windows && zip -qr "../../dist/zenith-${TAG}-win-x64.zip" .)
+          (cd artifacts/pkg-linux && tar czf "../../dist/zenith-${TAG}-linux-x64.tar.gz" .)
+          ls -lh dist
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "Zenith ${TAG}" --generate-notes
+          fi
+          gh release upload "$TAG" dist/* --clobber

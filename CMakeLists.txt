@@ -24,6 +24,9 @@ option(ZENITH_BUILD_BENCH        "Build zenith-bench load test tool"            
 set(ZENITH_TLS "none" CACHE STRING
     "TLS backend behind ITLSTransport: openssl | mbedtls | wolfssl | none (impl lands in M2/M3)")
 
+set(ZENITH_SANITIZE "" CACHE STRING
+    "启用 sanitizer：address | thread | undefined，可组合（如 address,undefined）；空=关闭")
+
 # ---------------------------------------------------------------------------
 # 全局编译设置
 # ---------------------------------------------------------------------------
@@ -34,6 +37,29 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# ---------------------------------------------------------------------------
+# sanitizer（CI 用；本地也可开）
+#
+#   -DZENITH_SANITIZE=address,undefined   内存错误 + UB（互斥于 thread）
+#   -DZENITH_SANITIZE=thread              数据竞争（只能单开）
+#
+# 注意：ASan 与 TSan 不能同时启用，CI 里是两个独立构建目录。
+# MinGW/MSVC 不支持这些 GCC/Clang 标志，这里显式忽略而不是让构建炸。
+# ---------------------------------------------------------------------------
+if (ZENITH_SANITIZE)
+    if (MSVC OR (WIN32 AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
+        message(WARNING "ZENITH_SANITIZE=${ZENITH_SANITIZE} 被忽略：Windows 下 "
+                        "MinGW/MSVC 对 -fsanitize 支持不完整（当前编译器 "
+                        "${CMAKE_CXX_COMPILER_ID}）。请用 Linux/macOS + GCC/Clang 构建。")
+    else()
+        message(STATUS "Zenith sanitizer: ${ZENITH_SANITIZE}")
+        add_compile_options(-fsanitize=${ZENITH_SANITIZE} -fno-omit-frame-pointer
+                            -fno-sanitize-recover=all -g)
+        add_link_options(-fsanitize=${ZENITH_SANITIZE})
+        # UBSan 的 vptr 检查需要 RTTI；项目未关 RTTI，这里只是避免 -fno-rtti 场景踩坑
+    endif()
+endif()
 
 # 输出布局：bin/ 放可执行与 DLL，lib/ 放静态库/so，plugins/ 放插件模块
 set(ZENITH_RUNTIME_OUTPUT_DIR ${CMAKE_BINARY_DIR}/bin)
