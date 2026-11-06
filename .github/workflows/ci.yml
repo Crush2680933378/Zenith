@@ -247,6 +247,25 @@ jobs:
           grep -q "Hello, Zenith!" /tmp/hello.txt
           docker rm -f zenith-ci
 
+  # MSVC：README 写明了「Windows 目前只覆盖 MinGW」，这条 job 用来探路。
+  # 先非阻塞（失败可见但不卡合并），把编译错误逐个清完再转阻塞。
+  windows-msvc:
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Configure + Build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release `
+                -DZENITH_TLS=none -DZENITH_ENABLE_ORM=OFF `
+                -DZENITH_BUILD_TESTS=OFF -DZENITH_BUILD_EXAMPLES=OFF `
+                -DZENITH_BUILD_PLUGINS=OFF
+          cmake --build build -j 4
+
   linux-gcc:
     runs-on: ubuntu-latest
     steps:
