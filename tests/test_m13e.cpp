@@ -416,6 +416,9 @@ ZTEST(Desk, WebSocketWatchAndEvents) {
         std::this_thread::sleep_for(10ms);
     cloop.stop();
     if (ct.joinable()) ct.join();
+    // 诊断：会话/连接应随客户端 loop 停止而释放（LSan 排查用）
+    std::printf("      [lifetime] desk sessions=%d connections=%d\n",
+                net::WebSocketSession::liveCount(), net::TcpConnection::liveCount());
     ZEXPECT_TRUE(gotHello.load());
     ZEXPECT_TRUE(gotCrewEvent.load());
     ZEXPECT_TRUE(frames.load() > 3);

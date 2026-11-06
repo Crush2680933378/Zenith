@@ -98,6 +98,7 @@ set(ZENITH_SOURCES
     obs/trace_context.cpp
     concurrency/cron.cpp
     http/otel.cpp
+    http/http2.cpp
     http/oauth.cpp
     net/mqtt.cpp
     mcp/mcp_client.cpp

@@ -171,6 +171,14 @@ zenith_set_warnings(test_m7)
 add_test(NAME test_m7 COMMAND test_m7)
 set_tests_properties(test_m7 PROPERTIES TIMEOUT 180)
 
+# M7.7 HTTP/2 基础层（帧编解码 + HPACK）
+add_executable(test_http2 test_http2.cpp)
+target_link_libraries(test_http2 PRIVATE zenith_core Threads::Threads )
+target_include_directories(test_http2 PRIVATE /tests)
+zenith_set_warnings(test_http2)
+add_test(NAME test_http2 COMMAND test_http2)
+set_tests_properties(test_http2 PROPERTIES TIMEOUT 60)
+
 # M8.7 W3C Trace Context（解析/校验 + 跨服务两跳传播）
 add_executable(test_m8_trace test_m8_trace.cpp)
 target_link_libraries(test_m8_trace PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
