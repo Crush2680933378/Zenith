@@ -15,17 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY . .
 
+# 示例没有 install() 规则：显式装上，作为镜像的默认入口
 RUN cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
         -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF \
         -DZENITH_BUILD_TESTS=OFF -DZENITH_BUILD_PLUGINS=OFF \
     && cmake --build build -j"$(nproc)" \
-    && cmake --install build --prefix /usr/local
+    && cmake --install build --prefix /usr/local \
+    && install -m755 build/bin/http_server /usr/local/bin/http_server
 
 # ---------------------------------------------------------------------------
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libssl3t64 zlib1g curl \
+        libssl3t64 zlib1g libstdc++6 curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr/local /usr/local
