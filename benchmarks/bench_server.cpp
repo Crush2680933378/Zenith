@@ -8,6 +8,7 @@
 //
 //  用法：bench_server <port> <seconds>
 // ============================================================================
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -38,10 +39,18 @@ int main(int argc, char** argv) {
         const fs::path p = fs::path(root) / name;
         if (fs::exists(p, ec) && fs::file_size(p, ec) == kSize) continue;
         std::ofstream out(p, std::ios::binary | std::ios::trunc);
-        std::string chunk(kSize, '\0');
-        for (size_t i = 0; i < kSize; ++i) chunk[i] = static_cast<char>((i * 31u + 7u) & 0xFFu);
-        if (std::string(name) == "text.txt") chunk.assign(kSize, 'T');
-        out.write(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+        // 分块生成：一次性 std::string(kSize) 会让进程峰值 RSS 直接等于文件大小，
+        // 性能门禁测到的就成了「生成时的内存」而不是「服务时的内存」。
+        constexpr size_t kChunk = 1024 * 1024;
+        std::string chunk(kChunk, '\0');
+        for (size_t i = 0; i < kChunk; ++i) chunk[i] = static_cast<char>((i * 31u + 7u) & 0xFFu);
+        if (std::string(name) == "text.txt") chunk.assign(kChunk, 'T');
+        size_t written = 0;
+        while (written < kSize) {
+            const size_t n = std::min(kChunk, kSize - written);
+            out.write(chunk.data(), static_cast<std::streamsize>(n));
+            written += n;
+        }
         if (!out.good()) std::printf("  data write failed: %s\n", p.string().c_str());
     }
 
