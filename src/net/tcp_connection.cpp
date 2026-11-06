@@ -434,6 +434,20 @@ void TcpConnection::handleClose(const std::string& reason) {
     }
     if (onClose_) onClose_(shared_from_this());
     if (hostClose_) hostClose_(shared_from_this());
+    // 关闭后断开所有回调：它们常捕获上层会话/客户端状态（WebSocketSession、
+    // HttpClient 的 AsyncState 等），而对方又持有本连接——不清空就成环，
+    // 整组对象在进程退出时仍互相吊着（LSan 报的就是这类）。
+    //
+    // 必须投递到本轮事件之后再清：当前调用栈往往就在 onMessage_ 的闭包里，
+    // 同步置空会析构正在执行的函数对象（UAF，M3 5d 规则）。
+    auto self = shared_from_this();
+    loop_->queueInLoop([self] {
+        self->onConnect_ = nullptr;
+        self->onMessage_ = nullptr;
+        self->onClose_ = nullptr;
+        self->onError_ = nullptr;
+        self->hostClose_ = nullptr;
+    });
     sock_.close(); // 触发 Socket 析构路径统一关闭
 }
 
