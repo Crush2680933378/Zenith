@@ -110,6 +110,10 @@ struct HttpResponse {
     bool hasContentLengthOverride = false;
     uint64_t contentLengthOverride = 0;
 
+    /// 尾随头：HTTP/2 里是 HEADERS(END_STREAM)，gRPC 的 grpc-status 就走这里。
+    /// HTTP/1.1 序列化时不输出（需要 chunked trailer 才能表达）。
+    std::vector<std::pair<std::string, std::string>> trailers;
+
     /// M7.2a：原地复位（保留 headers 容量与 body 缓冲区），供连接级 Context 复用。
     void reset() noexcept {
         httpMajor = 1;
@@ -120,6 +124,7 @@ struct HttpResponse {
         chunked = false;
         hasContentLengthOverride = false;
         contentLengthOverride = 0;
+        trailers.clear();
     }
 
     [[nodiscard]] bool keepAlive() const noexcept {

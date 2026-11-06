@@ -138,6 +138,8 @@ struct H2Response {
     int status = 200;
     std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
+    /// 尾随头（gRPC 必需：grpc-status/grpc-message 走 trailers，不走 headers）
+    std::vector<std::pair<std::string, std::string>> trailers;
 };
 
 /// h2c（明文、prior-knowledge）服务端连接。
@@ -164,7 +166,7 @@ private:
     void dispatch(const H2Request& req, uint32_t streamId, std::string& out);
     void sendGoAway(std::string& out, ErrorCode code);
     /// 按连接/流窗口把一段响应正文切成 DATA 帧发出；窗口不足的部分暂存
-    void sendData(uint32_t streamId, std::string body, std::string& out);
+    void sendData(uint32_t streamId, std::string body, std::string& out, bool endStream);
     /// 窗口变大后，把暂存的数据继续发
     void flushPending(uint32_t streamId, std::string& out);
     /// 回 WINDOW_UPDATE（收到对端 DATA 后补充窗口）
@@ -182,6 +184,7 @@ private:
     uint32_t connSendWindow_ = 65535;
     std::map<uint32_t, uint32_t> streamSendWindow_;
     std::map<uint32_t, std::string> pendingData_;  // 窗口不够时挂起的正文
+    std::map<uint32_t, bool> pendingEndStream_;    // 该流 flush 完成后是否带 END_STREAM
     uint32_t maxFrameSize_ = kDefaultMaxFrameSize;
 
     bool prefaceSeen_ = false;

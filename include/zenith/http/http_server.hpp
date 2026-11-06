@@ -48,6 +48,13 @@ public:
     /// 访问内部路由表（注册路由/中间件/分组）。
     [[nodiscard]] Router& router() noexcept { return router_; }
 
+    /// gRPC 前置钩子：返回 true 表示已处理（不再走普通路由）。
+    /// gRPC 路径形如 "/pkg.Service/Method"，必须在路由之前拦截，
+    /// 否则未注册的方法会被普通 404 接走、丢掉 grpc-status 尾随头。
+    void setGrpcHandler(std::function<bool(Context&)> handler) {
+        grpcHandler_ = std::move(handler);
+    }
+
     /// 注册 WebSocket 升级路径（精确匹配 path）。
     /// onOpen：升级完成后触发（在连接所属 IO 线程）；会话回调由用户继续设置。
     void enableWebSocket(const std::string& path,
@@ -84,6 +91,7 @@ private:
     std::function<void()> drainedCb_;
     void maybeFireDrained();
     Router router_;
+    std::function<bool(Context&)> grpcHandler_;
     size_t maxBodyBytes_;
     std::unordered_map<std::string, std::function<void(const net::WebSocketSession::Ptr&)>>
         wsPaths_;

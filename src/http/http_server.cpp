@@ -182,21 +182,26 @@ void HttpServer::handleH2Request(const h2::H2Request& r, h2::H2Response& resp) {
 
     Context ctx(std::move(req));
     ctx.setConnection(nullptr);  // h2 v1 暂不支持流式响应
-    try {
-        router_.dispatch(ctx);
-    } catch (const Context::BadRequestBody& e) {
-        ctx.status(400).text(400, std::string("400 Bad Request: ") + e.what());
-    } catch (const std::exception& e) {
-        ZLOG_ERROR("h2 handler exception: ", e.what(), " (", r.path, ")");
-        ctx.status(500).text(500, "500 Internal Server Error");
-    } catch (...) {
-        ctx.status(500).text(500, "500 Internal Server Error");
+    // gRPC 先于路由：它的路径是 "/pkg.Service/Method"，不该被普通路由表接走
+    const bool grpcHandled = grpcHandler_ && grpcHandler_(ctx);
+    if (!grpcHandled) {
+        try {
+            router_.dispatch(ctx);
+        } catch (const Context::BadRequestBody& e) {
+            ctx.status(400).text(400, std::string("400 Bad Request: ") + e.what());
+        } catch (const std::exception& e) {
+            ZLOG_ERROR("h2 handler exception: ", e.what(), " (", r.path, ")");
+            ctx.status(500).text(500, "500 Internal Server Error");
+        } catch (...) {
+            ctx.status(500).text(500, "500 Internal Server Error");
+        }
     }
 
     resp.status = ctx.response().status;
     for (const auto& [k, v] : ctx.response().headers.entries())
         resp.headers.emplace_back(k, v);
     resp.body = ctx.response().body;
+    resp.trailers = ctx.response().trailers;  // gRPC 的 grpc-status 走尾随头
 }
 
 bool HttpServer::tryWebSocketUpgrade(const net::TcpConnection::Ptr& conn) {

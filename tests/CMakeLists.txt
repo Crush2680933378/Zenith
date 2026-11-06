@@ -179,6 +179,14 @@ zenith_set_warnings(test_http2)
 add_test(NAME test_http2 COMMAND test_http2)
 set_tests_properties(test_http2 PROPERTIES TIMEOUT 120)
 
+# gRPC 传输层（消息帧 + h2 端到端）
+add_executable(test_grpc test_grpc.cpp)
+target_link_libraries(test_grpc PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_grpc PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_grpc)
+add_test(NAME test_grpc COMMAND test_grpc)
+set_tests_properties(test_grpc PROPERTIES TIMEOUT 120)
+
 # M8.x MQTT 3.1.1 编解码 + 主题匹配
 add_executable(test_mqtt test_mqtt.cpp)
 target_link_libraries(test_mqtt PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})

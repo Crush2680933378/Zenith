@@ -115,6 +115,11 @@ public:
         resp_.headers.set(key, value);
         return *this;
     }
+    /// 尾随头（仅 HTTP/2 会真正发出；gRPC 的 grpc-status/grpc-message 走这里）
+    Context& trailer(std::string key, std::string value) {
+        resp_.trailers.emplace_back(std::move(key), std::move(value));
+        return *this;
+    }
     [[nodiscard]] int responseStatus() const noexcept { return resp_.status; }
 
     Context& text(int code, std::string body) {

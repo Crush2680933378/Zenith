@@ -666,22 +666,49 @@ void H2ServerConnection::dispatch(const H2Request& req, uint32_t streamId, std::
 
     std::string block = encoder_.encode(fields);
 
+    const bool hasTrailers = !resp.trailers.empty();
+    const bool hasBody = !resp.body.empty();
+
     Frame h;
     h.type = FrameType::Headers;
     h.streamId = streamId;
-    h.flags = 0x4;                          // END_HEADERS
-    if (resp.body.empty()) h.flags |= 0x1;  // END_STREAM
+    h.flags = 0x4;                                 // END_HEADERS
+    if (!hasBody && !hasTrailers) h.flags |= 0x1;  // END_STREAM
     h.payload = std::move(block);
     out += encodeFrame(h);
 
     // 正文按窗口分帧（大响应会被拆成多个 DATA，窗口不足的部分挂起等 WINDOW_UPDATE）
-    if (!resp.body.empty()) sendData(streamId, std::move(resp.body), out);
+    if (hasBody) sendData(streamId, std::move(resp.body), out, /*endStream=*/!hasTrailers);
+
+    // gRPC 等场景：尾随头单独一帧 HEADERS，并带上 END_STREAM
+    if (hasTrailers) {
+        std::vector<std::pair<std::string, std::string>> tf;
+        for (const auto& [k, v] : resp.trailers)
+            tf.emplace_back(k, v);
+        Frame t;
+        t.type = FrameType::Headers;
+        t.streamId = streamId;
+        t.flags = 0x4 | 0x1;  // END_HEADERS | END_STREAM
+        t.payload = encoder_.encode(tf);
+        out += encodeFrame(t);
+    }
     streams_.erase(streamId);
 }
 
-void H2ServerConnection::sendData(uint32_t streamId, std::string body, std::string& out) {
-    if (body.empty()) return;
+void H2ServerConnection::sendData(uint32_t streamId, std::string body, std::string& out,
+                                  bool endStream) {
+    if (body.empty()) {
+        if (endStream) {
+            Frame d;
+            d.type = FrameType::Data;
+            d.streamId = streamId;
+            d.flags = 0x1;
+            out += encodeFrame(d);
+        }
+        return;
+    }
     pendingData_[streamId] += body;
+    pendingEndStream_[streamId] = endStream;
     flushPending(streamId, out);
 }
 
@@ -690,6 +717,7 @@ void H2ServerConnection::flushPending(uint32_t streamId, std::string& out) {
     if (it == pendingData_.end()) return;
     std::string& buf = it->second;
     uint32_t& sw = streamSendWindow_[streamId];
+    const bool endStream = pendingEndStream_[streamId];
     while (!buf.empty()) {
         uint32_t allowed = static_cast<uint32_t>(buf.size());
         if (allowed > connSendWindow_) allowed = connSendWindow_;
@@ -703,10 +731,11 @@ void H2ServerConnection::flushPending(uint32_t streamId, std::string& out) {
         buf.erase(0, allowed);
         connSendWindow_ -= allowed;
         sw -= allowed;
-        if (buf.empty()) d.flags = 0x1;  // END_STREAM
+        if (buf.empty() && endStream) d.flags = 0x1;  // END_STREAM
         out += encodeFrame(d);
     }
     pendingData_.erase(it);
+    pendingEndStream_.erase(streamId);
 }
 
 void H2ServerConnection::replenish(uint32_t streamId, uint32_t bytes, std::string& out) {

@@ -101,6 +101,7 @@ set(ZENITH_SOURCES
     concurrency/cron.cpp
     http/otel.cpp
     http/http2.cpp
+    http/grpc.cpp
     http/oauth.cpp
     net/mqtt.cpp
     mcp/mcp_client.cpp
