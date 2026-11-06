@@ -79,6 +79,15 @@ WsDecodeResult wsDecodeFrame(const uint8_t* data, size_t n, bool requireMask) {
         r.error = "RSV bits set";
         return r;
     }
+    // RFC6455：opcode 只允许 0(continuation)/1(text)/2(binary)/8(close)/9(ping)/10(pong)。
+    // 3–7 / 11–15 是保留值，收到必须判错——否则上层会把非法枚举值当正常帧处理
+    // （fuzz 首跑就喂出了 0x0D）。
+    if (!(opcode == 0x0 || opcode == 0x1 || opcode == 0x2 || opcode == 0x8 ||
+          opcode == 0x9 || opcode == 0xA)) {
+        r.state = WsDecodeResult::State::Error;
+        r.error = "invalid opcode " + std::to_string(static_cast<int>(opcode));
+        return r;
+    }
     if (requireMask && !masked) {
         r.state = WsDecodeResult::State::Error;
         r.error = "client frame not masked";

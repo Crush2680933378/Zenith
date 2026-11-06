@@ -91,7 +91,7 @@ jobs:
           cmake -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=Debug \
                 -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
                 -DZENITH_COVERAGE=ON -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF \
-                -DZENITH_BUILD_EXAMPLES=OFF -DZENITH_BUILD_PLUGINS=OFF
+                -DZENITH_BUILD_EXAMPLES=OFF
           cmake --build build-cov
       - name: 跑测试并汇总
         run: |

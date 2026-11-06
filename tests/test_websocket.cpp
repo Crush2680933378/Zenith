@@ -52,6 +52,21 @@ ZTEST(WsCodec, MaskedClientFrame) {
     (void)r2;
 }
 
+ZTEST(WsCodec, RejectsReservedOpcode) {
+    // RFC6455：opcode 3–7 / 11–15 保留，收到必须判错。
+    // 这是 fuzz 首跑喂出来的：0x0D 曾一路被当作正常帧返回 Ok。
+    const uint8_t reserved[] = {0x0D, 0x80, 0x00, 0x00, 0x00, 0x00};
+    auto bad = net::wsDecodeFrame(reserved, sizeof(reserved), /*requireMask=*/true);
+    ZEXPECT_TRUE(bad.state == net::WsDecodeResult::State::Error);
+    ZEXPECT_TRUE(bad.error.find("opcode") != std::string::npos);
+
+    // 合法 opcode 的同类帧不受影响（0x81 = FIN + text，空载荷）
+    const uint8_t ok[] = {0x81, 0x80, 0x00, 0x00, 0x00, 0x00};
+    auto good = net::wsDecodeFrame(ok, sizeof(ok), /*requireMask=*/true);
+    ZEXPECT_TRUE(good.state == net::WsDecodeResult::State::Ok);
+    ZEXPECT_TRUE(good.frame.payload.empty());
+}
+
 ZTEST(WsCodec, LengthForms) {
     // 126 → 16 位长度
     net::WsFrame f16;

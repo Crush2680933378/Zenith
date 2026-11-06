@@ -187,13 +187,7 @@ zenith_set_warnings(test_m8_speech)
 add_test(NAME test_m8_speech COMMAND test_m8_speech)
 set_tests_properties(test_m8_speech PROPERTIES TIMEOUT 120)
 
-# zenith-bench 压测工具（ZENITH_BUILD_BENCH，默认 ON）
-if (ZENITH_BUILD_BENCH)
-    add_executable(zenith_bench ../tools/zenith_bench.cpp)
-    target_link_libraries(zenith_bench PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
-    target_include_directories(zenith_bench PRIVATE ${CMAKE_SOURCE_DIR}/include)
-    zenith_set_warnings(zenith_bench)
-endif()
+# zenith-bench 压测工具已移到 benchmarks/CMakeLists.txt（测试关闭时也要能构建）
 
 # M5.2 安全（SHA-256/HMAC/JWT/CORS/限流/安全头；需 TLS=openssl 以做 OpenSSL 交叉核对）
 get_property(ZENITH_HAS_TLS_PROP GLOBAL PROPERTY ZENITH_HAS_TLS)
