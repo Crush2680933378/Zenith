@@ -53,7 +53,7 @@ jobs:
       - name: 性能/内存门禁
         run: |
           python3 tools/bench_gate.py \
-            --server build/benchmarks/zenith_bench_server \
+            --server build/bin/zenith_bench_server \
             --bench  build/bin/zenith_bench
 
   # Release 模式跑全量测试：Debug 全绿不代表 Release 全绿（NDEBUG/优化会暴露不同问题）
