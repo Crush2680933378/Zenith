@@ -351,10 +351,10 @@ jobs:
                 -DZENITH_SANITIZE=thread \
                 -DZENITH_TLS=openssl -DZENITH_ENABLE_ORM=OFF
           cmake --build build-tsan
-          # 覆盖面：先保持 5 套已验证零竞争的；扩面（stream/m5_web/m13e/m13g/m11）
-          # 会打到 crew 测试夹具里的共享标志，需逐个改原子——见 Issue #4。
+          # 覆盖 10 套并发相关用例。crew 夹具里跨线程读写的标志已全部改 std::atomic，
+          # 上一轮扩面时抓到的 Rec::chat 竞争就是它们（见 Issue #4）。
           ctest --test-dir build-tsan --output-on-failure \
-                -R "test_concurrency|test_m6|test_websocket|test_m13b|test_m13d"
+                -R "test_concurrency|test_m6|test_stream|test_websocket|test_m5_web|test_m13b|test_m13d|test_m13e|test_m13g|test_m11"
 
   linux-clang-coro:
     runs-on: ubuntu-latest
@@ -389,15 +389,8 @@ jobs:
                 -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) \
                 -DZENITH_ENABLE_ORM=OFF
           cmake --build build
-      # 核心套件阻塞：HTTP/网络/插件/流式/安全等必须全绿
-      - name: Test (macOS 核心套件)
+      # 全量阻塞：原先 test_m13b/test_m13d 在 macOS 上被排除（Issue #3）。
+      # 现在统一阻塞跑，失败即暴露真实原因，便于彻底修掉而不是长期挂"已知问题"。
+      - name: Test (macOS 全量)
         run: |
-          ctest --test-dir build --output-on-failure \
-                -E "test_m13b|test_m13d"
-      # AI 编排套件非阻塞：macOS 上有两个已知运行期问题（见 README「平台支持」）。
-      # 仍在这里跑一遍，失败在日志里可见，但不阻塞合并——修好即可并回上面的阻塞步骤。
-      - name: Test (macOS AI 编排套件 · 已知问题跟踪中)
-        continue-on-error: true
-        run: |
-          ctest --test-dir build --output-on-failure \
-                -R "test_m13b|test_m13d"
+          ctest --test-dir build --output-on-failure
