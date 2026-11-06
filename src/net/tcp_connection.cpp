@@ -89,6 +89,10 @@ bool TcpConnection::tlsEstablished() const noexcept {
     return tls_ != nullptr && tls_->state() == tls::TlsState::Established;
 }
 
+std::string TcpConnection::tlsAlpnProtocol() const {
+    return tls_ != nullptr ? tls_->alpnProtocol() : std::string();
+}
+
 /// 底层密文直发（绕过 TLS 层）
 void TcpConnection::sockSend(const std::string& wire) {
     if (wire.empty()) return;

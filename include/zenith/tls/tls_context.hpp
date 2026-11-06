@@ -32,6 +32,9 @@ struct TlsClientConfig {
     bool useSystemTrust = true;  // SSL_CTX_set_default_verify_paths
     std::string caFile;          // 额外 CA 包（PEM）；空则仅系统信任
     bool verifyPeer = true;
+    /// ALPN 协议列表（空格分隔，优先级从高到低），如 "h2 http/1.1"。
+    /// 空 = 不发起 ALPN 扩展（老服务端仍可协商出 HTTP/1.1）
+    std::string alpn;
 };
 
 /// 进程级 OpenSSL 初始化（幂等；首次创建 Context 时自动调用）
@@ -96,6 +99,8 @@ public:
 
     [[nodiscard]] TlsState state() const noexcept { return state_; }
     [[nodiscard]] const std::string& error() const noexcept { return error_; }
+    /// ALPN 协商结果（握手后有效；未协商返回空串）。"h2" 表示对端选了 HTTP/2
+    [[nodiscard]] std::string alpnProtocol() const;
     /// 是否刚完成握手（用于触发 onConnect 一次性事件）
     bool consumeHandshakeDone() {
         const bool d = handshakeDone_;

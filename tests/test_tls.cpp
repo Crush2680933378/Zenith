@@ -11,6 +11,7 @@
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
 #include "ztest.hpp"
@@ -92,6 +93,99 @@ struct CertDir {
     }
     [[nodiscard]] bool ok() const { return ok_; }
 };
+
+namespace {
+/// SSL_get0_alpn_selected 给的是 (ptr,len)，空指针要当空串
+std::string alpnOf(const unsigned char* p, unsigned n) {
+    return p != nullptr ? std::string(reinterpret_cast<const char*>(p), n) : std::string();
+}
+}  // namespace
+
+// ALPN：在一条内存 BIO 对上完成完整握手，断言两端协商结果。
+// 用内存 BIO 而不是 socket，是为了把「协商」从网络时序里摘出来。
+ZTEST(TlsAlpn, NegotiatesH2OnBothSides) {
+    CertDir certs;
+    ZEXPECT_TRUE(certs.ok());
+
+    tls::TlsServerConfig sc;
+    sc.certFile = "ztls_certs.tmp/server.crt";
+    sc.keyFile = "ztls_certs.tmp/server.key";
+    sc.alpn = "h2 http/1.1";  // 服务端偏好：h2 优先
+    auto sctx = tls::OpenSslContext::createServer(sc);
+    ZEXPECT_TRUE(static_cast<bool>(sctx));
+
+    tls::TlsClientConfig cc;
+    cc.verifyPeer = false;
+    cc.alpn = "h2 http/1.1";
+    auto cctx = tls::OpenSslContext::createClient(cc);
+    ZEXPECT_TRUE(static_cast<bool>(cctx));
+
+    SSL* s = sctx.value().newServerSession();
+    SSL* c = cctx.value().newClientSession("127.0.0.1");
+    ZEXPECT_TRUE(s != nullptr);
+    ZEXPECT_TRUE(c != nullptr);
+    BIO* sb = nullptr;
+    BIO* cb = nullptr;
+    ZEXPECT_EQ(BIO_new_bio_pair(&sb, 0, &cb, 0), 1);
+    SSL_set_bio(s, sb, sb);  // 所有权交给 SSL
+    SSL_set_bio(c, cb, cb);
+    SSL_set_accept_state(s);
+    SSL_set_connect_state(c);
+    for (int i = 0; i < 100 && !(SSL_is_init_finished(s) && SSL_is_init_finished(c)); ++i) {
+        SSL_do_handshake(c);
+        SSL_do_handshake(s);
+    }
+    ZEXPECT_TRUE(SSL_is_init_finished(s));
+    ZEXPECT_TRUE(SSL_is_init_finished(c));
+
+    const unsigned char* sp = nullptr;
+    const unsigned char* cp = nullptr;
+    unsigned sl = 0;
+    unsigned cl = 0;
+    SSL_get0_alpn_selected(s, &sp, &sl);
+    SSL_get0_alpn_selected(c, &cp, &cl);
+    ZEXPECT_EQ(alpnOf(sp, sl), std::string("h2"));
+    ZEXPECT_EQ(alpnOf(cp, cl), std::string("h2"));
+    SSL_free(s);
+    SSL_free(c);
+}
+
+// 客户端只给 http/1.1 时，服务端不能硬选 h2（否则老客户端直接被踢）
+ZTEST(TlsAlpn, FallsBackToHttp11) {
+    CertDir certs;
+    ZEXPECT_TRUE(certs.ok());
+    tls::TlsServerConfig sc;
+    sc.certFile = "ztls_certs.tmp/server.crt";
+    sc.keyFile = "ztls_certs.tmp/server.key";
+    sc.alpn = "h2 http/1.1";
+    auto sctx = tls::OpenSslContext::createServer(sc);
+    tls::TlsClientConfig cc;
+    cc.verifyPeer = false;
+    cc.alpn = "http/1.1";
+    auto cctx = tls::OpenSslContext::createClient(cc);
+    ZEXPECT_TRUE(static_cast<bool>(sctx));
+    ZEXPECT_TRUE(static_cast<bool>(cctx));
+
+    SSL* s = sctx.value().newServerSession();
+    SSL* c = cctx.value().newClientSession("127.0.0.1");
+    BIO* sb = nullptr;
+    BIO* cb = nullptr;
+    ZEXPECT_EQ(BIO_new_bio_pair(&sb, 0, &cb, 0), 1);
+    SSL_set_bio(s, sb, sb);
+    SSL_set_bio(c, cb, cb);
+    SSL_set_accept_state(s);
+    SSL_set_connect_state(c);
+    for (int i = 0; i < 100 && !(SSL_is_init_finished(s) && SSL_is_init_finished(c)); ++i) {
+        SSL_do_handshake(c);
+        SSL_do_handshake(s);
+    }
+    const unsigned char* sp = nullptr;
+    unsigned sl = 0;
+    SSL_get0_alpn_selected(s, &sp, &sl);
+    ZEXPECT_EQ(alpnOf(sp, sl), std::string("http/1.1"));
+    SSL_free(s);
+    SSL_free(c);
+}
 
 struct HttpsFixture {
     net::EventLoop loop;

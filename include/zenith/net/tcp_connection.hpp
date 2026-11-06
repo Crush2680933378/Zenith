@@ -93,6 +93,8 @@ public:
     void startTls(std::unique_ptr<tls::TlsFilter> filter);
     [[nodiscard]] bool tlsActive() const noexcept { return tls_ != nullptr; }
     [[nodiscard]] bool tlsEstablished() const noexcept;
+    /// ALPN 协商结果（未启用 TLS 或未协商返回空串）；"h2" 表示对端选了 HTTP/2
+    [[nodiscard]] std::string tlsAlpnProtocol() const;
 
 private:
     TcpConnection(EventLoop* loop, fd_t fd, std::string peer);

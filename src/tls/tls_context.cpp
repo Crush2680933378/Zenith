@@ -35,7 +35,8 @@ OpenSslContext::~OpenSslContext() {
     if (ctx_ != nullptr) SSL_CTX_free(ctx_);
 }
 
-OpenSslContext::OpenSslContext(OpenSslContext&& other) noexcept : ctx_(other.ctx_) {
+OpenSslContext::OpenSslContext(OpenSslContext&& other) noexcept
+    : ctx_(other.ctx_), alpnHolder_(std::move(other.alpnHolder_)) {
     other.ctx_ = nullptr;
 }
 
@@ -43,6 +44,7 @@ OpenSslContext& OpenSslContext::operator=(OpenSslContext&& other) noexcept {
     if (this != &other) {
         if (ctx_ != nullptr) SSL_CTX_free(ctx_);
         ctx_ = std::exchange(other.ctx_, nullptr);
+        alpnHolder_ = std::move(other.alpnHolder_);
     }
     return *this;
 }
@@ -130,7 +132,41 @@ core::Result<OpenSslContext> OpenSslContext::createClient(const TlsClientConfig&
     } else {
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
     }
+    if (!cfg.alpn.empty()) {
+        // ALPN 线格式：每个协议前面加一字节长度（RFC 7301）
+        std::string wire;
+        size_t begin = 0;
+        while (begin <= cfg.alpn.size()) {
+            const size_t sp = cfg.alpn.find(' ', begin);
+            const std::string proto =
+                cfg.alpn.substr(begin, sp == std::string::npos ? std::string::npos : sp - begin);
+            if (!proto.empty()) {
+                if (proto.size() > 255) {
+                    SSL_CTX_free(ctx);
+                    return core::Result<OpenSslContext>::Err(
+                        core::Error(85, "alpn protocol name too long"));
+                }
+                wire.push_back(static_cast<char>(proto.size()));
+                wire += proto;
+            }
+            if (sp == std::string::npos) break;
+            begin = sp + 1;
+        }
+        if (!wire.empty()) {
+            SSL_CTX_set_alpn_protos(ctx, reinterpret_cast<const unsigned char*>(wire.data()),
+                                    static_cast<unsigned>(wire.size()));
+        }
+    }
     return core::Result<OpenSslContext>::Ok(OpenSslContext(ctx));
+}
+
+std::string TlsFilter::alpnProtocol() const {
+    if (ssl_ == nullptr) return {};
+    const unsigned char* proto = nullptr;
+    unsigned len = 0;
+    SSL_get0_alpn_selected(ssl_, &proto, &len);
+    if (proto == nullptr || len == 0) return {};
+    return std::string(reinterpret_cast<const char*>(proto), len);
 }
 
 SSL* OpenSslContext::newServerSession() const {
