@@ -38,10 +38,15 @@ public:
     /// 线程安全；唤醒循环使其退出。
     void stop();
 
+    /// 注意：threadId_ 由 loop 线程在进入循环时写入、其他线程随时读取
+    /// （runInLoop 判断是否需要投递）。std::thread::id 的并发读写是数据竞争
+    /// （TSan 抓到过），所以用 atomic 发布。
     [[nodiscard]] bool isInLoopThread() const noexcept {
-        return std::this_thread::get_id() == threadId_;
+        return std::this_thread::get_id() == threadId_.load(std::memory_order_acquire);
     }
-    [[nodiscard]] std::thread::id threadId() const noexcept { return threadId_; }
+    [[nodiscard]] std::thread::id threadId() const noexcept {
+        return threadId_.load(std::memory_order_acquire);
+    }
     [[nodiscard]] const char* pollerName() const noexcept { return pollerName_; }
 
     /* ---- fd 注册（仅 loop 线程） ---- */
@@ -97,7 +102,7 @@ private:
 
     fd_t wakeFd_ = kInvalidFd; // 自连接 UDP：跨线程唤醒
     std::atomic<bool> quit_{false};
-    std::thread::id threadId_{};
+    std::atomic<std::thread::id> threadId_{};
     std::vector<PollResult> pollResults_;
     bool looping_ = false;
 };
