@@ -19,7 +19,9 @@ void appendUint16(std::string& s, uint16_t v) {
 }
 
 uint32_t randomMaskKey() {
-    static std::mt19937 rng{std::random_device{}()};
+    // thread_local：客户端握手会在多个 IO 线程上并发取掩码键，
+    // 共享同一个 mt19937 是数据竞争（TSan 报的就是这里）。
+    static thread_local std::mt19937 rng{std::random_device{}()};
     return rng();
 }
 

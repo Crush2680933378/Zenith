@@ -16,10 +16,25 @@
 - `benchmarks/` 纳入构建（`zenith_bench_server` 目标），带种子语料 `fuzz/corpus/`。
 
 ### 修复
+- **WebSocket 解码器接受保留 opcode**（fuzz 首跑发现）：`0x0D`（RFC6455 保留值）
+  曾被当作正常帧返回 Ok，上层会拿到非法枚举值。现在 3–7 / 11–15 一律判错，
+  并补单测 `WsCodec.RejectsReservedOpcode`。
+- **WebSocket 掩码 RNG 数据竞争**（TSan）：`randomMaskKey()` 的 `mt19937` 是函数内
+  static，多 IO 线程共享。改 `thread_local`。
+- **test_concurrency 的竞态断言**：`ExecutesAllTasks` 用「哨兵任务」当完成信号，
+  但 4 个 worker 并发时哨兵完成不代表其余任务已跑完（CI 偶发 got 499 vs 500）。
+  改为等计数追平再断言，语义不变。
 - **连接关闭后不断开回调**：`TcpConnection` 的 onMessage_/onClose_ 闭包常捕获
   WebSocketSession / HttpClient::AsyncState，而对方又持有连接 → 关闭后互相吊着，
   进程退出时仍不释放（LSan 报的 TcpConnection 缓冲泄漏）。关闭时投递任务在本轮事件
   之后清空全部回调（同步清会析构正在执行的闭包，M3 5d 规则）。
+- **性能门禁自身两处 bug**：`bench_server` 生成测试文件时一次性 `std::string(64MB)`
+  污染峰值 RSS；`bench_gate.py` 在带 `cwd` 的 Popen 里用了相对可执行路径。
+
+### 跟踪
+
+剩余已知问题已转为 GitHub Issues：#2（LSan 4 套件）、#3（macOS 2 套件）、
+#4（TSan 转阻塞）、#5（M7 剩余四项）、#6（M8 剩余三项）。
 
 ## v0.2.1 (2026-11-06)
 

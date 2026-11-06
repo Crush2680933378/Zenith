@@ -76,7 +76,14 @@ HTTP 客户端失败路径的循环引用、空闲定时器强引用连接、Eve
 
 仍在收敛的两项：LSan 有 4 套（`test_websocket` / `test_m5_web` / `test_m13e` / `test_m13g`）
 在进程退出时仍有对象存活（非增长型），TSan 还有存量竞争未清——两者都单列报告步骤，
-清完即并回阻塞步骤。
+清完即并回阻塞步骤。已全部转为 Issue 跟踪：[#2](https://github.com/Crush2680933378/Zenith/issues/2)
+（LSan）、[#3](https://github.com/Crush2680933378/Zenith/issues/3)（macOS）、
+[#4](https://github.com/Crush2680933378/Zenith/issues/4)（TSan）、
+[#5](https://github.com/Crush2680933378/Zenith/issues/5)（M7 剩余）、
+[#6](https://github.com/Crush2680933378/Zenith/issues/6)（M8 剩余）。
+
+fuzz 上线首跑就抓到一个真问题：WebSocket 解码器把 RFC6455 的保留 opcode（`0x0D`）
+当正常帧返回，上层会拿到非法枚举值。已修并补了单测。
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
 
