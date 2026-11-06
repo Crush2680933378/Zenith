@@ -1,4 +1,4 @@
-﻿# Zenith
+# Zenith
 
 [![CI](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml/badge.svg)](https://github.com/Crush2680933378/Zenith/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -14,13 +14,13 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 
 前端交给 React，Zenith 只提供 API。
 
-## 📌 进度总览（2026-10-25）
+## 📌 进度总览（2026-11-06）
 
 | 里程碑 | 状态 | 关键产出 |
 |---|---|---|
 | **M1–M6** | ✅ 完成 | v0.1.0：C ABI 插件内核 / Reactor / HTTP / WS / TLS / 生产就绪（181K RPS） |
-| **M7 性能深挖** | 📋 计划中 | [PLAN_M7](docs/PLAN_M7.md)；其中 **M7.4 压缩已提前落地**（zlib 后端） |
-| **M8 生态扩展** | 🚧 **2/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP **+ M8.3 向量库提前落地**（M10 三件套：ai_mcp/db_vector/ai_agent）→ [PLAN_M8](docs/PLAN_M8.md) |
+| **M7 性能深挖** | 🚧 **3/7 实装** | ✅ M7.4 gzip 压缩（提前落地）；✅ **M7.2 内存优化**（连接级 Context 池化 + 响应缓冲归还 + 发送缓冲空闲缩容）；✅ **M7.3 静态文件零拷贝**（Linux/macOS sendfile，Windows/TLS 分块回退）；📋 M7.1 热路径微优化 / M7.5 io_uring / M7.6 IOCP / M7.7 HTTP/2 → [PLAN_M7](docs/PLAN_M7.md) |
+| **M8 生态扩展** | 🚧 **5/8 实装** | ✅ M8.1 推理网关(4 插件)；✅ M8.2 MCP；✅ M8.3 向量库；✅ **M8.7 OTel + W3C Trace Context 跨服务透传**；✅ **M8.8 whisper.cpp 真 STT 后端**；📋 M8.4 mqtt broker / M8.5 gRPC / M8.6 WebRTC → [PLAN_M8](docs/PLAN_M8.md) |
 | **M17 优化全包** | ✅ 完成 | SSE 定时器化（多观看者不占死 IO 线程）/execVerify 命令白名单+元字符禁令/持久化去抖+锁内快照/任务 TTL 淘汰/语义记忆（embeddings→哈希回退）/ai_guard 联动（brief 阻断+产物 PII 掩码）/定时 crew（cron）/WS 心跳+慢消费者背压/投票 abstain+quorum+声明序破平/任务分页/OTel 锁外上传 |
 | **M16 P0 护栏** | ✅ 完成 | 上下文预算截断（truncate 事件）/成本预算熔断（超限转人工，放行翻倍）/cancel webhook 补漏/followup 增量迭代（POST /:id/followup 继承产物+增量提示） |
 | **M15 ZenithDesk 契约** | ✅ 完成 | 2.5D 可视化前端全套 API：`/crew/roster`（角色↔AI 立绘映射）、逐票 `vote_cast`/`handoff`/`bug_assigned` 结构化协作事件、`/crew/ws` WebSocket 双向、`/crew/board` 多任务聚合、CORS 即开即用 → [CREW_EVENTS.md](docs/CREW_EVENTS.md) |
@@ -31,7 +31,7 @@ Claude/Gemini 三协议 + 熔断/成本记账）、**多 Agent 软件开发集�
 | **M10 AI Agent 后端** | ✅ 完成 | **推理+编排+工具协议+记忆检索成环**：ReAct 循环/会话记忆/RAG 召回、MCP 双向、HNSW 自研(Qdrant API)、示例 08 全链路 |
 | **M9 流式与身份** | ✅ 完成 | SSE/chunked 流式、gzip 压缩、RS/ES 非对称 JWT |
 | **计划外** | ✅ 完成 | 插件热重载（`PluginManager::reload` + `PluginWatcher`） |
-| **CI** | ✅ 三平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro，40 套测试全绿 |
+| **CI** | ✅ 四平台绿 | Windows-MinGW / Linux-GCC / Linux-Clang+Coro / **macOS-Clang**，43 套测试全绿 |
 | **插件** | 16 个 | hello_cpp·hello_c·media_ffmpeg·edge_esp32·ai_comfyui·ai_inference·ai_llama·ai_ninfer·ai_ninfer_native·db_vector·ai_mcp·ai_agent·ai_router·ai_crew·**ai_guard**·**ai_speech** |
 
 ## 🏆 性能：跨语言公平基准（10 框架对比）
@@ -445,8 +445,8 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | `net_mqtt` | ✅ **客户端已入核心**（M13c：3.1.1——变长编码/QoS1 PUBACK/心跳/下行分发）；📋 broker 形态（保留消息/共享订阅）仍在计划 | IoT 标准消息协议 | ⭐⭐⭐⭐ |
 | `net_grpc` | gRPC 框架（HTTP/2 + Protobuf + 四种流模式） | 微服务/AI 编排标准通信 | ⭐⭐⭐ |
 | `media_webrtc` | WebRTC 实时通信（ICE/DTLS/SRTP + FFmpeg 转码联动） | 视频会议/AI 实时视频 | ⭐⭐⭐ |
-| `obs_otel` | ~~OTLP 导出~~ ✅ **已入核心**（M13：OTLP/HTTP-JSON 批量导出+失败回队；crew 全链路 span 已接） | 云原生可观测标准 | ⭐⭐⭐ |
-| `ai_stt` | ~~语音接口~~ ✅ **已实装**（`ai_speech`：STT/TTS 抽象 + mock 后端；whisper.cpp 接入预留） | 语音 AI 入口 | ⭐⭐⭐ |
+| `obs_otel` | ✅ **已入核心**（M13：OTLP/HTTP-JSON 批量导出+失败回队，crew 全链路 span；M8.7：**W3C traceparent 提取/注入**，跨服务链路自动串通） | 云原生可观测标准 | ⭐⭐⭐ |
+| `ai_stt` | ✅ **已实装**（M13b：`ai_speech` STT/TTS 抽象 + 可播 mock；M8.8：**whisper.cpp 真后端**——WAV/PCM→16k 单声道→转写，编译期可选接入，缺库自动回落 mock） | 语音 AI 入口 | ⭐⭐⭐ |
 
 → 完整方案见 [docs/PLAN_M8.md](docs/PLAN_M8.md)（功能/架构/代码量/依赖逐项标注）
 
@@ -463,8 +463,9 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 - **M6 ✅ v0.1.0 发布**：Release 基准(181K RPS)/连接上限/slowloris 防线/soak 1.64 亿零失败/
   Linux epoll 闭环/双平台发行版
 - **M9 ✅ 流式与身份**：分块/SSE 流式响应、gzip 响应压缩、非对称 JWT（RS/ES）
-- **M7 📋 性能深挖**：Context 池化+arena、sendfile 零拷贝、deflate 压缩、io_uring/IOCP、HTTP/2
-  → [docs/PLAN_M7.md](docs/PLAN_M7.md)
+- **M7 🚧 性能深挖（3/7）**：✅ Context 池化 + 缓冲缩容 + 响应缓冲归还、✅ sendfile 静态文件
+  零拷贝、✅ gzip 压缩；📋 待做：热路径微优化（eventfd 唤醒/header 预编码）、io_uring/IOCP、
+  HTTP/2 → [docs/PLAN_M7.md](docs/PLAN_M7.md)
 - **M13 ✅ 全栈补强（2026-10-24）**：ProviderRouter TLS 直连 https 上游（SNI/证书校验/insecure）+
   三协议流式 SSE 翻译成 token 增量；db_vector 快照持久化；crew 内嵌 Web 仪表盘；
   路由 failover+熔断+成本记账；ai_guard 注入/PII 护栏；ai_stt/ai_tts 语音抽象（mock 可播 WAV）；
@@ -482,10 +483,21 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
   任务淘汰、语义记忆、guard 联动、定时 crew、WS 心跳/背压、投票配置化、分页、
   OTel 解锁；修复子线程 CrewInterrupted 逃逸（Linux clang terminate）与
   asArray() 悬垂指针（Linux 平台 UB）
-- **M8 🚧 生态扩展（1/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
+- **M18 ✅ 性能与生态收尾（2026-11-06）**：M7.3 静态文件零拷贝（sendfile，Windows/TLS
+  分块回退）、M7.2 内存修正（Buffer 缩容数据截断 bug 修复、Context 池化循环引用泄漏修复、
+  大响应缓冲归还）、M8.7 W3C Trace Context（服务端提取 + HttpClient 自动注入，两跳
+  传播有端到端测试）、M8.8 whisper.cpp STT（音频前处理管线 + 编译期可选真后端）；
+  修复 macOS CI（OpenSSL 3 的 X509 const 签名）、补齐 macOS 平台构建验证
+- **M19 ✅ 发布 v0.2.0（2026-11-06）**：M9–M18 十一个里程碑累积发布，43 套测试四平台全绿
+- **M8 🚧 生态扩展（5/8）**：✅ M8.1 LLM 推理网关——实装为 **4 个插件**
   （`ai_inference` 网关 / `ai_llama` 进程内 llama.cpp / `ai_ninfer` 子进程 /
   `ai_ninfer_native` 自研 C ABI 进程内），实测 prefill 3.65k · decode 729 tok/s；
-  📋 M8.2–M8.8：MCP/向量DB/MQTT/gRPC/WebRTC/OpenTelemetry/STT
+   ✅ M8.2 插件热重载；✅ M8.3 向量库（HNSW/Qdrant API）；
+   ✅ **M8.7 Trace Context**：W3C `traceparent` 提取（服务端）+ 自动注入（HttpClient），
+   跨服务 A→B→C 一条 trace 串通，业务代码零改动；
+   ✅ **M8.8 whisper.cpp STT**：WAV/PCM → 16kHz 单声道 → whisper 转写，编译期可选接入
+   （`-DZENITH_WHISPER_ROOT=…`），缺库/缺模型自动回落 mock；
+   📋 剩余 M8.4 mqtt broker / M8.5 gRPC / M8.6 WebRTC
   → [docs/PLAN_M8.md](docs/PLAN_M8.md)
 
 ## 依赖原则

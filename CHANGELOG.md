@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
@@ -129,8 +129,32 @@
 
 ## v0.2.0 (2026-11)
 
-九个里程碑的累积更新（M9–M17）：AI 后端全家桶、多厂商路由韧性、2.5D 可视化契约、
-生产级护栏与性能优化。测试 4 → 40 套（337 用例），代码 ~24K → ~28K 行。
+十一个里程碑的累积更新（M9–M18）：AI 后端全家桶、多厂商路由韧性、2.5D 可视化契约、
+生产级护栏、性能优化与生态补齐。测试 4 → 43 套，CI 覆盖 Windows / Linux-GCC /
+Linux-Clang+Coro / macOS 四平台。
+
+### M18 性能与生态收尾（2026-11-06）
+- **静态文件零拷贝（M7.3）**：`TcpConnection::sendFile` —— Linux/macOS 走 `sendfile`
+  内核态零拷贝，Windows/TLS 自动回退 64KB 分块读发（内存有界）。写路径用
+  `filePendingStart_` 保证「响应头完全排空后才发正文」，期间新的 `send()` 进发送缓冲，
+  文件发完后依次送出——字节顺序=调用顺序，pipelining 也不会交错。
+  静态资源 ≥256KB 走零拷贝；可压缩类型且客户端接受 gzip 时仍走内存路径（压缩收益 > 一次拷贝）。
+- **内存优化修正（M7.2）**：
+  - `Buffer::shrinkIfBloated` 原实现先 `resize` 再 `memmove`：`readerIndex>8` 时搬的是
+    已被截断的区间（sanitizer 下必炸）。改为先紧凑化再截断，大幅冗余时换小 buffer
+    真正归还内存。
+  - 连接级 Context 池化会形成 `连接→ConnState→Context→连接` 的 shared_ptr 循环，
+    每条 keep-alive 连接永不析构——派发结束即断开引用；大响应体发完即归还，
+    避免空闲连接长期占着上次响应的整块内存。
+- **W3C Trace Context（M8.7）**：`traceparent` 解析（严格校验小写十六进制/长度/全零 id/
+  版本 ff）、序列化、child 派生、线程上下文 `TraceScope`。服务端每请求提取（缺失则新起），
+  `HttpClient` 序列化时自动注入——A→B→C 跨服务一条 trace 串通，业务代码零改动。
+- **whisper.cpp STT（M8.8）**：音频前处理管线（WAV 8/16/24/32bit 与 float、任意采样率/
+  声道 → 降混 → 16kHz 单声道）纯函数可单测；whisper 后端编译期可选
+  （`-DZENITH_WHISPER_ROOT=…`），缺库/缺模型时插件自动回落 mock 并在日志写明原因。
+- **修复 macOS CI**：OpenSSL 3 把 `X509_get_subject_name` 的返回类型改为 `const X509_NAME*`，
+  三个测试改用显式 `X509_NAME_new` + `X509_set_subject_name`（1.1/3.x/LibreSSL 通吃）；
+  同时修正 `OPENSSL_INCLUDE_DIR` 未传播给目标的问题（macOS brew 路径不在默认搜索路径）。
 
 ### M17 优化全包（2026-11）
 - **SSE 转发定时器化**：tick 挂连接所属 loop（200ms 队列交换微秒级），

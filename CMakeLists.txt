@@ -5,7 +5,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(zenith
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Zenith: high-concurrency C++ backend framework with a pure C ABI plugin kernel"
     LANGUAGES C CXX)
 

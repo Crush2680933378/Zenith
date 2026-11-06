@@ -82,7 +82,10 @@ core::Result<size_t> PluginManager::loadDirectory(const std::string& dir) {
         if (!entry.is_regular_file()) continue;
         const std::string p = entry.path().string();
         const std::string e = core::string_util::toLower(entry.path().extension().string());
-        if (e == ext || (ext == ".so" && e == ".so")) files.push_back(p);
+        // macOS 两种后缀都认：MODULE 库是 .so，外部用 SHARED 构建的是 .dylib，
+        // 只认一种就会出现「插件明明构建了却一个都扫不到」。
+        const bool match = (e == ext) || (ext == ".so" && e == ".dylib");
+        if (match) files.push_back(p);
     }
     std::sort(files.begin(), files.end());
 

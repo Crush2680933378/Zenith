@@ -22,7 +22,10 @@ const char* pluginFileExtension() noexcept {
 #if defined(ZENITH_PLATFORM_WINDOWS)
     return ".dll";
 #elif defined(ZENITH_PLATFORM_MACOS)
-    return ".dylib";
+    // macOS 上 add_library(... MODULE) 产出的是 .so（CMAKE_SHARED_MODULE_SUFFIX），
+    // 只有 SHARED 才是 .dylib。插件的构建形态是 MODULE，所以这里必须是 .so——
+    // 返回 .dylib 会「插件构建成功但加载器一个都扫不到」。
+    return ".so";
 #else
     return ".so";
 #endif
