@@ -87,6 +87,8 @@ struct DtlsTransport::Impl {
     bool server = false;
     bool established = false;
     bool ownsFd = true;  // 借用外部 socket（WebRTC 复用 ICE 的 fd）时为 false
+    bool memMode = false;
+    OutboundFn out;
 
     ~Impl() { reset(); }
 
@@ -167,6 +169,82 @@ bool DtlsTransport::listen(const std::string& certFile, const std::string& keyFi
     }
     impl_->server = true;
     return true;
+}
+
+bool DtlsTransport::initMemory(bool serverSide, const std::string& certFile,
+                               const std::string& keyFile, OutboundFn out) {
+    impl_->reset();
+    tls::openSslGlobalInit();
+    impl_->ctx = serverSide ? SSL_CTX_new(DTLS_server_method()) : SSL_CTX_new(DTLS_client_method());
+    if (impl_->ctx == nullptr) return false;
+    if (serverSide) {
+        if (SSL_CTX_use_certificate_chain_file(impl_->ctx, certFile.c_str()) != 1) {
+            impl_->reset();
+            return false;
+        }
+        if (SSL_CTX_use_PrivateKey_file(impl_->ctx, keyFile.c_str(), SSL_FILETYPE_PEM) != 1) {
+            impl_->reset();
+            return false;
+        }
+    }
+    SSL_CTX_set_verify(impl_->ctx, SSL_VERIFY_NONE, nullptr);
+    SSL_CTX_set_read_ahead(impl_->ctx, 1);
+
+    impl_->ssl = SSL_new(impl_->ctx);
+    if (impl_->ssl == nullptr) {
+        impl_->reset();
+        return false;
+    }
+    BIO* rbio = BIO_new(BIO_s_mem());
+    BIO* wbio = BIO_new(BIO_s_mem());
+    if (rbio == nullptr || wbio == nullptr) {
+        if (rbio != nullptr) BIO_free(rbio);
+        if (wbio != nullptr) BIO_free(wbio);
+        impl_->reset();
+        return false;
+    }
+    BIO_set_mem_eof_return(rbio, -1);
+    BIO_set_mem_eof_return(wbio, -1);
+    SSL_set_bio(impl_->ssl, rbio, wbio);
+    if (serverSide) {
+        SSL_set_accept_state(impl_->ssl);
+    } else {
+        SSL_set_connect_state(impl_->ssl);
+    }
+    SSL_set_options(impl_->ssl, SSL_OP_NO_QUERY_MTU);
+    SSL_set_mtu(impl_->ssl, 1200);
+    impl_->memMode = true;
+    impl_->server = serverSide;
+    impl_->out = std::move(out);
+    return true;
+}
+
+void DtlsTransport::feedInbound(std::string_view datagram) {
+    if (!impl_->memMode || impl_->ssl == nullptr) return;
+    BIO* rbio = SSL_get_rbio(impl_->ssl);
+    if (rbio != nullptr) (void)BIO_write(rbio, datagram.data(), static_cast<int>(datagram.size()));
+}
+
+bool DtlsTransport::step() {
+    if (!impl_->memMode || impl_->ssl == nullptr) return false;
+    int rc = 0;
+    if (impl_->established) {
+        rc = 1;
+    } else if (impl_->server) {
+        rc = SSL_accept(impl_->ssl);
+    } else {
+        rc = SSL_connect(impl_->ssl);
+    }
+    BIO* wbio = SSL_get_wbio(impl_->ssl);
+    if (wbio != nullptr && impl_->out) {
+        char buf[4096];
+        int n = 0;
+        while ((n = BIO_read(wbio, buf, sizeof(buf))) > 0) {
+            impl_->out(std::string_view(buf, static_cast<size_t>(n)));
+        }
+    }
+    if (rc == 1) impl_->established = true;
+    return impl_->established;
 }
 
 bool DtlsTransport::listenOnFd(int fd, const std::string& certFile, const std::string& keyFile) {
@@ -365,6 +443,16 @@ uint16_t DtlsTransport::localPort() const {
 bool DtlsTransport::send(const std::string& data) {
     if (!impl_->established || data.empty()) return false;
     const int n = SSL_write(impl_->ssl, data.data(), static_cast<int>(data.size()));
+    if (impl_->memMode) {
+        BIO* wbio = SSL_get_wbio(impl_->ssl);
+        if (wbio != nullptr && impl_->out) {
+            char buf[4096];
+            int r = 0;
+            while ((r = BIO_read(wbio, buf, sizeof(buf))) > 0) {
+                impl_->out(std::string_view(buf, static_cast<size_t>(r)));
+            }
+        }
+    }
     return n == static_cast<int>(data.size());
 }
 
@@ -372,6 +460,15 @@ std::string DtlsTransport::receive(int timeoutMs, std::string* err) {
     if (!impl_->established) {
         if (err) *err = "not established";
         return {};
+    }
+    if (impl_->memMode) {
+        char mbuf[2048];
+        const int mn = SSL_read(impl_->ssl, mbuf, sizeof(mbuf));
+        if (mn <= 0) {
+            if (err != nullptr) *err = "no record available";
+            return {};
+        }
+        return std::string(mbuf, static_cast<size_t>(mn));
     }
     setRecvTimeout(impl_->fd, timeoutMs);
     char buf[2048];
@@ -410,6 +507,13 @@ bool DtlsTransport::supported() {
     return false;
 }
 bool DtlsTransport::listen(const std::string&, const std::string&, uint16_t) {
+    return false;
+}
+bool DtlsTransport::initMemory(bool, const std::string&, const std::string&, OutboundFn) {
+    return false;
+}
+void DtlsTransport::feedInbound(std::string_view) {}
+bool DtlsTransport::step() {
     return false;
 }
 bool DtlsTransport::listenOnFd(int, const std::string&, const std::string&) {

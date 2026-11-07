@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -131,6 +132,14 @@ public:
 
     /// 底层 UDP socket（把 DTLS 复用到同一条 ICE 链路上；调用方不得关闭）
     [[nodiscard]] int socketFd() const;
+
+    /// 非 STUN 数据报的接管者（WebRTC：交给 DTLS 的 memory-BIO 模式）。
+    /// 收到首字节不属于 STUN 的包时回调，由 sink 决定如何继续派发。
+    using DatagramSink = std::function<void(std::string_view, const StunAddress& from)>;
+    void setDatagramSink(DatagramSink sink);
+
+    /// 直接发送一个数据报（DTLS 的出站字节走这里）
+    bool sendTo(const StunAddress& to, std::string_view data);
 
 private:
     struct Impl;

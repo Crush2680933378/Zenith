@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,20 @@ public:
 
     /// 服务端：绑定 UDP 并载入证书
     bool listen(const std::string& certFile, const std::string& keyFile, uint16_t port = 0);
+
+    /// 出站密文回调（memory-BIO 模式：由调用方决定怎么发，例如走 ICE 的 socket）
+    using OutboundFn = std::function<void(std::string_view)>;
+
+    /// memory-BIO 模式：不持有 socket，握手与收发都由调用方泵动。
+    /// 用于和 ICE 共用一条 UDP 链路（配合 UdpMux / IceAgent 的 datagram sink）。
+    bool initMemory(bool serverSide, const std::string& certFile = {},
+                    const std::string& keyFile = {}, OutboundFn out = {});
+
+    /// 把从链路上收到的一个数据报喂进来
+    void feedInbound(std::string_view datagram);
+
+    /// 推进一步握手（每次调用后出站字节已经通过 OutboundFn 发出）
+    bool step();
 
     /// 服务端：在**已有** UDP socket 上监听（WebRTC 里复用 ICE 的 socket）。
     /// socket 归调用方所有，本对象不会关闭它。

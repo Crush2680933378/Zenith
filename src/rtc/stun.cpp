@@ -369,6 +369,7 @@ struct IceAgent::Impl {
     mutable std::mutex mtx;
     std::vector<StunAddress> remotes;
     std::map<std::string, IcePair> pairs;
+    DatagramSink sink;
     std::string ufragLocal = "zenithLocal";
     std::string ufragRemote = "zenithRemote";
     uint64_t tieBreaker = 0x1234567890ABCDEFull;
@@ -383,11 +384,23 @@ struct IceAgent::Impl {
             const int n =
                 ::recvfrom(fd, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&peer), &plen);
             if (n <= 0) continue;
-            rtc::StunMessage msg;
-            if (!rtc::decode(std::string_view(buf, static_cast<size_t>(n)), msg)) continue;
             char ip[INET_ADDRSTRLEN] = {};
             ::inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
             const StunAddress from{ip, static_cast<uint16_t>(ntohs(peer.sin_port))};
+            const std::string_view payload(buf, static_cast<size_t>(n));
+            // 首字节 0..3 才是 STUN；其余（DTLS 20..63 / RTP 128..191）交给 sink
+            const bool looksStun = !payload.empty() && static_cast<uint8_t>(payload[0]) <= 3;
+            if (!looksStun) {
+                DatagramSink sink;
+                {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    sink = this->sink;
+                }
+                if (sink) sink(payload, from);
+                continue;
+            }
+            rtc::StunMessage msg;
+            if (!rtc::decode(payload, msg)) continue;
 
             if (msg.type == rtc::kStunTypeBindingRequest) {
                 {
@@ -541,6 +554,21 @@ std::optional<IcePair> IceAgent::selectedPair() const {
 
 int IceAgent::socketFd() const {
     return impl_->fd;
+}
+
+void IceAgent::setDatagramSink(DatagramSink sink) {
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    impl_->sink = std::move(sink);
+}
+
+bool IceAgent::sendTo(const StunAddress& to, std::string_view data) {
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(to.port);
+    if (::inet_pton(AF_INET, to.ip.c_str(), &addr.sin_addr) != 1) return false;
+    const int n = ::sendto(impl_->fd, data.data(), static_cast<int>(data.size()), 0,
+                           reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    return n == static_cast<int>(data.size());
 }
 
 }  // namespace zenith::rtc

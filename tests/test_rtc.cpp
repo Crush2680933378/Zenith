@@ -547,4 +547,81 @@ ZTEST(MuxE2E, UnknownBytesAreDropped) {
     ZEXPECT_TRUE(b.dropped() >= 1);
 }
 
+/* --------------- ICE + DTLS 共用一条链路（demux + memory BIO） --------------- */
+
+#if defined(ZENITH_TLS_OPENSSL)
+ZTEST(WebRtc, StackOnIceSocket) {
+    ZEXPECT_TRUE(makeDtlsCert("zrtc_certs.tmp"));
+
+    // 1) ICE 互检，选出链路
+    rtc::IceAgent a;
+    rtc::IceAgent b;
+    ZEXPECT_TRUE(a.bind(0));
+    ZEXPECT_TRUE(b.bind(0));
+    a.addRemoteCandidate({"127.0.0.1", b.localPort()});
+    b.addRemoteCandidate({"127.0.0.1", a.localPort()});
+    (void)a.runChecks(1200);
+    (void)b.runChecks(1200);
+    for (int i = 0; i < 300 && !(a.selectedPair() && b.selectedPair()); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ZEXPECT_TRUE(a.selectedPair().has_value());
+    ZEXPECT_TRUE(b.selectedPair().has_value());
+    const rtc::StunAddress peerA = a.selectedPair()->remote;  // 对端 = B
+    const rtc::StunAddress peerB = b.selectedPair()->remote;  // 对端 = A
+
+    // 2) 两端各起一个 memory-BIO 的 DTLS，出站字节走 ICE 的 socket
+    rtc::DtlsTransport server;
+    rtc::DtlsTransport client;
+    ZEXPECT_TRUE(server.initMemory(/*serverSide=*/true, "zrtc_certs.tmp/server.crt",
+                                   "zrtc_certs.tmp/server.key",
+                                   [&a, peerA](std::string_view d) { a.sendTo(peerA, d); }));
+    ZEXPECT_TRUE(client.initMemory(/*serverSide=*/false, {}, {},
+                                   [&b, peerB](std::string_view d) { b.sendTo(peerB, d); }));
+
+    // 3) 把非 STUN 数据报喂给各自的 DTLS（这就是 demux 的落地）
+    a.setDatagramSink(
+        [&server](std::string_view d, const rtc::StunAddress&) { server.feedInbound(d); });
+    b.setDatagramSink(
+        [&client](std::string_view d, const rtc::StunAddress&) { client.feedInbound(d); });
+
+    // 4) 泵握手
+    bool bothUp = false;
+    for (int i = 0; i < 400; ++i) {
+        const bool s1 = server.step();
+        const bool s2 = client.step();
+        if (s1 && s2) {
+            bothUp = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    ZEXPECT_TRUE(bothUp);
+    if (!bothUp) return;
+
+    // 5) 在 DTLS 上发一个 RTP 包
+    rtc::RtpPacket pkt;
+    pkt.header.payloadType = 96;
+    pkt.header.sequence = 4242;
+    pkt.header.ssrc = 0x11223344;
+    pkt.payload = "media-frame";
+    ZEXPECT_TRUE(client.send(rtc::serializeRtp(pkt)));
+
+    std::string got;
+    for (int i = 0; i < 200 && got.empty(); ++i) {
+        (void)server.step();
+        std::string err;
+        got = server.receive(50, &err);
+        if (got.empty()) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    ZEXPECT_TRUE(!got.empty());
+    if (!got.empty()) {
+        rtc::RtpPacket parsed;
+        ZEXPECT_TRUE(rtc::parseRtp(got, parsed));
+        ZEXPECT_EQ(parsed.payload, std::string("media-frame"));
+        ZEXPECT_EQ(parsed.header.ssrc, 0x11223344u);
+    }
+}
+#endif
+
 ZTEST_MAIN
