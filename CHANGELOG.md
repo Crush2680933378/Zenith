@@ -1,8 +1,32 @@
 # Changelog
 
-## Unreleased
+## v0.2.4 (2026-11-07)
+
+> 这一版把四路"大工程"一并落地：HTTP/2、io_uring、IOCP、MQTT broker、gRPC、
+> 以及 WebRTC 的 STUN/ICE 地基。每一项都有独立测试与 CI 验证，边界写在对应头文件里。
 
 ### 新增
+- **io_uring 后端（Linux）**：`zenith::net::IoUringPoller`
+  - 只用 `io_uring_setup` / `io_uring_enter` 系统调用，**不依赖 liburing**
+  - 每 fd 常驻 `POLL_ADD`、超时用 `TIMEOUT` 操作、注销尽力 `POLL_REMOVE`
+  - 默认仍走 epoll：`ZENITH_POLLER=io_uring` 启用，不可用自动回退；
+    CI 的 linux-gcc 会实际跑一遍并断言 `active backend: io_uring`
+- **IOCP 传输层（Windows）**：`zenith::net::IocpServer`
+  - `AcceptEx` 常驻 4 个并发接受 + `SO_UPDATE_ACCEPT_CONTEXT` + 完成端口关联
+  - 每连接常驻 `WSARecv`，`send()` 可从任意线程调用（`WSASend` 排队）
+  - 独立于 Poller（完成通知 ≠ 就绪通知），尚未接进 EventLoop
+- **gRPC 服务端**：`zenith::http::grpc`
+  - 消息帧（压缩标志 + 4 字节长度）、`content-type: application/grpc`、
+    **状态走 trailers**（`grpc-status`/`grpc-message`）
+  - `HttpServer::setGrpcHandler()` 在路由之前拦截，未知方法返回 `grpc-status: 12`
+  - 只支持一元调用；不碰 protobuf 编解码
+- **WebRTC 地基**：`zenith::rtc`
+  - STUN（RFC 5389）：Binding 编解码、XOR-MAPPED-ADDRESS（真做 XOR）、
+    ERROR-CODE、USERNAME/PRIORITY/USE-CANDIDATE/ICE-CONTROLLING/CONTROLLED
+  - `StunClient`：UDP + select 超时 + 事务 ID 校验
+  - `IceAgent`：双向连通性检查与提名，本机双端互连测试通过
+  - `gatherHostCandidates()`：本机 IPv4 候选
+  - 边界：**没有 DTLS/SRTP/SDP/TURN**，不能宣称"支持 WebRTC"
 - **HTTP/2（M7.7）**：`zenith::http::h2`
   - *帧层*：9 字节头编解码、长度上限校验（`FrameSizeError`）、streamId 掩到 31 位、
     半包返回 `Pending`

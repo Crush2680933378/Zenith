@@ -24,6 +24,24 @@ thirdparty/uORM git submodule（ZENITH_ENABLE_ORM，默认只构建 uORM::uorm �
 
 依赖只允许自下而上单向引用；同层模块互不引用。
 
+## 1b. 2026-11 新增的六个模块
+
+| 模块 | 位置 | 一句话职责 | 明确边界 |
+|---|---|---|---|
+| HTTP/2 | `http/http2.*` | 帧编解码、HPACK（含 Huffman）、h2c 服务端、流控、多流、ALPN | 不支持 h2 上的流式响应与 PUSH_PROMISE |
+| MQTT | `mqtt/*` | 3.1.1 编解码 + broker（QoS0/1、保留消息、通配订阅） | 不做 QoS2、不做离线消息缓存 |
+| gRPC | `http/grpc.*` | 在 HTTP/2 上做传输契约（消息帧 + trailers） | 只支持一元调用；不碰 protobuf 编解码 |
+| WebRTC | `rtc/stun.*` | STUN（RFC 5389）+ ICE 连通性检查 + host 候选 | 没有 DTLS/SRTP/SDP/TURN，不能宣称"支持 WebRTC" |
+| io_uring | `net/poller_io_uring.*` | Linux 完成队列后端（无 liburing 依赖） | 默认关：`ZENITH_POLLER=io_uring` 启用，不可用回退 epoll |
+| IOCP | `net/iocp.*` | Windows 完成端口传输层（AcceptEx + WSARecv/WSend） | 独立于 Poller，尚未接进 EventLoop |
+
+两条与既有架构的约束关系：
+
+- **HTTP/2 复用同一套 Router/中间件/Context**：h2 请求被构造成 `Context` 走 `router_.dispatch`，
+  所以业务代码不需要区分 HTTP/1.1 与 h2。
+- **gRPC 必须在路由之前拦截**：`HttpServer::setGrpcHandler()`。若走普通路由，
+  未注册的方法会被 404 接走，`grpc-status` 尾随头就丢了。
+
 ## 2. ABI 红线（最重要的一节）
 
 **跨动态库边界只允许出现 C 类型。** 任何 STL 类型（std::string/std::vector/…）、
