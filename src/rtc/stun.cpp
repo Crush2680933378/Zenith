@@ -387,7 +387,7 @@ struct IceAgent::Impl {
             if (!rtc::decode(std::string_view(buf, static_cast<size_t>(n)), msg)) continue;
             char ip[INET_ADDRSTRLEN] = {};
             ::inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
-            const StunAddress from{ip, static_cast<uint16_t>(::ntohs(peer.sin_port))};
+            const StunAddress from{ip, static_cast<uint16_t>(ntohs(peer.sin_port))};
 
             if (msg.type == rtc::kStunTypeBindingRequest) {
                 {
