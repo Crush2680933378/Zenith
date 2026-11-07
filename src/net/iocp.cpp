@@ -8,9 +8,14 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <mswsock.h>
+// 顺序要紧：mswsock.h 依赖 winsock2.h + windows.h 里的类型定义，
+// 先包含它（MSVC 的 mswsockdef.h 会报 unknown override specifier）。
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#include <windows.h>
+
+#include <mswsock.h>
 
 #include <atomic>
 #include <map>
