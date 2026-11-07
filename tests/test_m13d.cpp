@@ -433,9 +433,12 @@ ZTEST(CrewM14, HumanVoterBallot) {
     eng.setInference(rec);
     crew::CrewConfig cfg;
     cfg.humanVoter = true;
-    cfg.humanVoteTimeoutSec = 1;
+    cfg.humanVoteTimeoutSec = 10;  // 宽窗口：慢速机器上也有足够时间把票投进去
     const std::string id = eng.createTask("human vote task", cfg);
-    std::this_thread::sleep_for(600ms);  // 7 角色 x50ms 投完 → 人工票窗口内
+    // 窗口打开时引擎会**清空** humanBallot 标志（crew.cpp:1889），所以不能提前投票；
+    // 但也不能赌固定延迟——macOS 阶段推进更快，600ms 时第一张票可能已经按默认值结了
+    // （Issue #3）。这里把窗口放宽到 10s、等 1s 再投：既在窗口内，又留足余量。
+    std::this_thread::sleep_for(1000ms);
     ZEXPECT_TRUE(static_cast<bool>(eng.castHumanVote(id, "revise")));
     const auto st = waitTerminal(eng, id);
     ZEXPECT_EQ(crew::phaseName(st.phase), std::string("done"));

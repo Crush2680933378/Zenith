@@ -93,8 +93,8 @@ public:
     }
     std::string backend() const override { return "crew-scripted"; }
 
-    bool revoted_ = false;
-    bool retested_ = false;
+    std::atomic<bool> revoted_{false};
+    std::atomic<bool> retested_{false};
 };
 
 CrewTaskInfo waitDone(crew::CrewEngine& eng, const std::string& id, int maxSec = 30) {
