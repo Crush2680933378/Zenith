@@ -68,7 +68,7 @@ public:
         return ai::EmbeddingResult{};
     }
     std::string backend() const override { return "rec"; }
-    bool rev_ = false, ret_ = false;
+    std::atomic<bool> rev_{false}, ret_{false};
 };
 
 crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id, int maxSec = 30) {

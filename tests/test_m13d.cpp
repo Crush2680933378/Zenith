@@ -148,8 +148,8 @@ private:
         if (sys.find("ROLE: DELIVERY") != std::string::npos) return "delivery";
         return "?";
     }
-    bool revoted_ = false;
-    bool retested_ = false;
+    std::atomic<bool> revoted_{false};
+    std::atomic<bool> retested_{false};
 };
 
 using RecPtr = std::shared_ptr<Rec>;
