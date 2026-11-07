@@ -30,6 +30,7 @@
 #include "zenith/rtc/dtls.hpp"
 #include "zenith/rtc/rtp.hpp"
 #include "zenith/rtc/stun.hpp"
+#include "zenith/rtc/udp_mux.hpp"
 
 using namespace zenith;
 using namespace std::chrono_literals;
@@ -476,5 +477,74 @@ ZTEST(WebRtc, KeyingMaterialMatchesAcrossStack) {
     ZEXPECT_TRUE(clientKey == serverKey);
 }
 #endif
+
+/* ----------------------------- UDP demux ----------------------------- */
+
+ZTEST(Mux, ClassifiesByFirstByte) {
+    auto kind = [](uint8_t b) {
+        const char c = static_cast<char>(b);
+        return rtc::classifyDatagram(&c, 1);
+    };
+    ZEXPECT_TRUE(kind(0x00) == rtc::DatagramKind::Stun);  // Binding Request
+    ZEXPECT_TRUE(kind(0x01) == rtc::DatagramKind::Stun);  // Binding Success
+    ZEXPECT_TRUE(kind(22) == rtc::DatagramKind::Dtls);    // handshake
+    ZEXPECT_TRUE(kind(23) == rtc::DatagramKind::Dtls);    // application data
+    ZEXPECT_TRUE(kind(0x80) == rtc::DatagramKind::Rtp);   // RTP v2
+    ZEXPECT_TRUE(kind(0x81) == rtc::DatagramKind::Rtp);   // RTP v2 + marker
+    // 0x90 属于 0x80..0xBF，是 RTP v2（CC=16），不是未知
+    ZEXPECT_TRUE(kind(0x90) == rtc::DatagramKind::Rtp);
+    ZEXPECT_TRUE(kind(0x60) == rtc::DatagramKind::Unknown);  // 96：三类之外
+}
+
+ZTEST(MuxE2E, RoutesThreeProtocolsOnOneSocket) {
+    rtc::UdpMux a;
+    rtc::UdpMux b;
+    ZEXPECT_TRUE(a.bind(0));
+    ZEXPECT_TRUE(b.bind(0));
+
+    std::atomic<int> stunCount{0};
+    std::atomic<int> dtlsCount{0};
+    std::atomic<int> rtpCount{0};
+    std::string lastStun;
+    b.onStun([&](std::string_view payload, const rtc::StunAddress&) {
+        stunCount.fetch_add(1);
+        lastStun.assign(payload);
+    });
+    b.onDtls([&](std::string_view, const rtc::StunAddress&) { dtlsCount.fetch_add(1); });
+    b.onRtp([&](std::string_view, const rtc::StunAddress&) { rtpCount.fetch_add(1); });
+
+    const rtc::StunAddress to{"127.0.0.1", b.localPort()};
+    // STUN：用真的 Binding Request
+    uint8_t txn[12] = {};
+    ZEXPECT_TRUE(a.sendTo(to, rtc::encodeBindingRequest(txn)));
+    // DTLS：首字节 22
+    ZEXPECT_TRUE(a.sendTo(to, std::string("\x16\xfe\xfdhello", 9)));
+    // RTP：首字节 0x80
+    ZEXPECT_TRUE(a.sendTo(to, std::string("\x80\x60\x00\x01", 4)));
+
+    for (int i = 0; i < 300 && (stunCount.load() + dtlsCount.load() + rtpCount.load()) < 3; ++i) {
+        b.pollOnce(10);
+    }
+    ZEXPECT_EQ(stunCount.load(), 1);
+    ZEXPECT_EQ(dtlsCount.load(), 1);
+    ZEXPECT_EQ(rtpCount.load(), 1);
+    ZEXPECT_TRUE(lastStun.size() >= 20);  // 至少包含 STUN 头
+    ZEXPECT_EQ(b.dropped(), size_t{0});
+}
+
+ZTEST(MuxE2E, UnknownBytesAreDropped) {
+    rtc::UdpMux a;
+    rtc::UdpMux b;
+    ZEXPECT_TRUE(a.bind(0));
+    ZEXPECT_TRUE(b.bind(0));
+    std::atomic<int> hits{0};
+    b.onStun([&](std::string_view, const rtc::StunAddress&) { hits.fetch_add(1); });
+
+    ZEXPECT_TRUE(a.sendTo({"127.0.0.1", b.localPort()}, std::string("\x90\x01\x02", 3)));
+    for (int i = 0; i < 20; ++i)
+        b.pollOnce(10);
+    ZEXPECT_EQ(hits.load(), 0);
+    ZEXPECT_TRUE(b.dropped() >= 1);
+}
 
 ZTEST_MAIN
