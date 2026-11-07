@@ -195,6 +195,14 @@ zenith_set_warnings(test_mqtt)
 add_test(NAME test_mqtt COMMAND test_mqtt)
 set_tests_properties(test_mqtt PROPERTIES TIMEOUT 60)
 
+# WebRTC 基础件（STUN + host 候选）
+add_executable(test_rtc test_rtc.cpp)
+target_link_libraries(test_rtc PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_rtc PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_rtc)
+add_test(NAME test_rtc COMMAND test_rtc)
+set_tests_properties(test_rtc PROPERTIES TIMEOUT 60)
+
 # IOCP 传输层（Windows 原生；其它平台验证 supported()==false）
 add_executable(test_iocp test_iocp.cpp)
 target_link_libraries(test_iocp PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
