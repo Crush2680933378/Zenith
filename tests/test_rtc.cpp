@@ -94,9 +94,10 @@ private:
             inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
             rtc::StunAddress mapped{ip, ntohs(peer.sin_port)};
             const std::string resp = rtc::encodeBindingResponse(mapped, msg.transactionId);
+            // 先计数再回包：否则客户端收到响应后立刻断言时，这里可能还没加完（ASan 下必现）
+            handled_.fetch_add(1);
             ::sendto(fd_, resp.data(), static_cast<int>(resp.size()), 0,
                      reinterpret_cast<sockaddr*>(&peer), plen);
-            handled_.fetch_add(1);
         }
     }
 
