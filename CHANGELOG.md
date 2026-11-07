@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.2.5 (2026-11-07)
+
+> WebRTC 从"STUN/ICE 地基"补齐到**四层可验证的传输栈**（STUN · ICE · DTLS · RTP），
+> 并把 LSan 改造成分级门禁。SRTP 仍未做——缺官方测试向量，不写未经向量验证的加密代码。
+
+### 新增
+- **DTLS 传输层**：`zenith::rtc::DtlsTransport`
+  - `DTLSv1_listen` / `SSL_connect` 双向握手，两侧按 `WANT_READ/WRITE` 重试到超时
+    （UDP 丢包是常态，一次失败不能当结论）
+  - `DTLSv1_listen` 的 cookie 回调（缺它会直接报 `cookie gen callback failure`）
+  - 记录收发 + **`exportKeyingMaterial`**（SRTP 的会话密钥由此派生）
+  - `listenOnFd` / `connectOnFd`：可复用调用方的 UDP socket（不接管所有权）
+- **RTP（RFC 3550）**：`zenith::rtc::parseRtp` / `serializeRtp`
+  - V=2 校验、CSRC、头部扩展、**padding 剥离**（长度含末字节，补到 4 字节边界）
+- **ICE**：`selectedPair()`（已提名且收到响应对）、`socketFd()`
+- 测试：`Dtls.HandshakeAndEcho`（握手 + 回显 + **两端导出的 32 字节密钥材料一致**）、
+  `WebRtc.KeyingMaterialMatchesAcrossStack`、RTP 四例（往返/CSRC+扩展/畸形拒绝/padding）
+
+### 变更
+- **LSan 改为分级门禁**：`test_websocket` / `test_m5_web` 零泄漏 → **阻塞**；
+  `test_m13e` / `test_m13g` 已知"测试先退出"时序残留 → 报告级，
+  已定位项用 `.lsan-suppressions.txt` 的**窄规则**（按函数名）固定。
+  任何**新增**泄漏都会让 CI 变红。
+
+### 文档
+- ARCHITECTURE 1b 节：WebRTC 从一行扩成四层说明，并把缺口写全
+  （SRTP/SRTCP、SDP、TURN、ICE↔DTLS 的首字节 demux）
+- README 明确写"WebRTC 四层地基"，不写"支持 WebRTC"
+
+### 未做（如实记录）
+- **SRTP/SRTCP**：缺 RFC 3711 官方测试向量，不做未经向量验证的加密实现
+- ICE 与 DTLS 共用一条 UDP 链路：需要按首字节 demux（STUN 0-3 / DTLS 20-63 /
+  RTP 128-191），接口已备好，demux 层未写
+- SDP 协商、TURN 中继
+
 ## v0.2.4 (2026-11-07)
 
 > 这一版把四路"大工程"一并落地：HTTP/2、io_uring、IOCP、MQTT broker、gRPC、

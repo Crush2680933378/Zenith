@@ -31,7 +31,7 @@ thirdparty/uORM git submodule（ZENITH_ENABLE_ORM，默认只构建 uORM::uorm �
 | HTTP/2 | `http/http2.*` | 帧编解码、HPACK（含 Huffman）、h2c 服务端、流控、多流、ALPN | 不支持 h2 上的流式响应与 PUSH_PROMISE |
 | MQTT | `mqtt/*` | 3.1.1 编解码 + broker（QoS0/1、保留消息、通配订阅） | 不做 QoS2、不做离线消息缓存 |
 | gRPC | `http/grpc.*` | 在 HTTP/2 上做传输契约（消息帧 + trailers） | 只支持一元调用；不碰 protobuf 编解码 |
-| WebRTC | `rtc/stun.*` | STUN（RFC 5389）+ ICE 连通性检查 + host 候选 | 没有 DTLS/SRTP/SDP/TURN，不能宣称"支持 WebRTC" |
+| WebRTC | `rtc/*` | 四层地基：**STUN**（RFC 5389，含 XOR-MAPPED-ADDRESS）、**ICE 连通性**（双向检查 + 提名）、**DTLS**（握手 + 记录收发 + `exportKeyingMaterial`）、**RTP**（RFC 3550 解析/序列化） | **没有 SRTP/SRTCP、SDP、TURN**；ICE 与 DTLS 共用 socket 需要按首字节 demux（STUN 0-3 / DTLS 20-63 / RTP 128-191），该层未做。不能宣称"支持 WebRTC" |
 | io_uring | `net/poller_io_uring.*` | Linux 完成队列后端（无 liburing 依赖） | 默认关：`ZENITH_POLLER=io_uring` 启用，不可用回退 epoll |
 | IOCP | `net/iocp.*` | Windows 完成端口传输层（AcceptEx + WSARecv/WSend） | 独立于 Poller，尚未接进 EventLoop |
 

@@ -23,7 +23,7 @@
 |---|---|
 | **网络** | Reactor（WSAPoll / epoll / kqueue / select 四后端）+ **io_uring**（Linux，可选）、**IOCP**（Windows，Proactor 传输层）、TcpServer/TcpConnection/TcpClient、TLS（OpenSSL，内存 BIO 握手，**ALPN**） |
 | **HTTP** | 自研 HTTP/1.1 解析器、**HTTP/2（帧层 + HPACK 含 Huffman + h2c + 流控 + 多流）**、路由树（`:param` / `*catchAll`）、洋葱中间件、SSE/chunked 流式、gzip、静态文件（Range/ETag/**零拷贝**）、multipart、Session、CORS、限流 |
-| **协议** | WebSocket（RFC 6455 全实现）、Redis RESP2 客户端、**MQTT 3.1.1 broker + 客户端**、**gRPC 服务端（一元调用）**、**STUN/ICE（WebRTC 地基）**、MCP（JSON-RPC） |
+| **协议** | WebSocket（RFC 6455 全实现）、Redis RESP2 客户端、**MQTT 3.1.1 broker + 客户端**、**gRPC 服务端（一元调用）**、**RTP / STUN / ICE / DTLS（WebRTC 地基）**、MCP（JSON-RPC） |
 | **数据** | uORM 服务化（连接池 + 专用线程池，不占 EventLoop）、自研 HNSW 向量库（Qdrant 兼容 API） |
 | **AI 后端** | LLM 推理网关（OpenAI 兼容面）、三协议厂商路由（openai / anthropic / gemini）+ 熔断成本、ReAct Agent + RAG、7 角色 SDLC-Crew、输入护栏（注入/PII）、whisper STT |
 | **工程** | 纯 C 插件 ABI + 热重载、Prometheus 指标、`/zenith/status`、`find_package(Zenith)` 导出、协程层（可选 C++20） |
@@ -210,8 +210,11 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 📋 热路径微优化（Linux eventfd 唤醒 / header 预编码）。
 
 **M8 生态扩展 8/8 起步**：✅ 推理网关 · ✅ MCP · ✅ 向量库 · ✅ OTel + W3C Trace Context ·
-✅ whisper STT · ✅ **MQTT broker** · ✅ **gRPC**（一元调用）· ✅ **WebRTC 地基**
-（STUN + ICE 连通性）；WebRTC 的 DTLS/SRTP/SDP 与 TURN 仍未做。
+✅ whisper STT · ✅ **MQTT broker** · ✅ **gRPC**（一元调用）· ✅ **WebRTC 四层地基**
+（STUN · ICE 连通性 · DTLS · RTP）。
+
+> WebRTC **尚未**完整：缺 SRTP/SRTCP、SDP 协商、TURN 中继，以及 ICE 与 DTLS 共用
+> 一条链路的首字节 demux。所以这里只写"地基"，不写"支持 WebRTC"。
 
 剩余工作都在 [Issues](https://github.com/Crush2680933378/Zenith/issues) 里：
 [#2](https://github.com/Crush2680933378/Zenith/issues/2) LSan 清零（4→2）·
