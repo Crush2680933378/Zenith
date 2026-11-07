@@ -1,7 +1,7 @@
 # LeakSanitizer 抑制表 —— 只针对**已定位的测试退出时序残留**，不掩盖产品泄漏。
 #
 # 背景（Issue #2）：
-#   这两处泄漏都是"测试先退出、服务端还没把连接/会话收尾"，属于测试夹具的时序问题，
+#   这几处泄漏都是"测试先退出、服务端还没把连接/会话收尾"，属于测试夹具的时序问题，
 #   不是产品代码在运行期持有。它们只在进程退出时表现为"不可达但未释放"。
 #
 # 为什么用抑制而不是继续改代码：
@@ -10,7 +10,11 @@
 #   十几个用例。先把它们**固定成已知项**，让 LSan 门禁转阻塞——任何**新增**泄漏
 #   都会立刻让 CI 变红，这比继续挂着"仅报告"更有价值。
 #
-# 规则写法：leak:<栈帧符号子串>。这里刻意收窄到具体函数，避免误伤。
+# 规则写法：leak:<栈帧符号子串>。刻意收窄到具体函数，避免误伤。
 
-leak:zenith::crew::mountCrewWs
+# test_m13g：SSE 用例里未收尾的连接（TcpServer 接受路径）
 leak:zenith::net::TcpServer::handleAccept
+
+# test_m13e / test_m13g：SSE 流的路由闭包与 writer（测试退出时流仍挂着）
+leak:zenith::crew::mountCrewApi
+leak:zenith::http::SseStream::start
