@@ -9,8 +9,9 @@
 | `windows-mingw` / `linux-gcc` / `linux-clang-coro` / `macos-clang` | 四平台构建 + 全量测试 | ✅ |
 | `linux-release` | NDEBUG/优化下才暴露的问题（Debug 全绿 ≠ Release 全绿） | ✅ |
 | `linux-sanitize` · ASan+UBSan | 越界/UAF/UB，全量 41 套 | ✅ |
-| `linux-sanitize` · TSan | 数据竞争（并发相关 5 套） | ✅ |
-| `linux-sanitize` · LSan | 进程退出时的对象泄漏 | ❌ 仅报告 |
+| `linux-sanitize` · TSan | 数据竞争（并发相关 9 套） | ✅ |
+| `linux-sanitize` · LSan（零泄漏套件） | 进程退出时的对象泄漏；`test_websocket` / `test_m5_web` 阻塞 | ✅ |
+| `linux-sanitize` · LSan（已知时序套件） | `test_m13e` / `test_m13g` 报告，已定位项记在 `.lsan-suppressions.txt` | ⚠️ 报告 |
 | `consumer-smoke` | 装 SDK → 用 `find_package(Zenith CONFIG)` 编独立下游项目 | ✅ |
 | `perf-gate` | 大文件峰值 RSS + 吞吐下限 | ✅ |
 | `coverage` | llvm-cov 行覆盖 + 门限 | ✅ |
@@ -53,9 +54,8 @@ python3 tools/bench_gate.py \
 
 | 项 | 现状 | 跟踪 |
 |---|---|---|
-| LSan 4 套件 | `test_websocket` / `test_m5_web` / `test_m13e` / `test_m13g` 在进程退出时仍有对象存活（非增长型） | [#2](https://github.com/Crush2680933378/Zenith/issues/2) |
-| TSan 覆盖面 | 已清零并转阻塞，但只覆盖 5 个并发套件 | [#4](https://github.com/Crush2680933378/Zenith/issues/4) |
-| macOS 2 套件 | `test_m13b` / `test_m13d` 从阻塞步骤排除 | [#3](https://github.com/Crush2680933378/Zenith/issues/3) |
+| LSan 已知时序套件 | `test_m13e` / `test_m13g` 在进程退出时仍有对象存活（**非增长型**：测试先退出、服务端还没收尾）。已定位项用 `.lsan-suppressions.txt` 的窄规则固定；其余套件走**阻塞**门禁，新增泄漏会让 CI 变红 | [#2](https://github.com/Crush2680933378/Zenith/issues/2) |
+| WebRTC 完整度 | 只有 STUN/ICE 连通性；DTLS/SRTP/SDP/TURN 未实现 | 未开 issue（边界写在 `include/zenith/rtc/stun.hpp`） |
 
 ## fuzz 目标
 
