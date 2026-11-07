@@ -192,7 +192,6 @@ ZTEST(CrewM17, SseStreamDoesNotStarveIoPool) {
 #endif
     }
     waitTerminal(*eng, id);
-    srv.stop();  // 先停服务：让连接在 io 线程还活着时被关闭（LSan #2）
     loop.stop();
     t.join();
     io.stop();
@@ -489,7 +488,6 @@ ZTEST(CrewM17, HttpTaskPagination) {
     ZEXPECT_EQ(parseCount(get("?limit=2&offset=2").body), size_t{1});
     ZEXPECT_EQ(parseCount(get("?offset=9").body), size_t{0});
 
-    srv.stop();  // 先停服务：让连接在 io 线程还活着时被关闭（LSan #2）
     loop.stop();
     t.join();
     io.stop();
@@ -535,7 +533,6 @@ ZTEST(CrewM18, MarkdownReportContent) {
     ZEXPECT_TRUE(res.ok);
     ZEXPECT_TRUE(res.body.find("text/markdown") != std::string::npos ||
                  res.body.find("# Zenith Crew") != std::string::npos);
-    srv.stop();  // 先停服务：让连接在 io 线程还活着时被关闭（LSan #2）
     loop.stop();
     t.join();
     io.stop();
