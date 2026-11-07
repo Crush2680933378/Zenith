@@ -195,6 +195,14 @@ zenith_set_warnings(test_mqtt)
 add_test(NAME test_mqtt COMMAND test_mqtt)
 set_tests_properties(test_mqtt PROPERTIES TIMEOUT 60)
 
+# IOCP 传输层（Windows 原生；其它平台验证 supported()==false）
+add_executable(test_iocp test_iocp.cpp)
+target_link_libraries(test_iocp PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
+target_include_directories(test_iocp PRIVATE ${CMAKE_SOURCE_DIR}/tests)
+zenith_set_warnings(test_iocp)
+add_test(NAME test_iocp COMMAND test_iocp)
+set_tests_properties(test_iocp PROPERTIES TIMEOUT 120)
+
 # 通知后端选择（io_uring 探测 + 回退）与就绪语义
 add_executable(test_poller test_poller.cpp)
 target_link_libraries(test_poller PRIVATE zenith_core Threads::Threads ${ZT_NETLIB})
