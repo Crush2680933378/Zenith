@@ -740,7 +740,6 @@ ZTEST(Turn, RelayRoundtripThroughServer) {
     char buf[256];
     sockaddr_in from{};
     socklen_t fl = sizeof(from);
-    DWORD vol = 0;
 #if defined(_WIN32)
     DWORD tv = 2000;
     setsockopt(peerFd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
@@ -749,7 +748,6 @@ ZTEST(Turn, RelayRoundtripThroughServer) {
     tv.tv_sec = 2;
     setsockopt(peerFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 #endif
-    (void)vol;
     const int n = ::recvfrom(peerFd, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fl);
     ZEXPECT_TRUE(n > 0);
     if (n > 0) ZEXPECT_EQ(std::string(buf, static_cast<size_t>(n)), std::string("hello-via-relay"));
