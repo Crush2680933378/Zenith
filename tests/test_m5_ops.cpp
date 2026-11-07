@@ -43,6 +43,9 @@ ZTEST(HotReload, FileChangeReloadsSnapshot) {
     ZEXPECT_TRUE(hr.loaded());
     ZEXPECT_EQ(hr.get()->get("app.mode"), std::string("dev"));
 
+    // 基线必须在**写文件之前**取：写完之后再读，watcher 可能已经把这次变更
+    // 记进去了，baseline 就"包含"了要等的事件，于是永远等不到 baseline+1（CI flake）。
+    const int baseline = changes.load();
     // 触碰 mtime + 内容变更
     std::this_thread::sleep_for(300ms);
     {
@@ -50,7 +53,6 @@ ZTEST(HotReload, FileChangeReloadsSnapshot) {
     }
 
     // 首次装载即触发一次 onChange —— 等待“变更后”的第二次
-    const int baseline = changes.load();
     for (int i = 0; i < 80 && changes.load() <= baseline; ++i) {
         std::this_thread::sleep_for(50ms);
     }
