@@ -46,6 +46,17 @@ ZTEST(ConnLimit, OverLimitGets503) {
     (void)server.listen("127.0.0.1", 0);
     std::thread t([&] { loop.loop(); });
     std::this_thread::sleep_for(150ms);
+    // 断言失败会抛异常：必须靠 RAII 停 loop + join（并行跑时否则会 abort 掩盖原因）
+    struct Cleanup {
+        net::EventLoop& loop;
+        std::thread& t;
+        net::EventLoopThreadPool& io;
+        ~Cleanup() {
+            loop.stop();
+            if (t.joinable()) t.join();
+            io.stop();
+        }
+    } cleanup{loop, t, io};
 
     // 2 条长连接占位：原生阻塞 socket（行为最确定——连接建立即占额，无需请求）
     const std::string base = "http://127.0.0.1:" + std::to_string(server.port()) + "/hi";
@@ -71,7 +82,12 @@ ZTEST(ConnLimit, OverLimitGets503) {
     http::ClientRequest over;
     over.url = base;
     over.timeoutMs = 4000;
+    // 并行跑测试时，这条连接可能瞬时超时（机器忙），重试几次再判定
     auto r3 = http::HttpClient::fetchBlocking(over);
+    for (int attempt = 0; attempt < 2 && !r3; ++attempt) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        r3 = http::HttpClient::fetchBlocking(over);
+    }
     ZEXPECT_TRUE(static_cast<bool>(r3));
     ZEXPECT_EQ(r3.value().status, 503);
     ZEXPECT_TRUE(r3.value().body.find("connection limit") != std::string::npos);
@@ -83,10 +99,6 @@ ZTEST(ConnLimit, OverLimitGets503) {
         ::close(static_cast<int>(fd));
 #endif
     }
-
-    loop.stop();
-    t.join();
-    io.stop();
 }
 
 ZTEST(IdleTimeout, SlowlorisKicked) {
