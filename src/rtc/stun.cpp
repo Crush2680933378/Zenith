@@ -56,7 +56,7 @@ void addAddressAttr(std::string& msg, uint16_t type, const StunAddress& addr, bo
 
     in_addr in{};
     ::inet_pton(AF_INET, addr.ip.c_str(), &in);
-    uint32_t ip = ::ntohl(in.s_addr);
+    uint32_t ip = ntohl(in.s_addr);
     uint16_t port = addr.port;
     if (xored) {
         ip ^= kStunMagicCookie;
@@ -104,7 +104,7 @@ bool parseAddress(const char* p, size_t len, bool xored, StunAddress& out) {
         port ^= static_cast<uint16_t>(kStunMagicCookie >> 16);
     }
     in_addr in{};
-    in.s_addr = ::htonl(ip);
+    in.s_addr = htonl(ip);
     char buf[INET_ADDRSTRLEN] = {};
     if (::inet_ntop(AF_INET, &in, buf, sizeof(buf)) == nullptr) return false;
     out.ip = buf;
@@ -206,7 +206,7 @@ bool StunClient::binding(const std::string& host, uint16_t port, StunAddress& ma
 
     sockaddr_in server{};
     server.sin_family = AF_INET;
-    server.sin_port = ::htons(port);
+    server.sin_port = htons(port);
     if (::inet_pton(AF_INET, host.c_str(), &server.sin_addr) != 1) {
         addrinfo hints{};
         hints.ai_family = AF_INET;
