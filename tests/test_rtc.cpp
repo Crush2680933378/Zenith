@@ -2,6 +2,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
@@ -21,6 +27,7 @@
 
 #include "ztest.hpp"
 
+#include "zenith/rtc/dtls.hpp"
 #include "zenith/rtc/stun.hpp"
 
 using namespace zenith;
@@ -263,5 +270,110 @@ ZTEST(IceE2E, NoCandidateMeansNoPairs) {
     ZEXPECT_TRUE(pairs.empty());
     ZEXPECT_FALSE(a.nominated());
 }
+
+/* ------------------------------- DTLS ------------------------------- */
+
+#if defined(ZENITH_TLS_OPENSSL)
+namespace {
+/// 生成自签证书（与 test_tls 同款做法：RSA + SAN=127.0.0.1）
+bool makeDtlsCert(const std::string& dir) {
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string certPath = dir + "/server.crt";
+    const std::string keyPath = dir + "/server.key";
+
+    EVP_PKEY* pkey = EVP_RSA_gen(2048);
+    if (pkey == nullptr) return false;
+    X509* x = X509_new();
+    if (x == nullptr) {
+        EVP_PKEY_free(pkey);
+        return false;
+    }
+    ASN1_INTEGER_set(X509_get_serialNumber(x), 1);
+    X509_gmtime_adj(X509_get_notBefore(x), 0);
+    X509_gmtime_adj(X509_get_notAfter(x), 3600LL * 24);
+    X509_set_pubkey(x, pkey);
+    X509_NAME* name = X509_NAME_new();
+    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+                               reinterpret_cast<const unsigned char*>("127.0.0.1"), -1, -1, 0);
+    X509_set_subject_name(x, name);
+    X509_set_issuer_name(x, name);
+    X509_NAME_free(name);
+    const bool signedOk = X509_sign(x, pkey, EVP_sha256()) != 0;
+
+    bool ok = signedOk;
+    if (ok) {
+        FILE* cf = std::fopen(certPath.c_str(), "wb");
+        if (cf == nullptr) {
+            ok = false;
+        } else {
+            ok = PEM_write_X509(cf, x) == 1;
+            std::fclose(cf);
+        }
+    }
+    if (ok) {
+        FILE* kf = std::fopen(keyPath.c_str(), "wb");
+        if (kf == nullptr) {
+            ok = false;
+        } else {
+            ok = PEM_write_PrivateKey(kf, pkey, nullptr, nullptr, 0, nullptr, nullptr) == 1;
+            std::fclose(kf);
+        }
+    }
+    X509_free(x);
+    EVP_PKEY_free(pkey);
+    return ok;
+}
+}  // namespace
+
+ZTEST(Dtls, HandshakeAndEcho) {
+    ZEXPECT_TRUE(rtc::DtlsTransport::supported());
+    ZEXPECT_TRUE(makeDtlsCert("zrtc_certs.tmp"));
+
+    rtc::DtlsTransport server;
+    ZEXPECT_TRUE(server.listen("zrtc_certs.tmp/server.crt", "zrtc_certs.tmp/server.key", 0));
+    const uint16_t port = server.localPort();
+    ZEXPECT_TRUE(port != 0);
+
+    std::atomic<bool> accepted{false};
+    std::atomic<bool> echoed{false};
+    std::thread serverThread([&] {
+        if (!server.accept(5000)) return;
+        accepted.store(true);
+        std::string err;
+        const std::string got = server.receive(3000, &err);
+        if (!got.empty()) {
+            echoed.store(server.send(got));
+        }
+    });
+
+    rtc::DtlsTransport client;
+    ZEXPECT_TRUE(client.connect("127.0.0.1", port, /*verifyPeer=*/false, 5000));
+    ZEXPECT_TRUE(client.established());
+    ZEXPECT_TRUE(client.send("hello-dtls"));
+
+    std::string err;
+    const std::string reply = client.receive(3000, &err);
+    serverThread.join();
+
+    ZEXPECT_TRUE(accepted.load());
+    ZEXPECT_EQ(reply, std::string("hello-dtls"));
+
+    // 两端导出的密钥材料必须一致（SRTP 就靠这个派生会话密钥）
+    std::vector<uint8_t> a;
+    std::vector<uint8_t> b;
+    if (client.exportKeyingMaterial("EXTRACTOR-dtls_srtp", 32, a) &&
+        server.exportKeyingMaterial("EXTRACTOR-dtls_srtp", 32, b)) {
+        ZEXPECT_EQ(a.size(), size_t{32});
+        ZEXPECT_TRUE(a == b);
+    } else {
+        ztest::reportFail(__FILE__, __LINE__, "exportKeyingMaterial failed");
+    }
+}
+#else
+ZTEST(Dtls, SkippedWithoutOpenSsl) {
+    ZEXPECT_FALSE(rtc::DtlsTransport::supported());
+}
+#endif
 
 ZTEST_MAIN
