@@ -164,13 +164,18 @@ crew::CrewTaskInfo waitTerminal(crew::CrewEngine& eng, const std::string& id, in
     return info ? info.value() : crew::CrewTaskInfo{};
 }
 
+/// 事件可能比"终态"晚一拍到达（尤其 -coverage / sanitizer 构建下更慢），
+/// 一次性查表必然偶发失败；这里统一给最多 3s 的轮询窗口。
 bool hasEvent(const crew::CrewEngine& eng, const std::string& id, const std::string& type,
               std::string* detailOut = nullptr) {
-    for (const crew::CrewEvent& e : const_cast<crew::CrewEngine&>(eng).events(id)) {
-        if (e.type == type) {
-            if (detailOut != nullptr) *detailOut = e.detail;
-            return true;
+    for (int i = 0; i < 150; ++i) {
+        for (const crew::CrewEvent& e : const_cast<crew::CrewEngine&>(eng).events(id)) {
+            if (e.type == type) {
+                if (detailOut != nullptr) *detailOut = e.detail;
+                return true;
+            }
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     return false;
 }
