@@ -31,6 +31,7 @@
 #include "zenith/rtc/rtcp.hpp"
 #include "zenith/rtc/rtp.hpp"
 #include "zenith/rtc/stun.hpp"
+#include "zenith/rtc/turn.hpp"
 #include "zenith/rtc/udp_mux.hpp"
 
 using namespace zenith;
@@ -697,6 +698,81 @@ ZTEST(Rtcp, RejectsMalformed) {
     unknown[1] = static_cast<char>(250);
     unknown[3] = 1;  // 长度 1 字 = 8 字节
     ZEXPECT_FALSE(rtc::parseRtcpCompound(unknown, out, consumed, &err));
+}
+
+/* -------------------------------- TURN -------------------------------- */
+
+ZTEST(Turn, RelayRoundtripThroughServer) {
+    rtc::TurnServer server;
+    ZEXPECT_TRUE(server.listen(0));
+    ZEXPECT_TRUE(server.port() != 0);
+
+    // 服务器必须先开始泵包，否则 Allocate 请求没人处理
+    std::atomic<bool> stop{false};
+    std::thread pump([&] {
+        while (!stop.load())
+            server.pollOnce(20);
+    });
+
+    rtc::TurnClient client;
+    ZEXPECT_TRUE(client.allocate("127.0.0.1", server.port(), 2000));
+    const rtc::StunAddress relayed = client.relayedAddress();
+    ZEXPECT_TRUE(relayed.port != 0);
+    ZEXPECT_EQ(relayed.ip, std::string("127.0.0.1"));
+
+    // 一个"对端"普通 UDP socket
+    int peerFd = static_cast<int>(::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
+    ZEXPECT_TRUE(peerFd >= 0);
+    sockaddr_in local{};
+    local.sin_family = AF_INET;
+    local.sin_port = 0;
+    local.sin_addr.s_addr = inet_addr("127.0.0.1");
+    ZEXPECT_EQ(::bind(peerFd, reinterpret_cast<sockaddr*>(&local), sizeof(local)), 0);
+    socklen_t ll = sizeof(local);
+    ::getsockname(peerFd, reinterpret_cast<sockaddr*>(&local), &ll);
+    const rtc::StunAddress peerAddr{"127.0.0.1", static_cast<uint16_t>(ntohs(local.sin_port))};
+
+    // 客户端先建权限，再发数据 → 对端应收到
+    ZEXPECT_TRUE(client.createPermission(peerAddr, 2000));
+
+    ZEXPECT_TRUE(client.sendTo(peerAddr, "hello-via-relay"));
+
+    char buf[256];
+    sockaddr_in from{};
+    socklen_t fl = sizeof(from);
+    DWORD vol = 0;
+#if defined(_WIN32)
+    DWORD tv = 2000;
+    setsockopt(peerFd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
+#else
+    timeval tv{};
+    tv.tv_sec = 2;
+    setsockopt(peerFd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+    (void)vol;
+    const int n = ::recvfrom(peerFd, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fl);
+    ZEXPECT_TRUE(n > 0);
+    if (n > 0) ZEXPECT_EQ(std::string(buf, static_cast<size_t>(n)), std::string("hello-via-relay"));
+
+    // 反向：对端往中继地址发 → 客户端通过 Data indication 收到
+    sockaddr_in relaySa{};
+    relaySa.sin_family = AF_INET;
+    relaySa.sin_port = htons(relayed.port);
+    relaySa.sin_addr.s_addr = inet_addr(relayed.ip.c_str());
+    ZEXPECT_TRUE(::sendto(peerFd, "reply-from-peer", 15, 0, reinterpret_cast<sockaddr*>(&relaySa),
+                          sizeof(relaySa)) == 15);
+
+    rtc::StunAddress gotFrom;
+    const std::string got = client.receive(gotFrom, 2000);
+    stop.store(true);
+    if (pump.joinable()) pump.join();
+#if defined(_WIN32)
+    closesocket(peerFd);
+#else
+    ::close(peerFd);
+#endif
+    ZEXPECT_EQ(got, std::string("reply-from-peer"));
+    ZEXPECT_EQ(gotFrom.port, peerAddr.port);
 }
 
 ZTEST_MAIN

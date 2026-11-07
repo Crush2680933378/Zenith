@@ -64,6 +64,7 @@ set(ZENITH_SOURCES
     rtc/rtcp.cpp
     rtc/udp_mux.cpp
     rtc/stun.cpp
+    rtc/turn.cpp
     rtc/dtls.cpp
     mqtt/mqtt.cpp
     mqtt/mqtt_broker.cpp
