@@ -416,6 +416,11 @@ ZTEST(Desk, WebSocketWatchAndEvents) {
         std::this_thread::sleep_for(10ms);
     cloop.stop();
     if (ct.joinable()) ct.join();
+    // 等对端把断开处理完：客户端 loop 停了不代表服务端已经释放会话。
+    // 不等的话进程先退出，服务端会话就停在"未析构"状态（LSan #2 的 Desk 用例）。
+    for (int i = 0; i < 300 && net::WebSocketSession::liveCount() > 0; ++i) {
+        std::this_thread::sleep_for(10ms);
+    }
     // 诊断：会话/连接应随客户端 loop 停止而释放（LSan 排查用）
     std::printf("      [lifetime] desk sessions=%d connections=%d\n",
                 net::WebSocketSession::liveCount(), net::TcpConnection::liveCount());
