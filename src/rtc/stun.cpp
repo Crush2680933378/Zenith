@@ -18,17 +18,26 @@
 #include <unistd.h>
 #endif
 
+#include <atomic>
 #include <chrono>
 #include <cstring>
+#include <map>
+#include <mutex>
 #include <random>
+#include <thread>
 
 namespace zenith::rtc {
 namespace {
 
 constexpr uint16_t kAttrMappedAddress = 0x0001;
+constexpr uint16_t kAttrUsername = 0x0006;
 constexpr uint16_t kAttrXorMappedAddress = 0x0020;
+constexpr uint16_t kAttrPriority = 0x0024;
+constexpr uint16_t kAttrUseCandidate = 0x0025;
 constexpr uint16_t kAttrSoftware = 0x8022;
 constexpr uint16_t kAttrErrorCode = 0x0009;
+constexpr uint16_t kAttrIceControlled = 0x802A;
+constexpr uint16_t kAttrIceControlling = 0x8029;
 
 void putU16(std::string& s, uint16_t v) {
     s.push_back(static_cast<char>((v >> 8) & 0xFF));
@@ -37,6 +46,24 @@ void putU16(std::string& s, uint16_t v) {
 
 uint16_t getU16(const char* p) {
     return static_cast<uint16_t>((static_cast<uint8_t>(p[0]) << 8) | static_cast<uint8_t>(p[1]));
+}
+
+void putU32(std::string& s, uint32_t v) {
+    putU16(s, static_cast<uint16_t>((v >> 16) & 0xFFFF));
+    putU16(s, static_cast<uint16_t>(v & 0xFFFF));
+}
+
+void putU64(std::string& s, uint64_t v) {
+    putU32(s, static_cast<uint32_t>((v >> 32) & 0xFFFFFFFF));
+    putU32(s, static_cast<uint32_t>(v & 0xFFFFFFFF));
+}
+
+uint32_t getU32(const char* p) {
+    return (static_cast<uint32_t>(getU16(p)) << 16) | getU16(p + 2);
+}
+
+uint64_t getU64(const char* p) {
+    return (static_cast<uint64_t>(getU32(p)) << 32) | getU32(p + 4);
 }
 
 /// 追加一个属性（自动 4 字节对齐填充）
@@ -131,6 +158,23 @@ std::string encodeBindingResponse(const StunAddress& mapped, const uint8_t txn[1
     return msg;
 }
 
+std::string encodeIceCheck(const IceCheckAttrs& attrs, uint8_t outTxn[12]) {
+    std::mt19937 rng{std::random_device{}()};
+    for (int i = 0; i < 12; ++i)
+        outTxn[i] = static_cast<uint8_t>(rng() & 0xFF);
+    std::string msg = beginMessage(kStunTypeBindingRequest, outTxn);
+    if (!attrs.username.empty()) addAttr(msg, kAttrUsername, attrs.username);
+    std::string prio;
+    putU32(prio, attrs.priority);
+    addAttr(msg, kAttrPriority, prio);
+    std::string role;
+    putU64(role, attrs.tieBreaker);
+    addAttr(msg, attrs.controlling ? kAttrIceControlling : kAttrIceControlled, role);
+    if (attrs.useCandidate) addAttr(msg, kAttrUseCandidate, "");
+    finishMessage(msg);
+    return msg;
+}
+
 std::string encodeBindingError(int errorCode, const std::string& reason, const uint8_t txn[12]) {
     std::string msg = beginMessage(kStunTypeBindingError, txn);
     std::string v;
@@ -175,6 +219,16 @@ bool decode(std::string_view data, StunMessage& out, std::string* err) {
         } else if (at == kAttrMappedAddress) {
             StunAddress a;
             if (parseAddress(value, alen, false, a)) out.mapped = a;
+        } else if (at == kAttrUsername) {
+            out.username.assign(value, alen);
+        } else if (at == kAttrPriority && alen >= 4) {
+            out.priority = getU32(value);
+        } else if (at == kAttrUseCandidate) {
+            out.useCandidate = true;
+        } else if (at == kAttrIceControlling && alen >= 8) {
+            out.iceControlling = getU64(value);
+        } else if (at == kAttrIceControlled && alen >= 8) {
+            out.iceControlled = getU64(value);
         } else if (at == kAttrSoftware) {
             out.software.assign(value, alen);
         } else if (at == kAttrErrorCode) {
@@ -303,6 +357,177 @@ std::vector<IceCandidate> gatherHostCandidates() {
     }
     ::freeaddrinfo(res);
     return out;
+}
+
+/* ---------------------------- ICE 连通性检查 ---------------------------- */
+
+struct IceAgent::Impl {
+    int fd = -1;
+    uint16_t port = 0;
+    std::atomic<bool> running{false};
+    std::thread thread;
+    mutable std::mutex mtx;
+    std::vector<StunAddress> remotes;
+    std::map<std::string, IcePair> pairs;
+    std::string ufragLocal = "zenithLocal";
+    std::string ufragRemote = "zenithRemote";
+    uint64_t tieBreaker = 0x1234567890ABCDEFull;
+
+    static std::string keyOf(const StunAddress& a) { return a.ip + ":" + std::to_string(a.port); }
+
+    void loop() {
+        char buf[1500];
+        while (running.load()) {
+            sockaddr_in peer{};
+            socklen_t plen = sizeof(peer);
+            const int n =
+                ::recvfrom(fd, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&peer), &plen);
+            if (n <= 0) continue;
+            rtc::StunMessage msg;
+            if (!rtc::decode(std::string_view(buf, static_cast<size_t>(n)), msg)) continue;
+            char ip[INET_ADDRSTRLEN] = {};
+            ::inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
+            const StunAddress from{ip, static_cast<uint16_t>(::ntohs(peer.sin_port))};
+
+            if (msg.type == rtc::kStunTypeBindingRequest) {
+                {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    auto& p = pairs[keyOf(from)];
+                    p.remote = from;
+                    p.responded = true;  // 对端能到我，双向可达
+                    if (msg.useCandidate) p.nominated = true;
+                }
+                const std::string resp = rtc::encodeBindingResponse(from, msg.transactionId);
+                ::sendto(fd, resp.data(), static_cast<int>(resp.size()), 0,
+                         reinterpret_cast<sockaddr*>(&peer), plen);
+            } else if (msg.type == rtc::kStunTypeBindingSuccess) {
+                std::lock_guard<std::mutex> lk(mtx);
+                auto& p = pairs[keyOf(from)];
+                p.remote = from;
+                p.responded = true;
+            }
+        }
+    }
+};
+
+IceAgent::IceAgent() : impl_(std::make_unique<Impl>()) {}
+
+IceAgent::~IceAgent() {
+    impl_->running.store(false);
+    if (impl_->thread.joinable()) impl_->thread.join();
+    if (impl_->fd >= 0) {
+#if defined(_WIN32)
+        closesocket(impl_->fd);
+#else
+        ::close(impl_->fd);
+#endif
+    }
+}
+
+bool IceAgent::bind(uint16_t port) {
+#if defined(_WIN32)
+    WSADATA wsa{};
+    WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
+    impl_->fd = static_cast<int>(::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
+    if (impl_->fd < 0) return false;
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    if (::bind(impl_->fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) return false;
+    socklen_t len = sizeof(addr);
+    if (::getsockname(impl_->fd, reinterpret_cast<sockaddr*>(&addr), &len) == 0) {
+        impl_->port = ntohs(addr.sin_port);
+    }
+#if defined(_WIN32)
+    DWORD tv = 100;
+    setsockopt(impl_->fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tv), sizeof(tv));
+#else
+    timeval tv{};
+    tv.tv_usec = 100 * 1000;
+    setsockopt(impl_->fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
+    impl_->running.store(true);
+    impl_->thread = std::thread([p = impl_.get()] { p->loop(); });
+    return true;
+}
+
+uint16_t IceAgent::localPort() const {
+    return impl_->port;
+}
+
+void IceAgent::addRemoteCandidate(const StunAddress& addr) {
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    impl_->remotes.push_back(addr);
+}
+
+std::vector<IcePair> IceAgent::runChecks(int timeoutMs) {
+    std::vector<StunAddress> remotes;
+    {
+        std::lock_guard<std::mutex> lk(impl_->mtx);
+        remotes = impl_->remotes;
+    }
+    for (const auto& r : remotes) {
+        IceCheckAttrs attrs;
+        attrs.username = impl_->ufragRemote + ":" + impl_->ufragLocal;  // 对端视角的 local:remote
+        attrs.priority = 1;
+        attrs.controlling = true;
+        attrs.tieBreaker = impl_->tieBreaker;
+        attrs.useCandidate = true;
+        uint8_t txn[12] = {};
+        const std::string msg = encodeIceCheck(attrs, txn);
+        sockaddr_in to{};
+        to.sin_family = AF_INET;
+        to.sin_port = htons(r.port);
+        inet_pton(AF_INET, r.ip.c_str(), &to.sin_addr);
+        ::sendto(impl_->fd, msg.data(), static_cast<int>(msg.size()), 0,
+                 reinterpret_cast<sockaddr*>(&to), sizeof(to));
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    while (std::chrono::steady_clock::now() < deadline) {
+        {
+            std::lock_guard<std::mutex> lk(impl_->mtx);
+            bool allResponded = !remotes.empty();
+            for (const auto& r : remotes) {
+                auto it = impl_->pairs.find(Impl::keyOf(r));
+                if (it == impl_->pairs.end() || !it->second.responded) {
+                    allResponded = false;
+                    break;
+                }
+            }
+            if (allResponded) break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    std::vector<IcePair> out;
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    for (const auto& [k, p] : impl_->pairs) {
+        (void)k;
+        if (p.responded) out.push_back(p);
+    }
+    return out;
+}
+
+std::vector<IcePair> IceAgent::validPairs() const {
+    std::vector<IcePair> out;
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    for (const auto& [k, p] : impl_->pairs) {
+        (void)k;
+        if (p.responded) out.push_back(p);
+    }
+    return out;
+}
+
+bool IceAgent::nominated() const {
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    for (const auto& [k, p] : impl_->pairs) {
+        (void)k;
+        if (p.nominated) return true;
+    }
+    return false;
 }
 
 }  // namespace zenith::rtc

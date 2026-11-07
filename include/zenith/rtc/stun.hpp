@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,7 +38,25 @@ struct StunMessage {
     std::string software;
     int errorCode = 0;
     std::string errorReason;
+    // ---- ICE 连通性检查用到的属性 ----
+    std::string username;                    // USERNAME（"ufrag1:ufrag2"）
+    std::optional<uint32_t> priority;        // PRIORITY
+    bool useCandidate = false;               // USE-CANDIDATE
+    std::optional<uint64_t> iceControlling;  // ICE-CONTROLLING
+    std::optional<uint64_t> iceControlled;   // ICE-CONTROLLED
 };
+
+/// ICE 检查请求的可选属性
+struct IceCheckAttrs {
+    std::string username;
+    uint32_t priority = 0;
+    bool useCandidate = false;
+    bool controlling = true;  // true → ICE-CONTROLLING，false → ICE-CONTROLLED
+    uint64_t tieBreaker = 0;  // controlling 时作为 role 值
+};
+
+/// 编码带 ICE 属性的 Binding Request（random txn 写入 outTxn）
+ZENITH_API std::string encodeIceCheck(const IceCheckAttrs& attrs, uint8_t outTxn[12]);
 
 /// 编码 Binding Request（随机事务 ID 写入 outTxn）
 ZENITH_API std::string encodeBindingRequest(uint8_t outTxn[12]);
@@ -72,5 +91,44 @@ struct IceCandidate {
 
 /// 收集本机 host 候选（去重；空列表表示枚举失败）
 ZENITH_API std::vector<IceCandidate> gatherHostCandidates();
+
+/* ---------------------------- ICE 连通性检查 ---------------------------- */
+
+/// 一条通过检查的候选对
+struct IcePair {
+    StunAddress remote;
+    bool nominated = false;  // 收到带 USE-CANDIDATE 的请求
+    bool responded = false;  // 我方请求得到响应
+};
+
+/// 极简 ICE agent：UDP socket 上做 STUN Binding 双向检查。
+///
+/// 已做：候选互检（USERNAME/PRIORITY/USE-CANDIDATE/ICE-CONTROLLING 属性）、
+///       被动应答、有效对记录
+/// 未做：候选优先级排序与提名收敛、TURN、ICE restart
+class ZENITH_API IceAgent {
+public:
+    IceAgent();
+    ~IceAgent();
+
+    /// 绑定本地 UDP 端口（0 = 随机）
+    bool bind(uint16_t port = 0);
+    [[nodiscard]] uint16_t localPort() const;
+
+    void addRemoteCandidate(const StunAddress& addr);
+
+    /// 主动向所有远端候选发检查（每轮 timeoutMs），返回本轮成功的对
+    std::vector<IcePair> runChecks(int timeoutMs = 500);
+
+    /// 截至目前所有有效对（含被动接收到的提名）
+    [[nodiscard]] std::vector<IcePair> validPairs() const;
+
+    /// 是否至少有一条被提名的对（可用来判定"连通"）
+    [[nodiscard]] bool nominated() const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 }  // namespace zenith::rtc

@@ -209,4 +209,58 @@ ZTEST(Rtc, HostCandidatesAreWellFormed) {
     std::printf("      [rtc] host candidates: %zu\n", cands.size());
 }
 
+/* --------------------------- ICE 连通性检查 --------------------------- */
+
+ZTEST(Ice, CheckAttributesRoundtrip) {
+    rtc::IceCheckAttrs attrs;
+    attrs.username = "remoteU:localU";
+    attrs.priority = 1862270975u;
+    attrs.useCandidate = true;
+    attrs.controlling = true;
+    attrs.tieBreaker = 0x1122334455667788ull;
+    uint8_t txn[12] = {};
+    const std::string wire = rtc::encodeIceCheck(attrs, txn);
+
+    rtc::StunMessage msg;
+    ZEXPECT_TRUE(rtc::decode(wire, msg));
+    ZEXPECT_TRUE(msg.type == rtc::kStunTypeBindingRequest);
+    ZEXPECT_EQ(msg.username, attrs.username);
+    ZEXPECT_TRUE(msg.priority.has_value());
+    ZEXPECT_EQ(msg.priority.value_or(0), attrs.priority);
+    ZEXPECT_TRUE(msg.useCandidate);
+    ZEXPECT_TRUE(msg.iceControlling.has_value());
+    ZEXPECT_EQ(msg.iceControlling.value_or(0), attrs.tieBreaker);
+    ZEXPECT_FALSE(msg.iceControlled.has_value());
+}
+
+ZTEST(IceE2E, TwoAgentsConnectOverLoopback) {
+    rtc::IceAgent a;
+    rtc::IceAgent b;
+    ZEXPECT_TRUE(a.bind(0));
+    ZEXPECT_TRUE(b.bind(0));
+    ZEXPECT_TRUE(a.localPort() != 0);
+    ZEXPECT_TRUE(b.localPort() != 0);
+
+    a.addRemoteCandidate({"127.0.0.1", b.localPort()});
+    b.addRemoteCandidate({"127.0.0.1", a.localPort()});
+
+    const auto pairsA = a.runChecks(1500);
+    const auto pairsB = b.runChecks(1500);
+    ZEXPECT_TRUE(!pairsA.empty());
+    ZEXPECT_TRUE(!pairsB.empty());
+
+    // 双方都应至少有一条 responded 的对，且收到过带 USE-CANDIDATE 的提名
+    ZEXPECT_TRUE(a.nominated() || b.nominated());
+    for (const auto& p : pairsA)
+        ZEXPECT_EQ(p.remote.ip, std::string("127.0.0.1"));
+}
+
+ZTEST(IceE2E, NoCandidateMeansNoPairs) {
+    rtc::IceAgent a;
+    ZEXPECT_TRUE(a.bind(0));
+    const auto pairs = a.runChecks(200);  // 没有远端候选
+    ZEXPECT_TRUE(pairs.empty());
+    ZEXPECT_FALSE(a.nominated());
+}
+
 ZTEST_MAIN
