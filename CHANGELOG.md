@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.2.6 (2026-11-07)
+
+> WebRTC 传输栈**整栈跑通**：ICE 选路 → UDP demux → DTLS 握手（memory BIO，
+> 走 ICE 的 socket）→ RTP 加密传输。SRTP 仍未做（缺官方测试向量）。
+
+### 新增
+- **UDP demux**：`zenith::rtc::UdpMux`
+  - 首字节分流：`0..3` STUN / `20..63` DTLS / `128..191` RTP，其余 Unknown
+  - 四类回调 + `dropped()` 可观测（未识别的包不会被静默吞掉）
+- **DTLS memory-BIO 模式**：`initMemory` / `feedInbound` / `step`
+  - 不持有 socket，握手与收发由调用方泵动——这是 ICE 与 DTLS 共用一条链路的关键
+- **IceAgent**：`setDatagramSink()`（非 STUN 包转交）、`sendTo()`
+
+### 端到端
+`WebRtc.StackOnIceSocket`：两个 agent 互检选路 → 各起 memory-BIO DTLS →
+ICE 的 sink 把非 STUN 包喂给 DTLS → 交替 `step()` 完成握手 →
+客户端发 RTP（经 DTLS 加密），服务端解密后 `parseRtp` 校验 payload 与 SSRC 一致。
+
+### 测试
+RTC 模块共 20 例（STUN/ICE/DTLS/RTP/demux/整栈串联）。
+
+### 未做（如实记录）
+- **SRTP/SRTCP**：缺 RFC 3711 官方测试向量
+- **SDP 协商、TURN 中继**
+
 ## v0.2.5 (2026-11-07)
 
 > WebRTC 从"STUN/ICE 地基"补齐到**四层可验证的传输栈**（STUN · ICE · DTLS · RTP），
