@@ -28,6 +28,7 @@
 #include "ztest.hpp"
 
 #include "zenith/rtc/dtls.hpp"
+#include "zenith/rtc/rtcp.hpp"
 #include "zenith/rtc/rtp.hpp"
 #include "zenith/rtc/stun.hpp"
 #include "zenith/rtc/udp_mux.hpp"
@@ -623,5 +624,79 @@ ZTEST(WebRtc, StackOnIceSocket) {
     }
 }
 #endif
+
+/* -------------------------------- RTCP -------------------------------- */
+
+ZTEST(Rtcp, SenderReportRoundtrip) {
+    rtc::RtcpSenderReportPacket sr;
+    sr.ssrc = 0xAABBCCDD;
+    sr.ntpTimestamp = 0x1122334455667788ull;
+    sr.rtpTimestamp = 0x0A0B0C0D;
+    sr.packetCount = 100;
+    sr.octetCount = 20000;
+    rtc::RtcpReportBlock b;
+    b.ssrc = 0x01020304;
+    b.fractionLost = 12;
+    b.cumulativeLost = -3;  // 负值要能原样回读
+    b.extendedHighestSeq = 0x00010002;
+    b.jitter = 15;
+    b.lastSr = 0xCAFEBABE;
+    b.delaySinceSr = 7;
+    sr.reports.push_back(b);
+
+    const std::string wire = rtc::serializeRtcp(sr);
+    std::vector<rtc::RtcpPacket> out;
+    size_t consumed = 0;
+    std::string err;
+    ZEXPECT_TRUE(rtc::parseRtcpCompound(wire, out, consumed, &err));
+    ZEXPECT_EQ(consumed, wire.size());
+    ZEXPECT_EQ(out.size(), size_t{1});
+    ZEXPECT_EQ(static_cast<int>(out[0].type), 200);
+    ZEXPECT_EQ(out[0].count, 1);
+    ZEXPECT_EQ(out[0].sr.ssrc, sr.ssrc);
+    ZEXPECT_EQ(out[0].sr.ntpTimestamp, sr.ntpTimestamp);
+    ZEXPECT_EQ(out[0].sr.rtpTimestamp, sr.rtpTimestamp);
+    ZEXPECT_EQ(out[0].sr.packetCount, 100u);
+    ZEXPECT_EQ(out[0].sr.octetCount, 20000u);
+    ZEXPECT_EQ(out[0].sr.reports.size(), size_t{1});
+    ZEXPECT_EQ(out[0].sr.reports[0].fractionLost, static_cast<uint8_t>(12));
+    ZEXPECT_EQ(out[0].sr.reports[0].cumulativeLost, -3);
+    ZEXPECT_EQ(out[0].sr.reports[0].jitter, 15u);
+}
+
+ZTEST(Rtcp, CompoundWithCname) {
+    const std::string wire = rtc::serializeRtcpCompound(0x01020304, "zenith-cname");
+    std::vector<rtc::RtcpPacket> out;
+    size_t consumed = 0;
+    std::string err;
+    ZEXPECT_TRUE(rtc::parseRtcpCompound(wire, out, consumed, &err));
+    ZEXPECT_EQ(out.size(), size_t{2});  // RR + SDES
+    ZEXPECT_EQ(static_cast<int>(out[0].type), 201);
+    ZEXPECT_EQ(static_cast<int>(out[1].type), 202);
+    ZEXPECT_EQ(out[1].cname, std::string("zenith-cname"));
+}
+
+ZTEST(Rtcp, RejectsMalformed) {
+    std::vector<rtc::RtcpPacket> out;
+    size_t consumed = 0;
+    std::string err;
+    // 版本不是 2
+    std::string bad(8, '\0');
+    bad[0] = 0x40;  // version 1
+    ZEXPECT_FALSE(rtc::parseRtcpCompound(bad, out, consumed, &err));
+    // 长度撒谎（声明 100 字，实际 8 字节）
+    std::string lie(8, '\0');
+    lie[0] = static_cast<char>(2 << 6);
+    lie[1] = static_cast<char>(200);
+    lie[2] = 0;
+    lie[3] = 100;
+    ZEXPECT_FALSE(rtc::parseRtcpCompound(lie, out, consumed, &err));
+    // 未知类型
+    std::string unknown(8, '\0');
+    unknown[0] = static_cast<char>(2 << 6);
+    unknown[1] = static_cast<char>(250);
+    unknown[3] = 1;  // 长度 1 字 = 8 字节
+    ZEXPECT_FALSE(rtc::parseRtcpCompound(unknown, out, consumed, &err));
+}
 
 ZTEST_MAIN
