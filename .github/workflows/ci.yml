@@ -334,12 +334,15 @@ jobs:
       # 泄漏单独一步、非阻塞：目前有 4 个套件在进程退出时仍有连接/会话对象
       # 存活（见 README「sanitizer 现状」）。修好一个就从这里划掉一个，
       # 全部清零后把它并回上面的阻塞步骤。
-      - name: LeakSanitizer（仅报告 · 已知 4 套件）
-        continue-on-error: true
+      # LSan 转阻塞：已知的两处测试退出时序残留用窄抑制项固定（见 .lsan-suppressions.txt），
+      # 任何**新增**泄漏都会让这一步失败。
+      - name: LeakSanitizer（阻塞 · 已知 2 项已抑制）
         env:
-          ASAN_OPTIONS: detect_leaks=1:halt_on_error=0
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          # 绝对路径：ctest 在每个测试自己的 workdir 里跑，相对路径会找不到文件
+          LSAN_OPTIONS: suppressions=${{ github.workspace }}/.lsan-suppressions.txt:print_suppressions=1
         run: |
-          ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-asan --output-on-failure \
+          ctest --test-dir build-asan --output-on-failure \
                 -R "test_websocket|test_m5_web|test_m13e|test_m13g"
       # TSan：已清零并转阻塞（并发相关 5 套）。后续可扩到更多并发套件。
       - name: TSan（并发套件）
