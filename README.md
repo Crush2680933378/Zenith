@@ -168,17 +168,19 @@ ZENITH_EXPORT const zenith_plugin_desc* zenith_plugin_entry(void) { return &g_de
 | 消费者验证 | 装 SDK → `find_package(Zenith CONFIG)` → 编独立下游项目并运行 |
 | 偶发失败检测 | 核心套件夜间重复 3 轮 |
 
-未清零的两项（LSan 4 套件、macOS 2 套件）已转为 Issue 跟踪，细节见
-**[docs/QUALITY.md](docs/QUALITY.md)**。
+| ASan + UBSan / TSan | 阻塞；TSan 覆盖 10 套并发用例（0 竞争），ASan 全量通过 |
+| LSan（泄漏检测） | 4 套 → **2 套**（会话自环已修，剩 2 个见 [#2](https://github.com/Crush2680933378/Zenith/issues/2)） |
+
+细节见 **[docs/QUALITY.md](docs/QUALITY.md)**。
 
 ## 平台支持
 
 | 平台 | 构建 | 测试 | 说明 |
 |---|---|---|---|
-| Windows · MinGW-w64 | ✅ | ✅ 43/43 | WSAPoll 后端；**发布包用它的产物** |
+| Windows · MinGW-w64 | ✅ | ✅ 44/44 | WSAPoll 后端；**发布包用它的产物** |
 | Windows · MSVC | ✅ | — | 构建通过（`ZENITH_TLS=none`）；测试尚未接入 |
-| Linux · GCC / Clang+Coro | ✅ | ✅ 43/43 | epoll 后端；Clang 任务额外跑协程层 |
-| macOS · Apple Clang | ✅ | ⚠️ 41/43 | kqueue 后端；2 套 AI 编排用例跟踪中（[#3](https://github.com/Crush2680933378/Zenith/issues/3)） |
+| Linux · GCC / Clang+Coro | ✅ | ✅ 44/44 | epoll（可选 io_uring）；Clang 任务额外跑协程层 |
+| macOS · Apple Clang | ✅ | ✅ 44/44 | kqueue 后端；全量用例阻塞跑（原先排除的两套已修好，[#3](https://github.com/Crush2680933378/Zenith/issues/3)） |
 
 > **Windows 说明**：发布包由 MinGW-w64 构建（`libzenith.dll.a`）。MSVC 目前只验证到
 > 「能编过」——导入库、测试、OpenSSL 均未接入；需要 MSVC 产出 `.lib` 请开 Issue。
