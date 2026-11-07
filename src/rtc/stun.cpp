@@ -530,4 +530,17 @@ bool IceAgent::nominated() const {
     return false;
 }
 
+std::optional<IcePair> IceAgent::selectedPair() const {
+    std::lock_guard<std::mutex> lk(impl_->mtx);
+    for (const auto& [k, p] : impl_->pairs) {
+        (void)k;
+        if (p.nominated && p.responded) return p;
+    }
+    return std::nullopt;
+}
+
+int IceAgent::socketFd() const {
+    return impl_->fd;
+}
+
 }  // namespace zenith::rtc

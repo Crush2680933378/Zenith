@@ -86,6 +86,7 @@ struct DtlsTransport::Impl {
     uint16_t port = 0;
     bool server = false;
     bool established = false;
+    bool ownsFd = true;  // 借用外部 socket（WebRTC 复用 ICE 的 fd）时为 false
 
     ~Impl() { reset(); }
 
@@ -98,8 +99,9 @@ struct DtlsTransport::Impl {
             SSL_CTX_free(ctx);
             ctx = nullptr;
         }
-        closeSock(fd);
+        if (ownsFd) closeSock(fd);
         fd = -1;
+        ownsFd = true;
         established = false;
     }
 
@@ -164,6 +166,34 @@ bool DtlsTransport::listen(const std::string& certFile, const std::string& keyFi
         return false;
     }
     impl_->server = true;
+    return true;
+}
+
+bool DtlsTransport::listenOnFd(int fd, const std::string& certFile, const std::string& keyFile) {
+    impl_->reset();
+    tls::openSslGlobalInit();
+    impl_->ctx = SSL_CTX_new(DTLS_server_method());
+    if (impl_->ctx == nullptr) return false;
+    if (SSL_CTX_use_certificate_chain_file(impl_->ctx, certFile.c_str()) != 1) {
+        impl_->reset();
+        return false;
+    }
+    if (SSL_CTX_use_PrivateKey_file(impl_->ctx, keyFile.c_str(), SSL_FILETYPE_PEM) != 1) {
+        impl_->reset();
+        return false;
+    }
+    SSL_CTX_set_verify(impl_->ctx, SSL_VERIFY_NONE, nullptr);
+    SSL_CTX_set_read_ahead(impl_->ctx, 1);
+    SSL_CTX_set_cookie_generate_cb(impl_->ctx, dtlsCookieGenerate);
+    SSL_CTX_set_cookie_verify_cb(impl_->ctx, dtlsCookieVerify);
+    impl_->fd = fd;
+    impl_->ownsFd = false;
+    impl_->server = true;
+    sockaddr_in bound{};
+    socklen_t len = sizeof(bound);
+    if (::getsockname(fd, reinterpret_cast<sockaddr*>(&bound), &len) == 0) {
+        impl_->port = ntohs(bound.sin_port);
+    }
     return true;
 }
 
@@ -273,6 +303,58 @@ bool DtlsTransport::connect(const std::string& host, uint16_t port, bool verifyP
     return ok;
 }
 
+bool DtlsTransport::connectOnFd(int fd, const std::string& peerIp, uint16_t peerPort,
+                                bool verifyPeer, int timeoutMs) {
+    impl_->reset();
+    tls::openSslGlobalInit();
+    impl_->ctx = SSL_CTX_new(DTLS_client_method());
+    if (impl_->ctx == nullptr) return false;
+    SSL_CTX_set_verify(impl_->ctx, verifyPeer ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
+
+    sockaddr_in peer{};
+    peer.sin_family = AF_INET;
+    peer.sin_port = htons(peerPort);
+    if (inet_pton(AF_INET, peerIp.c_str(), &peer.sin_addr) != 1) {
+        impl_->reset();
+        return false;
+    }
+    if (::connect(fd, reinterpret_cast<sockaddr*>(&peer), sizeof(peer)) != 0) {
+        impl_->reset();
+        return false;
+    }
+    impl_->fd = fd;
+    impl_->ownsFd = false;
+    impl_->ssl = SSL_new(impl_->ctx);
+    if (impl_->ssl == nullptr) {
+        impl_->reset();
+        return false;
+    }
+    BIO* bio = BIO_new_dgram(fd, BIO_NOCLOSE);
+    if (bio == nullptr) {
+        impl_->reset();
+        return false;
+    }
+    BIO_ctrl(bio, BIO_CTRL_DGRAM_SET_CONNECTED, 0, &peer);
+    SSL_set_bio(impl_->ssl, bio, bio);
+    SSL_set_options(impl_->ssl, SSL_OP_NO_QUERY_MTU);
+    SSL_set_mtu(impl_->ssl, 1200);
+    setRecvTimeout(fd, timeoutMs);
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    bool ok = false;
+    while (std::chrono::steady_clock::now() < deadline) {
+        const int rc = SSL_connect(impl_->ssl);
+        if (rc == 1) {
+            ok = true;
+            break;
+        }
+        const int e = SSL_get_error(impl_->ssl, rc);
+        if (e != SSL_ERROR_WANT_READ && e != SSL_ERROR_WANT_WRITE) break;
+    }
+    impl_->established = ok;
+    return ok;
+}
+
 bool DtlsTransport::established() const {
     return impl_->established;
 }
@@ -328,6 +410,12 @@ bool DtlsTransport::supported() {
     return false;
 }
 bool DtlsTransport::listen(const std::string&, const std::string&, uint16_t) {
+    return false;
+}
+bool DtlsTransport::listenOnFd(int, const std::string&, const std::string&) {
+    return false;
+}
+bool DtlsTransport::connectOnFd(int, const std::string&, uint16_t, bool, int) {
     return false;
 }
 bool DtlsTransport::accept(int) {

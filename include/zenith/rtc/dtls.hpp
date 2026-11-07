@@ -6,8 +6,10 @@
 //
 //  已做：DTLS 1.2 握手（服务端 DTLSv1_listen / 客户端 SSL_connect）、
 //        记录收发、密钥导出（exportKeyingMaterial，SRTP 用）
-//  未做：ICE 与 DTLS 的 socket 复用（当前各自持有一个 UDP socket）、
-//        证书指纹协商（SDP 里的 fingerprint）、SRTP/SRTCP 本身
+//  未做：**ICE 与 DTLS 的 socket 复用**——共用一条 UDP socket 必须按首字节 demux
+//        （STUN 0-3 / DTLS 20-63 / RTP 128-191），当前 IceAgent 的收包线程会把
+//        非 STUN 包丢掉；listenOnFd/connectOnFd 已备好，缺的是 demux 层。
+//        另有：证书指纹协商（SDP fingerprint）、SRTP/SRTCP
 //
 //  无 OpenSSL 构建下 `supported()` 返回 false，调用返回失败——不静默假装加密。
 // ============================================================================
@@ -32,6 +34,14 @@ public:
 
     /// 服务端：绑定 UDP 并载入证书
     bool listen(const std::string& certFile, const std::string& keyFile, uint16_t port = 0);
+
+    /// 服务端：在**已有** UDP socket 上监听（WebRTC 里复用 ICE 的 socket）。
+    /// socket 归调用方所有，本对象不会关闭它。
+    bool listenOnFd(int fd, const std::string& certFile, const std::string& keyFile);
+
+    /// 客户端：在已有 socket 上握手（socket 归调用方所有）
+    bool connectOnFd(int fd, const std::string& peerIp, uint16_t peerPort, bool verifyPeer = false,
+                     int timeoutMs = 5000);
 
     /// 服务端：阻塞等待一个客户端完成握手
     bool accept(int timeoutMs = 5000);

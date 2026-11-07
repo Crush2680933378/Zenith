@@ -126,6 +126,12 @@ public:
     /// 是否至少有一条被提名的对（可用来判定"连通"）
     [[nodiscard]] bool nominated() const;
 
+    /// 已提名的对（无则空）。WebRTC 就是用它选定的链路跑 DTLS/SRTP
+    [[nodiscard]] std::optional<IcePair> selectedPair() const;
+
+    /// 底层 UDP socket（把 DTLS 复用到同一条 ICE 链路上；调用方不得关闭）
+    [[nodiscard]] int socketFd() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

@@ -453,4 +453,28 @@ ZTEST(Rtp, PaddingIsStripped) {
     ZEXPECT_TRUE(back.header.padding);
 }
 
+/* --------------------- WebRTC 栈装配：ICE → DTLS → RTP --------------------- */
+
+#if defined(ZENITH_TLS_OPENSSL)
+// 注：ICE 与 DTLS 共用同一条 UDP socket 需要按首字节做 demux
+// （STUN 0-3 / DTLS 20-63 / RTP 128-191），当前 IceAgent 的接收线程会把
+// 非 STUN 包丢弃。这条路留作后续（见 dtls.hpp 的边界说明）。
+ZTEST(WebRtc, KeyingMaterialMatchesAcrossStack) {
+    ZEXPECT_TRUE(makeDtlsCert("zrtc_certs.tmp"));
+    rtc::DtlsTransport server;
+    ZEXPECT_TRUE(server.listen("zrtc_certs.tmp/server.crt", "zrtc_certs.tmp/server.key", 0));
+    std::vector<uint8_t> serverKey;
+    std::thread th([&] {
+        if (server.accept(5000)) server.exportKeyingMaterial("EXTRACTOR-dtls_srtp", 32, serverKey);
+    });
+    rtc::DtlsTransport client;
+    ZEXPECT_TRUE(client.connect("127.0.0.1", server.localPort(), false, 5000));
+    th.join();
+    std::vector<uint8_t> clientKey;
+    ZEXPECT_TRUE(client.exportKeyingMaterial("EXTRACTOR-dtls_srtp", 32, clientKey));
+    ZEXPECT_EQ(clientKey.size(), size_t{32});
+    ZEXPECT_TRUE(clientKey == serverKey);
+}
+#endif
+
 ZTEST_MAIN
