@@ -60,6 +60,7 @@ set(ZENITH_SOURCES
     net/iocp.cpp
     net/event_loop.cpp
     net/event_loop_thread_pool.cpp
+    rtc/rtp.cpp
     rtc/stun.cpp
     rtc/dtls.cpp
     mqtt/mqtt.cpp

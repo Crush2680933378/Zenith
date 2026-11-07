@@ -28,6 +28,7 @@
 #include "ztest.hpp"
 
 #include "zenith/rtc/dtls.hpp"
+#include "zenith/rtc/rtp.hpp"
 #include "zenith/rtc/stun.hpp"
 
 using namespace zenith;
@@ -375,5 +376,81 @@ ZTEST(Dtls, SkippedWithoutOpenSsl) {
     ZEXPECT_FALSE(rtc::DtlsTransport::supported());
 }
 #endif
+
+/* -------------------------------- RTP -------------------------------- */
+
+ZTEST(Rtp, HeaderRoundtrip) {
+    rtc::RtpPacket pkt;
+    pkt.header.payloadType = 111;  // opus
+    pkt.header.marker = true;
+    pkt.header.sequence = 0xBEEF;
+    pkt.header.timestamp = 0x01020304;
+    pkt.header.ssrc = 0xDEADBEEF;
+    pkt.payload = std::string("\x00\x01\x02payload", 10);
+
+    const std::string wire = rtc::serializeRtp(pkt);
+    ZEXPECT_EQ(wire.size(), rtc::kRtpFixedHeaderSize + pkt.payload.size());
+
+    rtc::RtpPacket back;
+    std::string err;
+    ZEXPECT_TRUE(rtc::parseRtp(wire, back, &err));
+    ZEXPECT_EQ(static_cast<int>(back.header.version), 2);
+    ZEXPECT_EQ(static_cast<int>(back.header.payloadType), 111);
+    ZEXPECT_TRUE(back.header.marker);
+    ZEXPECT_EQ(back.header.sequence, 0xBEEF);
+    ZEXPECT_EQ(back.header.timestamp, 0x01020304u);
+    ZEXPECT_EQ(back.header.ssrc, 0xDEADBEEFu);
+    ZEXPECT_EQ(back.payload, pkt.payload);
+}
+
+ZTEST(Rtp, CsrcAndExtension) {
+    rtc::RtpPacket pkt;
+    pkt.header.sequence = 7;
+    pkt.header.csrc = {0x11111111u, 0x22222222u};
+    pkt.header.extension = true;
+    pkt.header.extensionProfile = std::string("\xBE\xDE", 2);
+    pkt.header.extensionData = std::string("\x01\x02\x03\x04", 4);  // 1 word
+    pkt.payload = "x";
+
+    const std::string wire = rtc::serializeRtp(pkt);
+    rtc::RtpPacket back;
+    std::string err;
+    ZEXPECT_TRUE(rtc::parseRtp(wire, back, &err));
+    ZEXPECT_EQ(back.header.csrc.size(), size_t{2});
+    ZEXPECT_EQ(back.header.csrc[0], 0x11111111u);
+    ZEXPECT_EQ(back.header.csrc[1], 0x22222222u);
+    ZEXPECT_TRUE(back.header.extension);
+    ZEXPECT_EQ(back.header.extensionProfile, std::string("\xBE\xDE", 2));
+    ZEXPECT_EQ(back.header.extensionData, std::string("\x01\x02\x03\x04", 4));
+    ZEXPECT_EQ(back.payload, std::string("x"));
+}
+
+ZTEST(Rtp, RejectsBadPackets) {
+    rtc::RtpPacket p;
+    std::string err;
+    // 太短
+    ZEXPECT_FALSE(rtc::parseRtp(std::string(8, '\0'), p, &err));
+    // 版本不是 2
+    std::string bad(12, '\0');
+    bad[0] = static_cast<char>(1 << 6);  // version=1
+    ZEXPECT_FALSE(rtc::parseRtp(bad, p, &err));
+    // CSRC 数量超过实际长度
+    std::string badCsrc(12, '\0');
+    badCsrc[0] = static_cast<char>((2 << 6) | 0x0F);  // version 2, csrc count 15
+    ZEXPECT_FALSE(rtc::parseRtp(badCsrc, p, &err));
+}
+
+ZTEST(Rtp, PaddingIsStripped) {
+    rtc::RtpPacket pkt;
+    pkt.header.padding = true;
+    pkt.payload = std::string("abcde");
+    const std::string wire = rtc::serializeRtp(pkt);
+
+    rtc::RtpPacket back;
+    std::string err;
+    ZEXPECT_TRUE(rtc::parseRtp(wire, back, &err));
+    ZEXPECT_EQ(back.payload, std::string("abcde"));
+    ZEXPECT_TRUE(back.header.padding);
+}
 
 ZTEST_MAIN
