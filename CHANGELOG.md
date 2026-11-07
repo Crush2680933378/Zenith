@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.7 (2026-11-07)
+
+> WebRTC 媒体栈补齐控制面（RTCP），并修掉一个连接上限用例的并行 flake。
+
+### 新增
+- **RTCP（RFC 3550 §6）**：`zenith::rtc::parseRtcpCompound` / `serializeRtcp`
+  - 复合包遍历（一个包里多条）、SR（发送者信息 + 报告块）、RR、SDES（**CNAME**）、BYE
+  - 报告块：fraction lost、**24 位有符号 cumulative lost**（负值原样回读）、
+    extended highest seq、jitter、LSR、DLSR
+  - `serializeRtcpCompound(ssrc, cname)`：RR + SDES 的最小复合包（WebRTC 标准形态）
+
+### 修复
+- `test_m6` 连接上限用例：并行跑时第 3 条连接可能瞬时超时 → 加一次重试；
+  同时补 RAII 收尾，避免断言失败后线程未 join 触发 `std::terminate` 掩盖真实原因
+
+### 测试
+RTC 模块 **23 例**（STUN/ICE/DTLS/RTP/RTCP/demux/整栈串联）。
+
+### 未做（如实记录）
+- **SRTP/SRTCP**：缺 RFC 3711 官方测试向量
+- **SDP 协商、TURN 中继**
+
 ## v0.2.6 (2026-11-07)
 
 > WebRTC 传输栈**整栈跑通**：ICE 选路 → UDP demux → DTLS 握手（memory BIO，
